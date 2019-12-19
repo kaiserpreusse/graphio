@@ -9,6 +9,6 @@ before_install:
   - pip install -r requirements.txt
   - pip install -r test_requirements.txt
 install:
-  - pip install . # install the package
+  - pip install -e . # install the package
 script:
   - pytest
