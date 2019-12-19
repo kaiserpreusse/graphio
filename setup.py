@@ -6,7 +6,7 @@ setup(name='graphio',
       url='http://github.com/kaiser_preusse',
       author='Martin Preusse',
       author_email='martin.preusse@gmail.com',
-      license='APACHE v2',
+      license='Apache license 2.0',
       packages=['graphio'],
       install_requires=[
           'neo4j', 'py2neo'
