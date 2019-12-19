@@ -144,3 +144,5 @@ crashlytics-build.properties
 
 
 local\.conf
+
+.pytest_cache

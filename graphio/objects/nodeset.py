@@ -119,17 +119,7 @@ class NodeSet(GraphObject):
             graph.run(query, props=batch)
             i += 1
 
-    # TODO remove
-    def map_nodes_to_nodeset(self, graph):
-        """
-        Map all nodes of this NodeSet to the NodeSet node.
-
-        :param graph: The Graph
-        """
-        self.map_to_1(graph, [self.__primarylabel__], {self.__primarykey__: getattr(self, self.__primarykey__)},
-                      'DATA_FROM')
-
-    def map_to_1(self, graph, target_labels, target_properties, rel_type):
+    def map_to_1(self, graph, target_labels, target_properties, rel_type=None):
         """
         Create relationships from all nodes in this NodeSet to 1 target node.
 
@@ -138,7 +128,10 @@ class NodeSet(GraphObject):
         :param rel_type: Relationship Type
         """
 
-        rels = RelationshipSet('FROM_SET', self.labels, target_labels, self.merge_keys, target_properties)
+        if not rel_type:
+            rel_type = 'FROM_SET'
+
+        rels = RelationshipSet(rel_type, self.labels, target_labels, self.merge_keys, target_properties)
 
         for node in self.nodes:
             # get properties for merge_keys
