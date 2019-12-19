@@ -9,7 +9,7 @@ setup(name='graphio',
       license='Apache license 2.0',
       packages=['graphio'],
       install_requires=[
-          'test_neo4j', 'py2neo'
+          'neo4j', 'py2neo'
       ],
       keywords=['NEO4J'],
       zip_safe=False,
