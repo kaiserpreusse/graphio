@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='graphio',
       version='0.0.3',
@@ -7,7 +7,7 @@ setup(name='graphio',
       author='Martin Preusse',
       author_email='martin.preusse@gmail.com',
       license='Apache license 2.0',
-      packages=['graphio'],
+      packages=find_packages(),
       install_requires=[
           'neo4j', 'py2neo'
       ],
