@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='graphio',
-      version='0.0.2',
+      version='0.0.3',
       description='Library to load data sets to Neo4j.',
       url='http://github.com/kaiser_preusse',
       author='Martin Preusse',
