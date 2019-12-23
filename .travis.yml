@@ -1,14 +1,21 @@
 language: python
 python:
-  - "2.7"
-  - "3.5"
-  - "3.6"
-  - "3.7"
-  - "3.8"
+- '2.7'
+- '3.5'
+- '3.6'
+- '3.7'
+- '3.8'
 before_install:
-  - pip install -r requirements.txt
-  - pip install -r test_requirements.txt
+- pip install -r requirements.txt
+- pip install -r test_requirements.txt
 install:
-  - pip install -e . # install the package
+- pip install -e .
 script:
-  - pytest
+- pytest
+deploy:
+  provider: pypi
+  user: __token__
+  password:
+    secure: LoDlxN875huqS2f0+af0vK2XQ9Wg09r60TelEk+5SmxfqhXPQxSobj8rtbDoeB16uZcygmDAE4zF3GCe9E08I5DISVJFkeq0S5kO505BEgEqvDUm1DpaiQ2FclU77EgBMZB3eaS2ikx6N+gpIZ258vHB8ZrlmeEp+T/D/aR5gv7M6Etjzdx6wMx3I6wT3CzUWAgRtqPzH8wiLxzC046/tFdY3VIewcX/mD9NKuxcBmMGmtcyDRCV1tkZ+TwbiMXzEllvTlGhDRiVqeJ1ywZfqCw2cG14wc0vK1H+9Hox2Jf9rVUkzIC2fSDO/uzx3xX7kR8bcXZzIZskoPFH62tviZg0EdNlZI9mSEFaF2Ui3CoVfrRiugZiDSEAXLBc9T/GYp2DnqB4wun5mQ3595NwOHTVKpQTi044EKsHdDN7DnqxfAksa5HXTyYBlirywp1aODoF/UAPgHUk7dybD4fA0a9gdcC6UofyxAOH17SzgNOoZmBobmZISdZ2H65BbtGcYW4bm8ZZLNYdaOLjDZFfCU1VeCt78s/DiQpESS9K9kp4qzpGLNNLxPBWQdaiwF3Rf3oE8iB9Y4hlO5XoA60KhHqulKsQ52zsKad8T0q2PVW0z+Zs1rLxt20rmlCUjk5By9ai/++bBIJyF30jYZvZRngIZuXRwiT4vg/Rtd1VmJM=
+  on:
+    tags: true
