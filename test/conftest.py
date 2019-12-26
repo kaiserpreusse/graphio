@@ -49,7 +49,7 @@ def run_neo4j(graph):
     yield container
 
     # stop container
-    # container.stop()
+    container.stop()
 
 
 @pytest.fixture(scope='session')
