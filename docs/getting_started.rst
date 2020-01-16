@@ -91,5 +91,5 @@ A :class:`~graphio.Container` can be used to group :class:`~graphio.NodeSet` and
 
 You can iterate the :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` in the :class:`~graphio.Container`::
 
-    for nodeset in my_data.nodeset:
+    for nodeset in my_data.nodesets:
         nodeset.create(graph)
