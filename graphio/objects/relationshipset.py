@@ -13,9 +13,27 @@ log = logging.getLogger(__name__)
 
 
 class RelationshipSet(GraphObject):
+    """
+    Container for a set of Relationships with the same type of start and end nodes.
+    """
 
     def __init__(self, rel_type, start_node_labels, end_node_labels, start_node_properties, end_node_properties,
                  batch_size=None):
+        """
+
+        :param rel_type: Realtionship type.
+        :type rel_type: str
+        :param start_node_labels: Labels of the start node.
+        :type start_node_labels: list[str]
+        :param end_node_labels: Labels of the end node.
+        :type end_node_labels: list[str]
+        :param start_node_properties: Property keys to identify the start node.
+        :type start_node_properties: list[str]
+        :param end_node_properties: Properties to identify the end node.
+        :type end_node_properties: list[str]
+        :param batch_size: Batch size for Neo4j operations.
+        :type batch_size: int
+        """
 
         self.rel_type = rel_type
         self.start_node_labels = start_node_labels

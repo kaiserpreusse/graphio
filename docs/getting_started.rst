@@ -78,3 +78,18 @@ You need a :class:`py2neo.Graph` instance to create data. See: https://py2neo.or
 
 Group Data Sets in a Container
 --------------------------------
+A :class:`~graphio.Container` can be used to group :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet`::
+
+    my_data = Container()
+
+    my_data.add(people)
+    my_data.add(person_likes_food)
+
+.. note::
+    This is particularly useful if you build many :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet`
+    and want to group data sets (e.g. because of dependencies).
+
+You can iterate the :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` in the :class:`~graphio.Container`::
+
+    for nodeset in my_data.nodeset:
+        nodeset.create(graph)
