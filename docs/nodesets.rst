@@ -2,4 +2,5 @@
 NodeSets
 ====================
 
-s;dlgjlfgj
+.. autoclass:: graphio.NodeSet
+    :members:
