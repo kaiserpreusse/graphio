@@ -6,10 +6,17 @@
 graphio documentation
 ===================================
 
+.. automodule:: graphio.objects.helper
+    :members:
+
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
+   nodesets
+   relsets
+
+
+.. autoclass:: graphio.NodeSet
 
 
 Indices and tables

@@ -12,8 +12,20 @@ log = logging.getLogger(__name__)
 
 
 class NodeSet(GraphObject):
+    """
+    Container for a set of Nodes with the same labels and the same properties that define uniqueness.
+    """
 
     def __init__(self, labels, merge_keys=None, batch_size=None):
+        """
+
+        :param labels: The labels for the nodes in this NodeSet.
+        :type labels: list[str]
+        :param merge_keys: The properties that define uniqueness of the nodes in this NodeSet.
+        :type merge_keys: list[str]
+        :param batch_size: Batch size for Neo4j operations.
+        :type batch_size: int
+        """
         self.labels = labels
         self.merge_keys = merge_keys
 
