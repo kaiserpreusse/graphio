@@ -9,10 +9,11 @@ graphio documentation
 Graphio is a Python library to quickly load data to Neo4j. The goal of graphio is to collect
 multiple sets of nodes and relationships from files or other data sources and write them to Neo4j. Graphio only writes
 data, it is not meant for querying Neo4j and returning data. A common task is to parse an Excel file that contains condensed
-information. Typical cases are multiple nodes per row or rows containing both nodes and relationship.
+information.
 
-Graphio focuses on creating :class:`graphio.NodeSet` and :class:`graphio.RelationshipSet` which are groups of nodes
+Graphio focuses on creating :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` which are groups of nodes
 and relationships with similiar properties. Graphio can write these data sets to Neo4j using :code:`CREATE` or :code:`MERGE` operations.
+Graphio enables you to store metadata by creating nodes and relationships from :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet`.
 
 Graphio is based on py2neo which is used to run queries. While py2neo is a comprehensive Neo4j library including object-graph mapping,
 graphio is made to quickly build a Neo4j database from existing data sets.
@@ -44,15 +45,16 @@ Iterate over a file that contains data for nodes and create a :class:`graphio.No
 
 
 
-Prerequisites
+Contents
 ----------------
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
-   nodesets
-   relsets
+   getting_started
+   objects
+   metadata
 
 
 
