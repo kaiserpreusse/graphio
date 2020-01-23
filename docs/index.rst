@@ -19,6 +19,13 @@ Graphio is based on py2neo which is used to run queries. While py2neo is a compr
 graphio is made to quickly build a Neo4j database from existing data sets.
 
 
+Version
+-----------
+Latest version: :code:`0.0.9`. Install with::
+
+   pip install -U graphio
+
+
 Example
 -----------
 Iterate over a file that contains people and the movies they like and extract nodes and relationships.
