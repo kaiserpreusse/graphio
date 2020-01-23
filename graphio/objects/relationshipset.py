@@ -4,8 +4,8 @@ import json
 
 from graphio.objects.relationship import Relationship
 from graphio import defaults
-from graphio.neo4j.queries import query_create_rels_unwind
-from graphio.neo4j.query_parameters import params_create_rels_unwind_from_objects
+from graphio.queries import query_create_rels_unwind
+from graphio.queries.query_parameters import params_create_rels_unwind_from_objects
 from graphio.objects.helper import chunks
 from py2neo.ogm import GraphObject
 

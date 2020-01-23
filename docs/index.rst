@@ -89,6 +89,7 @@ Contents
 
    getting_started
    objects
+   queries
    metadata
 
 

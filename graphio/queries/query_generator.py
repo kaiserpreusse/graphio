@@ -1,38 +1,68 @@
-def nodes_create_unwind(labels):
+def nodes_create_unwind(labels, property_parameter=None):
     """
+    Generate a :code:`CREATE` query using :code:`UNWIND` for batch creation of nodes.::
 
-    UNWIND $props AS properties CREATE (n:Gene) SET n = properties
+        UNWIND $props AS properties CREATE (n:Gene) SET n = properties
 
-    Call with:
+    Pass the node properties as parameter to the query, e.g. with a :py:obj:`py2neo.Graph`::
 
-        {'props': [{'sid': 1}, {'sid': 2}, ...]}
+        graph.run(query, props=[{'id': 1}, {'id': 2}, ...])
+
+    You can optionally set the name of the parameter with the argument :code:`property_parameter`::
+
+        query = nodes_create_unwind(['Foo'], query_parameter='mynodes')
+
+        graph.run(query, mynodes=[{'id': 1}, {'id': 2}, ...])
+
 
     :param labels: Labels for the create query.
     :type labels: list[str]
+    :param property_parameter: Optional name of the parameter used in the query. Default is 'props'.
+    :type property_parameter: str
     :return: Query
     """
-    return "UNWIND $props AS properties CREATE (n:{}) SET n = properties".format(":".join(labels))
+    if not property_parameter:
+        property_parameter = 'props'
+
+    return "UNWIND ${0} AS properties CREATE (n:{1}) SET n = properties".format(property_parameter, ":".join(labels))
 
 
-def query_merge_nodes_unwind(labels, merge_properties):
+def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
     """
-    Generate a MERGE query which uses the uniqueness properties defined by the parser output.
+    Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
 
         UNWIND $props AS properties
-        MERGE (n:Gene {properties.sid: '1234'})
+        MERGE (n:Node {properties.sid: '1234'})
         ON CREATE SET n = properties
-        ON MATCH SET n = properties
+        ON MATCH SET n += properties
 
-    Call with:
+    The '+=' operator in ON MATCH updates the node properties provided and leaves the others untouched.
 
-        {'props': [{'sid': 1}, {'sid': 2}, ...]}
+    Call with the labels and a list of properties to :code:`MERGE` on::
+
+        query = nodes_merge_unwind(['Foo', 'Bar'], ['node_id'])
+
+    Pass the node properties as parameter to the query, e.g. with a :py:obj:`py2neo.Graph`::
+
+        graph.run(query, props=[{'node_id': 1}, {'node_id': 2}, ...])
+
+    You can optionally set the name of the parameter with the argument :code:`property_parameter`::
+
+        query = nodes_merge_unwind([['Foo', 'Bar'], ['node_id'], query_parameter='mynodes')
+
+        graph.run(query, mynodes=[{'node_id': 1}, {'node_id': 2}, ...])
+
 
     :param labels: Labels for the query.
     :type labels: list[str]
     :param merge_properties: Unique properties for the node.
     :type merge_properties: list[str]
+    :param property_parameter: Optional name of the parameter used in the query. Default is 'props'.
+    :type property_parameter: str
     :return: Query
     """
+    if not property_parameter:
+        property_parameter = 'props'
 
     label_string = ':'.join(labels)
 
@@ -42,10 +72,10 @@ def query_merge_nodes_unwind(labels, merge_properties):
 
     merge_string = ', '.join(merge_strings)
 
-    q = "UNWIND $props AS properties \n" \
-        "MERGE (n:{0} {{ {1} }} ) \n" \
-        "ON CREATE SET n = properties \n" \
-        "ON MATCH SET n += properties".format(label_string, merge_string)
+    q = "UNWIND ${0} AS properties\n" \
+        "MERGE (n:{1} {{ {2} }} )\n" \
+        "ON CREATE SET n = properties\n" \
+        "ON MATCH SET n += properties".format(property_parameter, label_string, merge_string)
 
     return q
 

@@ -3,7 +3,7 @@ from py2neo import Node, Relationship, Subgraph
 from py2neo.ogm import GraphObject
 from uuid import uuid4
 
-from graphio.neo4j.queries import nodes_create_unwind, query_merge_nodes_unwind
+from graphio.queries import nodes_create_unwind, nodes_merge_unwind
 from graphio.objects.helper import chunks
 from graphio import defaults
 from graphio.objects.relationshipset import RelationshipSet
@@ -120,7 +120,7 @@ class NodeSet(GraphObject):
 
         log.debug('Batch Size: {}'.format(batch_size))
 
-        query = query_merge_nodes_unwind(self.labels, merge_properties)
+        query = nodes_merge_unwind(self.labels, merge_properties)
         log.debug(query)
 
         i = 1
