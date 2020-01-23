@@ -1,7 +1,7 @@
 # GraphIO
 
 [![Build Status](https://travis-ci.com/kaiserpreusse/graphio.svg?branch=master)](https://travis-ci.com/kaiserpreusse/graphio)
-![PyPI](https://img.shields.io/pypi/v/graphio)
+[![PyPI](https://img.shields.io/pypi/v/graphio)](https://pypi.org/project/graphio)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A Python library to quickly build data sets and load them to Neo4j. Based on Py2neo. Built by [Kaiser & Preusse](https://kaiser-preusse.com).
