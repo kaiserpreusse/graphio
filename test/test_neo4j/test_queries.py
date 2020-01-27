@@ -1,3 +1,5 @@
+import pytest
+
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind
 
 
