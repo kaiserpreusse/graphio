@@ -9,17 +9,23 @@ A Python library to quickly build data sets and load them to Neo4j. Based on Py2
 ## Documentation
 [![Documentation Status](https://readthedocs.org/projects/graphio/badge/?version=latest)](https://graphio.readthedocs.io/en/latest/?badge=latest)
 
-Preliminary docs available at: https://graphio.readthedocs.io/
+Docs available at: https://graphio.readthedocs.io/
 
 ## Install
 Install graphio from PyPI:
 
-```
+```shell script
 pip install graphio
 ```
 
+Install the latest build version from github:
+
+```shell script
+pip install git+https://github.com/kaiserpreusse/graphio.git
+```
+
 ## Status
-This is an early release with basic features.
+This is an early release with a focus on data loading.
 
 ## Feedback
 Please provide feedback, ideas and bug reports through github issues.
