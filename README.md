@@ -28,6 +28,12 @@ pip install git+https://github.com/kaiserpreusse/graphio.git
 ## Status
 This is an early release with a focus on data loading.
 
+## Development
+You need Docker to run the test suite. Two Neo4j Docker containers will be started before 
+running the tests, one for version 3.5 and another for version 4.
+
+All tests that use the `graph` fixture found in `tests/conftest.py` will run against both databases.
+
 ## Feedback
 Please provide feedback, ideas and bug reports through github issues.
 
