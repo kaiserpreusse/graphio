@@ -3,6 +3,10 @@
 #
 # The maintainer of this package has a background in computational biology.
 # This example loads data on gene IDs from a public genome database.
+# We create (:Gene) nodes and (:Gene)-[:MAPS]->(:Gene) relationships.
+#
+# Example line of data file:
+# 9606	11	NATP	-	AACP|NATP1	HGNC:HGNC:15	8	8p22	N-acetyltransferase pseudogene	pseudo	NATP	N-acetyltransferase pseudogene	O	arylamide acetylase pseudogene	20191221	-
 
 import gzip
 import os
@@ -14,7 +18,7 @@ import py2neo
 
 
 # setup file paths, Neo4j config and Graph instance
-DOWNLOAD_DIR = "/Users/mpreusse/Downloads"
+DOWNLOAD_DIR = "/set/your/path/here"
 DOWNLOAD_FILE_PATH = os.path.join(DOWNLOAD_DIR, 'Homo_sapiens.gene_info.gz')
 NEO4J_HOST = 'localhost'
 NEO4J_PORT = 7687
@@ -76,7 +80,7 @@ with gzip.open(DOWNLOAD_FILE_PATH, 'rt') as file:
             )
 
 
-# Load data to Neo4j
+# load data to Neo4j
 print(len(ncbi_gene_nodes.nodes))
 print(len(ensembl_gene_nodes.nodes))
 print(len(gene_mapping_rels.relationships))
