@@ -2,7 +2,6 @@ import pytest
 
 from graphio.objects.nodeset import NodeSet
 
-
 @pytest.fixture
 def small_nodeset():
     ns = NodeSet(['Test'], merge_keys=['uuid'])

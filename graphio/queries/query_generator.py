@@ -112,7 +112,7 @@ def query_create_rels_unwind(start_node_labels, end_node_labels, start_node_prop
     a Relationship object. This is used in cases where we avoid recreating Relationship objects from mongoDB
     documents.
 
-    UNWIND { rels } AS rel
+    UNWIND $rels AS rel
     MATCH (a:Gene), (b:GeneSymbol)
     WHERE a.sid = rel.start_sid AND b.sid = rel.end_sid AND b.taxid = rel.end_taxid
     CREATE (a)-[r:MAPS]->(b)
@@ -135,7 +135,7 @@ def query_create_rels_unwind(start_node_labels, end_node_labels, start_node_prop
     start_node_label_string = ':'.join(start_node_labels)
     end_node_label_string = ':'.join(end_node_labels)
 
-    q = "UNWIND {{ {0} }} AS rel \n".format(property_identifier)
+    q = "UNWIND ${0} AS rel \n".format(property_identifier)
     q += "MATCH (a:{0}), (b:{1}) \n".format(start_node_label_string, end_node_label_string)
 
     # collect WHERE clauses

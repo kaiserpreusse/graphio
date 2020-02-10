@@ -40,7 +40,7 @@ def run_neo4j():
 
     # check availability for both containers
     connected = False
-    max_retries = 20
+    max_retries = 120
     retries = 0
 
     while not connected:
