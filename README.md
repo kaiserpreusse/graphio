@@ -12,6 +12,8 @@ A Python library to quickly build data sets and load them to Neo4j. Based on Py2
 
 Docs available at: https://graphio.readthedocs.io/
 
+Tutorial with real data: https://graphdb-bio.com/graphio-tutorial-idmapping
+
 ## Install
 Install graphio from PyPI:
 
