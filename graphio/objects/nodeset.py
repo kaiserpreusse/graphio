@@ -55,6 +55,27 @@ class NodeSet(GraphObject):
         for properties in list_of_properties:
             self.add_node(properties)
 
+    def add_unique(self, properties):
+        """
+        Add a node to this NodeSet only if a node with the same `merge_keys` does not exist yet.
+
+        Note: Right now this function iterates all nodes in the NodeSet. This is of course slow for large
+        numbers of nodes. A better solution would be to create an 'index' as is done for RelationshipSet.
+
+        :param properties: Node properties.
+        :type properties: dict
+        """
+
+        compare_values = frozenset([properties[key] for key in self.merge_keys])
+
+        for other_node_properties in self.node_properties():
+            this_values = frozenset([other_node_properties[key] for key in self.merge_keys])
+            if this_values == compare_values:
+                return None
+
+        # add node if not found
+        self.add_node(properties)
+
     def to_dict(self):
         """
         Create dictionary defining each node.
@@ -107,7 +128,7 @@ class NodeSet(GraphObject):
 
         self.nodes = filtered_nodes
 
-    def merge(self, graph, merge_properties, batch_size=None):
+    def merge(self, graph, merge_properties=None, batch_size=None):
         """
         Merge nodes from NodeSet on merge properties.
 
@@ -117,6 +138,9 @@ class NodeSet(GraphObject):
 
         if not batch_size:
             batch_size = self.batch_size
+
+        if not merge_properties:
+            merge_properties = self.merge_keys
 
         log.debug('Batch Size: {}'.format(batch_size))
 

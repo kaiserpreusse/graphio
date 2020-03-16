@@ -4,7 +4,7 @@ import json
 
 from graphio.objects.relationship import Relationship
 from graphio import defaults
-from graphio.queries import query_create_rels_unwind
+from graphio.queries import query_create_rels_unwind, query_merge_rels_unwind
 from graphio.queries.query_parameters import params_create_rels_unwind_from_objects
 from graphio.objects.helper import chunks
 from py2neo.ogm import GraphObject
@@ -118,17 +118,6 @@ class RelationshipSet(GraphObject):
         self.relationships = filtered_rels
         self.discarded_nodes = discarded_rels
 
-    def _add_unique_relationship(self, start_node_properties, end_node_properties, properties):
-        """
-        Add relationship to RelationshipSet only if it does not exist yet.
-
-        :param start_node_properties:
-        :param end_node_properties:
-        :param properties:
-        """
-        if not self.check_if_rel_exists(start_node_properties, end_node_properties, properties):
-            self.add_relationship(start_node_properties, end_node_properties, properties)
-
     def check_if_rel_exists(self, start_node_properties, end_node_properties, properties):
         for rel in self.relationships:
             if rel.start_node_properties == start_node_properties and rel.end_node_properties == end_node_properties and rel.properties == properties:
@@ -145,6 +134,34 @@ class RelationshipSet(GraphObject):
 
         # get query
         query = query_create_rels_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
+                                         self.end_node_properties, self.rel_type)
+        log.debug(query)
+
+        i = 1
+        # iterate over chunks of rels
+        for batch in chunks(self.relationships, size=batch_size):
+            batch = list(batch)
+            log.debug('Batch {}'.format(i))
+            log.debug(batch[0])
+            # get parameters
+            query_parameters = params_create_rels_unwind_from_objects(batch)
+            log.debug(json.dumps(query_parameters))
+            result = graph.run(query, **query_parameters)
+            for r in result:
+                print(r)
+            i += 1
+
+    def merge(self, graph, batch_size=None):
+        """
+        Create relationships in this RelationshipSet
+        """
+        log.debug('Create RelationshipSet')
+        if not batch_size:
+            batch_size = self.batch_size
+        log.debug('Batch Size: {}'.format(batch_size))
+
+        # get query
+        query = query_merge_rels_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
                                          self.end_node_properties, self.rel_type)
         log.debug(query)
 

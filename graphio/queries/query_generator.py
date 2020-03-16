@@ -80,37 +80,10 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
     return q
 
 
-def query_create_rels_unwind_from_relationship(relationship, property_identifier=None):
-    """
-
-    UNWIND { rels } AS rel
-    MATCH (a:Gene), (b:GeneSymbol)
-    WHERE a.sid = rel.start_sid AND b.sid = rel.end_sid AND b.taxid = rel.end_taxid
-    CREATE (a)-[r:MAPS]->(b)
-    SET r = rel.properties
-
-    Call with params:
-        {'start_sid': 1, 'end_sid': 2, 'end_taxid': '9606', 'properties': {'foo': 'bar} }
-
-    Within UNWIND you cannot access nested dictionaries such as 'rel.start_node.sid'. Thus the
-    parameters are created in a separate function.
-
-    :param relationship: A Relationship object to create the query.
-    :param property_identifier: The variable used in UNWIND.
-    :return: Query
-    """
-
-    return query_create_rels_unwind(relationship.start_node_labels, relationship.end_node_labels,
-                                    relationship.start_node_properties, relationship.end_node_properties,
-                                    relationship.rel_type)
-
-
 def query_create_rels_unwind(start_node_labels, end_node_labels, start_node_properties,
                              end_node_properties, rel_type, property_identifier=None):
     """
-    Create relationship query with explicit arguments (i.e. extracted from a mongoDB document) and not from
-    a Relationship object. This is used in cases where we avoid recreating Relationship objects from mongoDB
-    documents.
+    Create relationship query with explicit arguments.
 
     UNWIND $rels AS rel
     MATCH (a:Gene), (b:GeneSymbol)
@@ -148,6 +121,54 @@ def query_create_rels_unwind(start_node_labels, end_node_labels, start_node_prop
     q += "WHERE " + ' AND '.join(where_clauses) + " \n"
 
     q += "CREATE (a)-[r:{0}]->(b) \n".format(rel_type)
+    q += "SET r = rel.properties RETURN count(r)\n"
+
+    return q
+
+
+def query_merge_rels_unwind(start_node_labels, end_node_labels, start_node_properties,
+                             end_node_properties, rel_type, property_identifier=None):
+    """
+    Merge relationship query with explicit arguments.
+
+    Note: The MERGE on relationships does not take relationship properties into account!
+
+    UNWIND $rels AS rel
+    MATCH (a:Gene), (b:GeneSymbol)
+    WHERE a.sid = rel.start_sid AND b.sid = rel.end_sid AND b.taxid = rel.end_taxid
+    MERGE (a)-[r:MAPS]->(b)
+    SET r = rel.properties
+
+    Call with params:
+        {'start_sid': 1, 'end_sid': 2, 'end_taxid': '9606', 'properties': {'foo': 'bar} }
+
+    Within UNWIND you cannot access nested dictionaries such as 'rel.start_node.sid'. Thus the
+    parameters are created in a separate function.
+
+    :param relationship: A Relationship object to create the query.
+    :param property_identifier: The variable used in UNWIND.
+    :return: Query
+    """
+
+    if not property_identifier:
+        property_identifier = 'rels'
+
+    start_node_label_string = ':'.join(start_node_labels)
+    end_node_label_string = ':'.join(end_node_labels)
+
+    q = "UNWIND ${0} AS rel \n".format(property_identifier)
+    q += "MATCH (a:{0}), (b:{1}) \n".format(start_node_label_string, end_node_label_string)
+
+    # collect WHERE clauses
+    where_clauses = []
+    for property in start_node_properties:
+        where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+    for property in end_node_properties:
+        where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+
+    q += "WHERE " + ' AND '.join(where_clauses) + " \n"
+
+    q += "MERGE (a)-[r:{0}]->(b) \n".format(rel_type)
     q += "SET r = rel.properties RETURN count(r)\n"
 
     return q
