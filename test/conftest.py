@@ -14,7 +14,7 @@ CONTAINER_NAME = 'neo4j_graphio_test_run'
 NEO4J_PASSWORD = 'test'
 
 NEO4J_VERSIONS = [
-    {'version': '3.5', 'ports': (7474, 7473, 7687)},
+    {'version': '3.5', 'ports': (9474, 9473, 9687)},
     {'version': '4.0', 'ports': (8474, 8473, 8687)}
 ]
 
@@ -29,7 +29,8 @@ def run_neo4j():
     # run all Neo4j containers
     for v in NEO4J_VERSIONS:
         container = client.containers.run(image='neo4j:{}'.format(v['version']),
-                                          ports={'7474/tcp': v['ports'][0], '7473/tcp': v['ports'][1], '7687/tcp': v['ports'][2]},
+                                          ports={'7474/tcp': v['ports'][0], '7473/tcp': v['ports'][1],
+                                                 '7687/tcp': v['ports'][2]},
                                           environment={'NEO4J_AUTH': 'neo4j/{}'.format(NEO4J_PASSWORD)},
                                           name='{}_{}'.format(CONTAINER_NAME, v['version']),
                                           detach=True,
@@ -74,3 +75,23 @@ def graph(request):
 @pytest.fixture
 def clear_graph(graph):
     graph.run("MATCH (n) DETACH DELETE n")
+
+    # remove indexes
+    result = list(
+        graph.run("CALL db.indexes()")
+    )
+
+    for row in result:
+        # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+        # this should also be synced with differences in py2neo versions
+        labels = []
+        if 'tokenNames' in row:
+            labels = row['tokenNames']
+        elif 'labelsOrTypes' in row:
+            labels = row['labelsOrTypes']
+
+        properties = row['properties']
+
+        # multiple labels possible?
+        for label in labels:
+            q = "DROP INDEX ON :{}({})".format(label, ', '.join(properties))

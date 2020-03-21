@@ -24,7 +24,6 @@ def create_nodes_test(graph, clear_graph):
 class TestRelationshipSet:
 
     def test_relationshipset_create_number(self, graph, create_nodes_test):
-
         rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
 
         for i in range(10):
@@ -42,3 +41,23 @@ class TestRelationshipSet:
         print(result)
         print(result[0])
         assert result[0][0] == 10
+
+    def test_relationship_create_single_index(self, graph):
+        rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+
+        rs.create_index(graph)
+
+        result = list(
+            graph.run("CALL db.indexes()")
+        )
+
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            if 'tokenNames' in row:
+                assert row['tokenNames'] == ['Test'] and row['properties'] == ['uuid'] \
+                       or row['tokenNames'] == ['Test'] and row['properties'] == ['uuid']
+
+            elif 'labelsOrTypes' in row:
+                assert row['labelsOrTypes'] == ['Test'] and row['properties'] == ['uuid'] \
+                       or row['labelsOrTypes'] == ['Test'] and row['properties'] == ['uuid']
