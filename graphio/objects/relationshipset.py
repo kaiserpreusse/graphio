@@ -1,13 +1,14 @@
 from uuid import uuid4
 import logging
 import json
+from py2neo.ogm import GraphObject
+from py2neo.database import ClientError
 
 from graphio.objects.relationship import Relationship
 from graphio import defaults
 from graphio.queries import query_create_rels_unwind, query_merge_rels_unwind
 from graphio.queries.query_parameters import params_create_rels_unwind_from_objects
-from graphio.objects.helper import chunks
-from py2neo.ogm import GraphObject
+from graphio.objects.helper import chunks, create_single_index
 
 log = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class RelationshipSet(GraphObject):
 
         # get query
         query = query_merge_rels_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                                         self.end_node_properties, self.rel_type)
+                                        self.end_node_properties, self.rel_type)
         log.debug(query)
 
         i = 1
@@ -178,3 +179,39 @@ class RelationshipSet(GraphObject):
             for r in result:
                 print(r)
             i += 1
+
+    def create_index(self, graph):
+        """
+        Create indices for start node and end node definition of this relationshipset. If more than one start or end
+        node property is defined, all single property indices as well as the composite index are created.
+
+        In Neo4j 3.x recreation of an index did not raise an error. In Neo4j 4 you cannot create an existing index.
+
+        Index creation syntax changed from Neo4j 3.5 to 4. So far the old syntax is still supported. All py2neo
+        functions (v4.4) work on both versions.
+        """
+
+        # from start nodes
+        for label in self.start_node_labels:
+            # create individual indexes
+            for prop in self.start_node_properties:
+                create_single_index(graph, label, prop)
+
+            # composite indexes
+            if len(self.start_node_properties) > 1:
+                try:
+                    graph.schema.create_index(label, *self.start_node_properties)
+                except ClientError:
+                    log.info("Index {}, {} cannot be created, it likely exists alredy.".format(label,
+                                                                                               self.start_node_properties))
+        for label in self.end_node_labels:
+            for prop in self.end_node_properties:
+                create_single_index(graph, label, prop)
+                
+            # composite indexes
+            if len(self.end_node_properties) > 1:
+                try:
+                    graph.schema.create_index(label, *self.end_node_properties)
+                except ClientError:
+                    log.info("Index {}, {} cannot be created, it likely exists alredy.".format(label,
+                                                                                               self.end_node_properties))

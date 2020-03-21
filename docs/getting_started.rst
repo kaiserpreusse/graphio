@@ -47,6 +47,21 @@ The arguments for the :class:`~graphio.RelationshipSet`
 When you add a relationship to :class:`~graphio.RelationshipSet` all you have to do is to define the matching properties for the
 start node and end node. You can also add relationship properties.
 
+Index for start and end node
+================================
+
+You can create the indexes required for both the start node and end note with :func:`RelationshipiSet.create_index()`::
+
+  from graphio import RelationshipSet
+  from py2neo import Graph
+
+  graph = Graph()
+
+  person_likes_food = RelationshipSet('KNOWS', ['Person'], ['Food'], ['name'], ['type'])
+
+  person_likes_food.create_index(graph)
+
+This will create single-property indexes for `:Person(name)` and `:Food(type)`.
 
 Create Data
 ---------------
