@@ -147,9 +147,7 @@ class RelationshipSet(GraphObject):
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-            result = graph.run(query, **query_parameters)
-            for r in result:
-                print(r)
+            graph.run(query, **query_parameters)
             i += 1
 
     def merge(self, graph, batch_size=None):
@@ -175,9 +173,7 @@ class RelationshipSet(GraphObject):
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-            result = graph.run(query, **query_parameters)
-            for r in result:
-                print(r)
+            graph.run(query, **query_parameters)
             i += 1
 
     def create_index(self, graph):
