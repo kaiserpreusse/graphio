@@ -8,7 +8,7 @@ from graphio.objects.relationship import Relationship
 from graphio import defaults
 from graphio.queries import query_create_rels_unwind, query_merge_rels_unwind
 from graphio.queries.query_parameters import params_create_rels_unwind_from_objects
-from graphio.objects.helper import chunks, create_single_index
+from graphio.objects.helper import chunks, create_single_index, create_composite_index
 
 log = logging.getLogger(__name__)
 
@@ -195,19 +195,12 @@ class RelationshipSet(GraphObject):
 
             # composite indexes
             if len(self.start_node_properties) > 1:
-                try:
-                    graph.schema.create_index(label, *self.start_node_properties)
-                except ClientError:
-                    log.info("Index {}, {} cannot be created, it likely exists alredy.".format(label,
-                                                                                               self.start_node_properties))
+                create_composite_index(graph, label, self.start_node_properties)
+
         for label in self.end_node_labels:
             for prop in self.end_node_properties:
                 create_single_index(graph, label, prop)
                 
             # composite indexes
             if len(self.end_node_properties) > 1:
-                try:
-                    graph.schema.create_index(label, *self.end_node_properties)
-                except ClientError:
-                    log.info("Index {}, {} cannot be created, it likely exists alredy.".format(label,
-                                                                                               self.end_node_properties))
+                create_composite_index(graph, label, self.end_node_properties)

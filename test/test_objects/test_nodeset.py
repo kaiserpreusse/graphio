@@ -56,3 +56,47 @@ class TestNodeSetCreate:
         )
 
         assert result[0][0] == 100
+
+    def test_nodeset_create_single_index(self, graph, clear_graph):
+        labels = ['TestNode']
+        properties = ['some_key']
+        ns = NodeSet(labels, merge_keys=properties)
+
+        ns.create_index(graph)
+
+        result = list(
+            graph.run("CALL db.indexes()")
+        )
+
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            if 'tokenNames' in row:
+                assert row['tokenNames'] == labels and row['properties'] == properties \
+                       or row['tokenNames'] == labels and row['properties'] == properties
+
+            elif 'labelsOrTypes' in row:
+                assert row['labelsOrTypes'] == labels and row['properties'] == properties \
+                       or row['labelsOrTypes'] == labels and row['properties'] == properties
+
+    def test_nodeset_create_composite_index(self, graph, clear_graph):
+        labels = ['TestNode']
+        properties = ['some_key', 'other_key']
+        ns = NodeSet(labels, merge_keys=properties)
+
+        ns.create_index(graph)
+
+        result = list(
+            graph.run("CALL db.indexes()")
+        )
+
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            if 'tokenNames' in row:
+                assert row['tokenNames'] == labels and row['properties'] == properties \
+                       or row['tokenNames'] == labels and row['properties'] == properties
+
+            elif 'labelsOrTypes' in row:
+                assert row['labelsOrTypes'] == labels and row['properties'] == properties \
+                       or row['labelsOrTypes'] == labels and row['properties'] == properties

@@ -1,10 +1,11 @@
 import logging
 from py2neo import Node, Relationship, Subgraph
 from py2neo.ogm import GraphObject
+from py2neo.database import ClientError
 from uuid import uuid4
 
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind
-from graphio.objects.helper import chunks
+from graphio.objects.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.objects.relationshipset import RelationshipSet
 
@@ -200,3 +201,22 @@ class NodeSet(GraphObject):
                 all_props.add(k)
 
         return all_props
+
+    def create_index(self, graph):
+        """
+        Create indices for all label/merge ky combinations as well as a composite index if multiple merge keys exist.
+
+        In Neo4j 3.x recreation of an index did not raise an error. In Neo4j 4 you cannot create an existing index.
+
+        Index creation syntax changed from Neo4j 3.5 to 4. So far the old syntax is still supported. All py2neo
+        functions (v4.4) work on both versions.
+        """
+        if self.merge_keys:
+            for label in self.labels:
+                # create individual indexes
+                for prop in self.merge_keys:
+                    create_single_index(graph, label, prop)
+
+                # composite indexes
+                if len(self.merge_keys) > 1:
+                    create_composite_index(graph, label, self.merge_keys)

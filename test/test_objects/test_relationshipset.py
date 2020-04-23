@@ -42,7 +42,7 @@ class TestRelationshipSet:
         print(result[0])
         assert result[0][0] == 10
 
-    def test_relationship_create_single_index(self, graph):
+    def test_relationship_create_single_index(self, graph, clear_graph):
         rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
 
         rs.create_index(graph)
