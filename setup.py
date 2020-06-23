@@ -17,7 +17,7 @@ setup(name='graphio',
       license='Apache License 2.0',
       packages=find_packages(),
       install_requires=[
-          'neo4j>=4.0',
+          'neo4j>=4.0'
       ],
       keywords=['NEO4J'],
       zip_safe=False,

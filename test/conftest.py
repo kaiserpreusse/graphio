@@ -21,23 +21,23 @@ NEO4J_VERSIONS = [
 
 @pytest.fixture(scope='session', autouse=True)
 def run_neo4j():
-    log.debug("Run Docker container.")
-    client = docker.from_env()
-
-    containers = []
-
-    # run all Neo4j containers
-    for v in NEO4J_VERSIONS:
-        container = client.containers.run(image='neo4j:{}'.format(v['version']),
-                                          ports={'7474/tcp': v['ports'][0], '7473/tcp': v['ports'][1],
-                                                 '7687/tcp': v['ports'][2]},
-                                          environment={'NEO4J_AUTH': 'neo4j/{}'.format(NEO4J_PASSWORD)},
-                                          name='{}_{}'.format(CONTAINER_NAME, v['version']),
-                                          detach=True,
-                                          remove=True,
-                                          auto_remove=True)
-
-        containers.append(container)
+    # log.debug("Run Docker container.")
+    # client = docker.from_env()
+    #
+    # containers = []
+    #
+    # # run all Neo4j containers
+    # for v in NEO4J_VERSIONS:
+    #     container = client.containers.run(image='neo4j:{}'.format(v['version']),
+    #                                       ports={'7474/tcp': v['ports'][0], '7473/tcp': v['ports'][1],
+    #                                              '7687/tcp': v['ports'][2]},
+    #                                       environment={'NEO4J_AUTH': 'neo4j/{}'.format(NEO4J_PASSWORD)},
+    #                                       name='{}_{}'.format(CONTAINER_NAME, v['version']),
+    #                                       detach=True,
+    #                                       remove=True,
+    #                                       auto_remove=True)
+    #
+    #     containers.append(container)
 
     # check availability for both containers
     connected = False
@@ -63,11 +63,11 @@ def run_neo4j():
                 break
             sleep(1)
 
-    yield containers
-
-    # stop container
-    for c in containers:
-        c.stop()
+    # yield containers
+    #
+    # # stop container
+    # for c in containers:
+    #     c.stop()
 
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
