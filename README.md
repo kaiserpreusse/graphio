@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Neo4j](https://img.shields.io/badge/Neo4j-3.4%20%7C%203.5%20%7C%204.0-blue)](https://neo4j.com)
 
-A Python library to quickly build data sets and load them to Neo4j. Based on Py2neo. Built by [Kaiser & Preusse](https://kaiser-preusse.com).
+A Python library to quickly build data sets and load them to Neo4j. Built by [Kaiser & Preusse](https://kaiser-preusse.com).
 
 ## Documentation
 [![Documentation Status](https://readthedocs.org/projects/graphio/badge/?version=latest)](https://graphio.readthedocs.io/en/latest/?badge=latest)
