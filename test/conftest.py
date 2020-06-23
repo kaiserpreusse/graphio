@@ -14,8 +14,8 @@ CONTAINER_NAME = 'neo4j_graphio_test_run'
 NEO4J_PASSWORD = 'test'
 
 NEO4J_VERSIONS = [
-    {'version': '3.5', 'ports': (9474, 9473, 9687)},
-    {'version': '4.0', 'ports': (8474, 8473, 8687)}
+    {'version': '3.5', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt'},
+    {'version': '4.0', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt'}
 ]
 
 
@@ -73,7 +73,7 @@ def run_neo4j():
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request):
 
-    neo4j_uri = 'bolt://localhost:{0}'.format(request.param['ports'][2])
+    neo4j_uri = '{0}://localhost:{1}'.format(request.param['uri_prefix'], request.param['ports'][2])
     log.info("Neo4j URI: {}".format(neo4j_uri))
     driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", NEO4J_PASSWORD))
 
