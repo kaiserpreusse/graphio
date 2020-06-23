@@ -1,8 +1,7 @@
 import logging
-from py2neo import Node, Relationship, Subgraph
-from py2neo.ogm import GraphObject
-from py2neo.database import ClientError
+from py2neo import Subgraph
 from uuid import uuid4
+from neo4j import GraphDatabase
 
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
@@ -12,7 +11,7 @@ from graphio.objects.relationshipset import RelationshipSet
 log = logging.getLogger(__name__)
 
 
-class NodeSet(GraphObject):
+class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
@@ -42,15 +41,12 @@ class NodeSet(GraphObject):
 
     def add_node(self, properties):
         """
-        Create a node in this NodeSet. If a Node subclass is provided,
-        the function create an instance of the subclass.
+        Create a node in this NodeSet.
 
         :param properties: Node properties.
         :type properties: dict
         """
-        n = Node(*self.labels, **properties)
-
-        self.nodes.append(n)
+        self.nodes.append(properties)
 
     def add_nodes(self, list_of_properties):
         for properties in list_of_properties:
@@ -95,12 +91,19 @@ class NodeSet(GraphObject):
 
         i = 1
         for batch in chunks(self.nodes, size=batch_size):
-            batch = Subgraph(list(batch))
+            batch = list(batch)
             log.debug('Batch {}'.format(i))
 
-            graph.create(batch)
+            query = nodes_create_unwind(self.labels)
+            log.debug(query)
+            print(query)
+
+            with graph.session() as s:
+                result = s.run(query, props=batch)
+
             i += 1
 
+    # TODO remove py2neo Node here, the node is just a dict now
     def filter_nodes(self, filter_func):
         """
         Filter node properties with a filter function, remove nodes that do not match from main list.
@@ -117,6 +120,7 @@ class NodeSet(GraphObject):
         self.nodes = filtered_nodes
         self.discarded_nodes = discarded_nodes
 
+    # TODO remove py2neo Node here, the node is just a dict now
     def reduce_node_properties(self, *keep_props):
         filtered_nodes = []
         for n in self.nodes:
@@ -153,7 +157,8 @@ class NodeSet(GraphObject):
             batch = list(batch)
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
-            graph.run(query, props=batch)
+            with graph.session() as s:
+                s.run(query, props=batch)
             i += 1
 
     def map_to_1(self, graph, target_labels, target_properties, rel_type=None):

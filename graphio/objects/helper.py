@@ -1,6 +1,6 @@
 from itertools import chain, islice
 import logging
-from py2neo.database import ClientError
+from neo4j.exceptions import ClientError
 
 log = logging.getLogger(__name__)
 
@@ -27,16 +27,16 @@ def create_single_index(graph, label, prop):
     :param label: The label.
     :param prop: The property.
     """
-
     try:
         log.debug("Create index {}, {}".format(label, prop))
         q = "CREATE INDEX ON :{0}({1})".format(label, prop)
         log.debug(q)
-        graph.run(q)
+        with graph.session() as s:
+            s.run(q)
 
     except ClientError:
         # TODO check if the index exists instead of catching the (very general) ClientError
-        log.info("Index {}, {} cannot be created, it likely exists alredy.".format(label, prop))
+        log.debug("Index {}, {} cannot be created, it likely exists alredy.".format(label, prop))
 
 
 def create_composite_index(graph, label, properties):
@@ -46,13 +46,13 @@ def create_composite_index(graph, label, properties):
     :param label: The label.
     :param prop: The property.
     """
-
     try:
         property_string = ', '.join(properties)
         log.debug("Create index {}, {}".format(label, property_string))
         q = "CREATE INDEX ON :{0}({1})".format(label, property_string)
         log.debug(q)
-        graph.run(q)
+        with graph.session() as s:
+            s.run(q)
 
     except ClientError:
         # TODO check if the index exists instead of catching the (very general) ClientError

@@ -1,9 +1,7 @@
-from py2neo.ogm import GraphObject
-
 from graphio import NodeSet, RelationshipSet
 
 
-class Container(GraphObject):
+class Container:
     """
     A container for a collection of Nodes, Relationships, NodeSets and RelationshipSets.
 

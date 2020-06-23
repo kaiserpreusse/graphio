@@ -1,8 +1,6 @@
 from uuid import uuid4
 import logging
 import json
-from py2neo.ogm import GraphObject
-from py2neo.database import ClientError
 
 from graphio.objects.relationship import Relationship
 from graphio import defaults
@@ -13,7 +11,7 @@ from graphio.objects.helper import chunks, create_single_index, create_composite
 log = logging.getLogger(__name__)
 
 
-class RelationshipSet(GraphObject):
+class RelationshipSet:
     """
     Container for a set of Relationships with the same type of start and end nodes.
     """

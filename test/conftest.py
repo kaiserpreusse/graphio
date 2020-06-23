@@ -1,8 +1,8 @@
 import docker
 import pytest
 import logging
-from py2neo import Graph
-from neobolt.exceptions import ServiceUnavailable
+from neo4j import GraphDatabase
+from neo4j.exceptions import ServiceUnavailable
 from time import sleep
 
 logging.basicConfig()
@@ -50,9 +50,12 @@ def run_neo4j():
             # throw a ServiceUnavailable error
             for v in NEO4J_VERSIONS:
                 # get Graph, bolt connection to localhost is default
-                graph = Graph(password=NEO4J_PASSWORD, port=v['ports'][2])
-                graph.run("MATCH (n) RETURN n LIMIT 1")
-            connected = True
+                neo4j_uri = 'bolt://localhost:{0}'.format(v['ports'][2])
+                graph = GraphDatabase.driver(neo4j_uri, auth=("neo4j", NEO4J_PASSWORD))
+
+                with graph.session() as s:
+                    s.run("MATCH (n) RETURN n LIMIT 1")
+                    connected = True
 
         except ServiceUnavailable:
             retries += 1
@@ -69,29 +72,35 @@ def run_neo4j():
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request):
-    yield Graph(password=NEO4J_PASSWORD, port=request.param['ports'][2])
+
+    neo4j_uri = 'bolt://localhost:{0}'.format(request.param['ports'][2])
+    log.info("Neo4j URI: {}".format(neo4j_uri))
+    driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", NEO4J_PASSWORD))
+
+    yield driver
 
 
 @pytest.fixture
 def clear_graph(graph):
-    graph.run("MATCH (n) DETACH DELETE n")
+    with graph.session() as s:
+        s.run("MATCH (n) DETACH DELETE n")
 
-    # remove indexes
-    result = list(
-        graph.run("CALL db.indexes()")
-    )
+        # remove indexes
+        result = s.run("CALL db.indexes()")
 
-    for row in result:
-        # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
-        # this should also be synced with differences in py2neo versions
-        labels = []
-        if 'tokenNames' in row:
-            labels = row['tokenNames']
-        elif 'labelsOrTypes' in row:
-            labels = row['labelsOrTypes']
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            labels = []
+            if 'tokenNames' in row:
+                labels = row['tokenNames']
+            elif 'labelsOrTypes' in row:
+                labels = row['labelsOrTypes']
 
-        properties = row['properties']
+            properties = row['properties']
 
-        # multiple labels possible?
-        for label in labels:
-            q = "DROP INDEX ON :{}({})".format(label, ', '.join(properties))
+            # multiple labels possible?
+            # TODO adapt this for Neo4j 4, the DROP INDEX syntax will be deprecated at some point
+            for label in labels:
+                q = "DROP INDEX ON :{}({})".format(label, ', '.join(properties))
+                s.run(q)

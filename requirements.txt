@@ -1,2 +1,1 @@
-neo4j
-py2neo
+neo4j>=4.0
