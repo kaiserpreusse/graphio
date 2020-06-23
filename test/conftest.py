@@ -79,6 +79,8 @@ def graph(request):
 
     yield driver
 
+    driver.close()
+
 
 @pytest.fixture
 def clear_graph(graph):
