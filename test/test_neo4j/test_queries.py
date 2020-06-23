@@ -24,18 +24,18 @@ class TestNodesCreateUnwind:
     def test_query_creates_nodes(self, graph, clear_graph):
         query = nodes_create_unwind(['Foo', 'Bar'])
 
-        # run query
-        graph.run(query, props=[{'testid': 1}, {'testid': 2}])
+        with graph.session() as s:
+            s.run(query, props=[{'testid': 1}, {'testid': 2}])
 
-        result = graph.run('MATCH (n:Foo:Bar) RETURN n.testid AS testid')
+            result = s.run('MATCH (n:Foo:Bar) RETURN n.testid AS testid')
 
-        collected_ids = set()
+            collected_ids = set()
 
-        for row in result:
-            assert row['testid']
-            collected_ids.add(row['testid'])
+            for row in result:
+                assert row['testid']
+                collected_ids.add(row['testid'])
 
-        assert collected_ids == {1, 2}
+            assert collected_ids == {1, 2}
 
 
 class TestNodesMergeUnwind:
@@ -93,32 +93,34 @@ ON MATCH SET n += properties"""
     def test_nodes_are_created(self, graph, clear_graph):
         query = nodes_merge_unwind(['Foo'], ['testid'])
 
-        graph.run(query, props=[{'testid': 1, 'key': 'newvalue'}])
+        with graph.session() as s:
 
-        results = list(graph.run("MATCH (n:Foo) RETURN n"))
+            s.run(query, props=[{'testid': 1, 'key': 'newvalue'}])
 
-        first_row = results[0]
-        first_row_first_element = first_row[0]
+            results = list(s.run("MATCH (n:Foo) RETURN n"))
 
-        assert len(results) == 1
-        assert first_row_first_element['testid'] == 1
-        assert first_row_first_element['key'] == 'newvalue'
+            first_row = results[0]
+            first_row_first_element = first_row[0]
+
+            assert len(results) == 1
+            assert first_row_first_element['testid'] == 1
+            assert first_row_first_element['key'] == 'newvalue'
 
     def test_nodes_are_merged(self, graph, clear_graph):
-        # create node
-        graph.run("CREATE (n:Foo) SET n.testid = 1, n.key = 'value', n.other = 'other_value'")
+        with graph.session() as s:
+            s.run("CREATE (n:Foo) SET n.testid = 1, n.key = 'value', n.other = 'other_value'")
 
-        query = nodes_merge_unwind(['Foo'], ['testid'])
+            query = nodes_merge_unwind(['Foo'], ['testid'])
 
-        graph.run(query, props=[{'testid': 1, 'key': 'newvalue'}])
+            s.run(query, props=[{'testid': 1, 'key': 'newvalue'}])
 
-        results = list(graph.run("MATCH (n:Foo) RETURN n"))
+            results = list(s.run("MATCH (n:Foo) RETURN n"))
 
-        first_row = results[0]
-        first_row_first_element = first_row[0]
+            first_row = results[0]
+            first_row_first_element = first_row[0]
 
-        assert len(results) == 1
-        assert first_row_first_element['testid'] == 1
-        assert first_row_first_element['key'] == 'newvalue'
-        # assert other value did not change
-        assert first_row_first_element['other'] == 'other_value'
+            assert len(results) == 1
+            assert first_row_first_element['testid'] == 1
+            assert first_row_first_element['key'] == 'newvalue'
+            # assert other value did not change
+            assert first_row_first_element['other'] == 'other_value'

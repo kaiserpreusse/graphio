@@ -7,20 +7,21 @@ def test_create_single_index(graph, clear_graph):
 
     create_single_index(graph, test_label, test_prop)
 
-    result = list(
-        graph.run("CALL db.indexes()")
-    )
-    row = result[0]
+    with graph.session() as s:
+        result = list(
+            s.run("CALL db.indexes()")
+        )
+        row = result[0]
 
-    # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
-    # this should also be synced with differences in py2neo versions
-    if 'tokenNames' in row:
-        assert row['tokenNames'] == [test_label]
-        assert row['properties'] == [test_prop]
+        # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+        # this should also be synced with differences in py2neo versions
+        if 'tokenNames' in row:
+            assert row['tokenNames'] == [test_label]
+            assert row['properties'] == [test_prop]
 
-    elif 'labelsOrTypes' in row:
-        assert row['labelsOrTypes'] == [test_label]
-        assert row['properties'] == [test_prop]
+        elif 'labelsOrTypes' in row:
+            assert row['labelsOrTypes'] == [test_label]
+            assert row['properties'] == [test_prop]
 
 
 def test_create_composite_index(graph, clear_graph):
@@ -28,21 +29,21 @@ def test_create_composite_index(graph, clear_graph):
     test_properties = ['bar', 'keks']
 
     create_composite_index(graph, test_label, test_properties)
+    with graph.session() as s:
+        result = list(
+            s.run("CALL db.indexes()")
+        )
 
-    result = list(
-        graph.run("CALL db.indexes()")
-    )
+        row = result[0]
 
-    row = result[0]
+        # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+        # this should also be synced with differences in py2neo versions
+        if 'tokenNames' in row:
+            assert row['tokenNames'] == [test_label]
+            # cast to set in case lists have different order
+            assert set(row['properties']) == set(test_properties)
 
-    # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
-    # this should also be synced with differences in py2neo versions
-    if 'tokenNames' in row:
-        assert row['tokenNames'] == [test_label]
-        # cast to set in case lists have different order
-        assert set(row['properties']) == set(test_properties)
-
-    elif 'labelsOrTypes' in row:
-        assert row['labelsOrTypes'] == [test_label]
-        # cast to set in case lists have different order
-        assert set(row['properties']) == set(test_properties)
+        elif 'labelsOrTypes' in row:
+            assert row['labelsOrTypes'] == [test_label]
+            # cast to set in case lists have different order
+            assert set(row['properties']) == set(test_properties)
