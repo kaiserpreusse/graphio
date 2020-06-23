@@ -1,5 +1,4 @@
 import logging
-from py2neo import Subgraph
 from uuid import uuid4
 from neo4j import GraphDatabase
 
