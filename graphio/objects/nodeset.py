@@ -76,7 +76,7 @@ class NodeSet:
         """
         Create dictionary defining the nodeset.
         """
-        return {"labels":self.labels,"merge_keys":self.merge_keys,"nodes":nodes}
+        return {"labels":self.labels,"merge_keys":self.merge_keys,"nodes":self.nodes}
 
     @classmethod
     def from_dict(cls,nodeset_dict,batch_size=None):

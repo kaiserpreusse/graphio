@@ -98,6 +98,7 @@ class RelationshipSet:
             batch_size=batch_size)
         rs.unique = relationship_dict["unique"]
         [rs.add_relationship(start_node_properties=rel["start_node_properties"],end_node_properties=rel["end_node_properties"],properties=rel["properties"]) for rel in relationship_dict["relationships"]]
+        return rs
 
     def filter_relationships_target_node(self, filter_func):
         """
