@@ -52,10 +52,11 @@ def run_neo4j():
                 # get Graph, bolt connection to localhost is default
                 neo4j_uri = 'bolt://localhost:{0}'.format(v['ports'][2])
                 graph = GraphDatabase.driver(neo4j_uri, auth=("neo4j", NEO4J_PASSWORD))
-
-                with graph.session() as s:
-                    s.run("MATCH (n) RETURN n LIMIT 1")
-                    connected = True
+                graph.run("MATCH (n) RETURN n LIMIT 1")
+                connected = True
+                #with graph.session() as s:
+                #    s.run("MATCH (n) RETURN n LIMIT 1")
+                    #connected = True
 
         except ServiceUnavailable:
             retries += 1

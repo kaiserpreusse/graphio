@@ -161,9 +161,11 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-            with graph.session() as s:
-                s.run(query, **query_parameters)
-                i += 1
+            graph.run(query,**query_parameters)
+            i += 1
+            #with graph.session() as s:
+            #    s.run(query, **query_parameters)
+            #    i += 1
 
     def merge(self, graph, batch_size=None):
         """
@@ -188,10 +190,11 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-
-            with graph.session() as s:
-                graph.run(query, **query_parameters)
-                i += 1
+            graph.run(query,**query_parameters)
+            i += 1
+            #with graph.session() as s:
+            #    graph.run(query, **query_parameters)
+            #    i += 1
 
     def create_index(self, graph):
         """

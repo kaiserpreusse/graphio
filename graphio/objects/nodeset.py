@@ -100,10 +100,10 @@ class NodeSet:
 
             query = nodes_create_unwind(self.labels)
             log.debug(query)
-            print(query)
+            graph.run(query,props=batch)
 
-            with graph.session() as s:
-                result = s.run(query, props=batch)
+            #with graph.session() as s:
+            #    result = s.run(query, props=batch)
 
             i += 1
 
@@ -161,8 +161,9 @@ class NodeSet:
             batch = list(batch)
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
-            with graph.session() as s:
-                s.run(query, props=batch)
+            graph.run(query,props=batch)
+            #with graph.session() as s:
+            #    s.run(query, props=batch)
             i += 1
 
     def map_to_1(self, graph, target_labels, target_properties, rel_type=None):

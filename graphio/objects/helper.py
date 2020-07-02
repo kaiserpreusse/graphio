@@ -31,8 +31,9 @@ def create_single_index(graph, label, prop):
         log.debug("Create index {}, {}".format(label, prop))
         q = "CREATE INDEX ON :{0}({1})".format(label, prop)
         log.debug(q)
-        with graph.session() as s:
-            s.run(q)
+        graph.run(q)
+        #with graph.session() as s:
+        #    s.run(q)
 
     except ClientError:
         # TODO check if the index exists instead of catching the (very general) ClientError
@@ -51,8 +52,9 @@ def create_composite_index(graph, label, properties):
         log.debug("Create index {}, {}".format(label, property_string))
         q = "CREATE INDEX ON :{0}({1})".format(label, property_string)
         log.debug(q)
-        with graph.session() as s:
-            s.run(q)
+        graph.run(q)
+        #with graph.session() as s:
+        #    s.run(q)
 
     except ClientError:
         # TODO check if the index exists instead of catching the (very general) ClientError
