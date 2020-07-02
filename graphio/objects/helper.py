@@ -1,6 +1,6 @@
 from itertools import chain, islice
 import logging
-from neo4j.exceptions import ClientError
+from py2neo.database import ClientError
 
 log = logging.getLogger(__name__)
 
