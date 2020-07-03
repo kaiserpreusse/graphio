@@ -14,6 +14,7 @@ class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
+    failed_batch_handler=None
 
     def __init__(self, labels, merge_keys=None, batch_size=None):
         """
@@ -100,7 +101,13 @@ class NodeSet:
 
             query = nodes_create_unwind(self.labels)
             log.debug(query)
-            graph.run(query,props=batch)
+            try:
+                graph.run(query,props=batch)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(e, query, batch)
+                else:
+                    raise
 
             #with graph.session() as s:
             #    result = s.run(query, props=batch)
@@ -161,9 +168,13 @@ class NodeSet:
             batch = list(batch)
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
-            graph.run(query,props=batch)
-            #with graph.session() as s:
-            #    s.run(query, props=batch)
+            try:
+                graph.run(query,props=batch)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(e, query, batch)
+                else:
+                    raise
             i += 1
 
     def map_to_1(self, graph, target_labels, target_properties, rel_type=None):

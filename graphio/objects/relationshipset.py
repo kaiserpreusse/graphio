@@ -15,6 +15,7 @@ class RelationshipSet:
     """
     Container for a set of Relationships with the same type of start and end nodes.
     """
+    failed_batch_handler = None
 
     def __init__(self, rel_type, start_node_labels, end_node_labels, start_node_properties, end_node_properties,
                  batch_size=None):
@@ -162,7 +163,14 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-            graph.run(query,**query_parameters)
+            try:
+                graph.run(query,**query_parameters)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(e, query, batch)
+                else:
+                    raise
+            
             i += 1
             #with graph.session() as s:
             #    s.run(query, **query_parameters)
@@ -191,7 +199,13 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-            graph.run(query,**query_parameters)
+            try:
+                graph.run(query,**query_parameters)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(e, query, batch)
+                else:
+                    raise
             i += 1
             #with graph.session() as s:
             #    graph.run(query, **query_parameters)
