@@ -255,3 +255,4 @@ class NodeSet:
         )
         new_set.failed_batch_handler = self.failed_batch_handler
         new_set.nodes = content
+        return new_set
