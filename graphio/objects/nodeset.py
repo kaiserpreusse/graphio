@@ -105,7 +105,7 @@ class NodeSet:
                 graph.run(query,props=batch)
             except Exception as e:
                 if self.failed_batch_handler is not None:
-                    self.failed_batch_handler(e, query, batch)
+                    self.failed_batch_handler(self,e, query, batch)
                 else:
                     raise
 
@@ -172,7 +172,7 @@ class NodeSet:
                 graph.run(query,props=batch)
             except Exception as e:
                 if self.failed_batch_handler is not None:
-                    self.failed_batch_handler(e, query, batch)
+                    self.failed_batch_handler(self,e, query, batch)
                 else:
                     raise
             i += 1
