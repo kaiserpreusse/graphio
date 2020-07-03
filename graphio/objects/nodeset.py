@@ -253,6 +253,5 @@ class NodeSet:
             merge_keys=self.merge_keys.copy() if self.merge_keys is not None else None, 
             batch_size=self.batch_size
         )
-        new_set.unique = self.unique
         new_set.failed_batch_handler = self.failed_batch_handler
         new_set.nodes = content
