@@ -241,3 +241,18 @@ class NodeSet:
                 # composite indexes
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys)
+
+    def copy(self, content=[]):
+        """Copy the NodeSet. By default it will copy all attributes of the set but not the Nodes itself.
+
+        Args:
+            relationships (list, optional): [description]. Defaults to []. Nodes of the new NodeSet.
+        """
+        new_set = type(self)(
+            labels=self.labels.copy(),
+            merge_keys=self.merge_keys.copy() if self.merge_keys is not None else None, 
+            batch_size=self.batch_size
+        )
+        new_set.unique = self.unique
+        new_set.failed_batch_handler = self.failed_batch_handler
+        new_set.nodes = content
