@@ -85,7 +85,7 @@ class NodeSet:
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
 
-    def create(self, graph, batch_size=None):
+    def create(self, graph, batch_size=None,raise_on_result_count_deviation=False):
         """
         Create all nodes from NodeSet.
         """
@@ -102,7 +102,9 @@ class NodeSet:
             query = nodes_create_unwind(self.labels)
             log.debug(query)
             try:
-                graph.run(query,props=batch)
+                count = graph.run(query,props=batch).data()[0]["cnt"]
+                if raise_on_result_count_deviation and count != len(batch):
+                    raise MissingNodesEx("Excepted {} Nodes to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
                     self.failed_batch_handler(self,e, query, batch)
@@ -144,7 +146,7 @@ class NodeSet:
 
         self.nodes = filtered_nodes
 
-    def merge(self, graph, merge_properties=None, batch_size=None):
+    def merge(self, graph, merge_properties=None, batch_size=None, raise_on_result_count_deviation=False):
         """
         Merge nodes from NodeSet on merge properties.
 
@@ -169,7 +171,9 @@ class NodeSet:
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
             try:
-                graph.run(query,props=batch)
+                count = graph.run(query,props=batch).data()[0]["cnt"]
+                if raise_on_result_count_deviation and count != len(batch):
+                    raise MissingNodesEx("Excepted {} Nodes to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
                     self.failed_batch_handler(self,e, query, batch)
@@ -256,3 +260,6 @@ class NodeSet:
         new_set.failed_batch_handler = self.failed_batch_handler
         new_set.nodes = content
         return new_set
+
+class MissingNodesEx(Exception):
+    pass

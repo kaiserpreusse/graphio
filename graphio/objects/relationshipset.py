@@ -140,7 +140,7 @@ class RelationshipSet:
             if rel.start_node_properties == start_node_properties and rel.end_node_properties == end_node_properties and rel.properties == properties:
                 return True
 
-    def create(self, graph, batch_size=None):
+    def create(self, graph, batch_size=None, raise_on_result_count_deviation=False):
         """
         Create relationships in this RelationshipSet
         """
@@ -164,7 +164,9 @@ class RelationshipSet:
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
             try:
-                graph.run(query,**query_parameters)
+                count = graph.run(query,**query_parameters).data()[0]["cnt"]
+                if raise_on_result_count_deviation and count != len(batch):
+                    raise MissingRelationShipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
                     self.failed_batch_handler(self,e, query, batch)
@@ -176,7 +178,7 @@ class RelationshipSet:
             #    s.run(query, **query_parameters)
             #    i += 1
 
-    def merge(self, graph, batch_size=None):
+    def merge(self, graph, batch_size=None, raise_on_result_count_deviation=False):
         """
         Create relationships in this RelationshipSet
         """
@@ -200,7 +202,9 @@ class RelationshipSet:
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
             try:
-                graph.run(query,**query_parameters)
+                count = graph.run(query,**query_parameters).data()[0]["cnt"]
+                if raise_on_result_count_deviation and count != len(batch):
+                    raise MissingRelationShipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
                     self.failed_batch_handler(self,e, query, batch)
@@ -241,7 +245,7 @@ class RelationshipSet:
                 create_composite_index(graph, label, self.end_node_properties)
 
     def copy(self, content=[]):
-        """Copy the RelationshipSet. By default it will copy all attributes of the set but not the relationsship itself.
+        """Copy the RelationshipSet metadata into new RelationshipSet. By default it will copy all attributes of the set but not the relationsship itself.
 
         Args:
             relationships (list, optional): [description]. Defaults to []. Content of the new relationship set.
@@ -258,3 +262,6 @@ class RelationshipSet:
         new_set.failed_batch_handler = self.failed_batch_handler
         new_set.relationshipsets = content
         return new_set
+
+class MissingRelationShipsEx(Exception):
+    pass

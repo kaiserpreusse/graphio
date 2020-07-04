@@ -24,7 +24,7 @@ def nodes_create_unwind(labels, property_parameter=None):
     if not property_parameter:
         property_parameter = 'props'
 
-    return "UNWIND ${0} AS properties CREATE (n:{1}) SET n = properties".format(property_parameter, ":".join(labels))
+    return "UNWIND ${0} AS properties CREATE (n:{1}) SET n = properties RETURN count(n) as cnt".format(property_parameter, ":".join(labels))
 
 
 def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
@@ -75,7 +75,8 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
     q = "UNWIND ${0} AS properties\n" \
         "MERGE (n:{1} {{ {2} }} )\n" \
         "ON CREATE SET n = properties\n" \
-        "ON MATCH SET n += properties".format(property_parameter, label_string, merge_string)
+        "ON MATCH SET n += properties\n" \
+        "RETURN count(n) as cnt".format(property_parameter, label_string, merge_string)
 
     return q
 
@@ -121,7 +122,7 @@ def query_create_rels_unwind(start_node_labels, end_node_labels, start_node_prop
     q += "WHERE " + ' AND '.join(where_clauses) + " \n"
 
     q += "CREATE (a)-[r:{0}]->(b) \n".format(rel_type)
-    q += "SET r = rel.properties RETURN count(r)\n"
+    q += "SET r = rel.properties RETURN count(r) as cnt\n"
 
     return q
 
@@ -169,6 +170,6 @@ def query_merge_rels_unwind(start_node_labels, end_node_labels, start_node_prope
     q += "WHERE " + ' AND '.join(where_clauses) + " \n"
 
     q += "MERGE (a)-[r:{0}]->(b) \n".format(rel_type)
-    q += "SET r = rel.properties RETURN count(r)\n"
+    q += "SET r = rel.properties RETURN count(r) as cnt\n"
 
     return q
