@@ -164,8 +164,12 @@ class RelationshipSet:
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
             try:
-                count = graph.run(query,**query_parameters).data()[0]["cnt"]
-                if raise_on_result_count_deviation and count != len(batch):
+                tx = graph.begin()
+                tx.run(query,**query_parameters)
+                result = tx.run(query,**query_parameters)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
                     raise MissingRelationShipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
@@ -201,9 +205,14 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
+            
             try:
-                count = graph.run(query,**query_parameters).data()[0]["cnt"]
-                if raise_on_result_count_deviation and count != len(batch):
+                tx = graph.begin()
+                tx.run(query,**query_parameters)
+                result = tx.run(query,**query_parameters)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
                     raise MissingRelationShipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:

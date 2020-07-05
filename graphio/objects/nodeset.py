@@ -102,8 +102,12 @@ class NodeSet:
             query = nodes_create_unwind(self.labels)
             log.debug(query)
             try:
-                count = graph.run(query,props=batch).data()[0]["cnt"]
-                if raise_on_result_count_deviation and count != len(batch):
+                tx = graph.begin()
+                tx.run(query,props=batch)
+                result = tx.run(query,props=batch)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
                     raise MissingNodesEx("Excepted {} Nodes to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
@@ -164,15 +168,18 @@ class NodeSet:
 
         query = nodes_merge_unwind(self.labels, merge_properties)
         log.debug(query)
-
         i = 1
         for batch in chunks(self.node_properties(), size=batch_size):
             batch = list(batch)
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
             try:
-                count = graph.run(query,props=batch).data()[0]["cnt"]
-                if raise_on_result_count_deviation and count != len(batch):
+                tx = graph.begin()
+                tx.run(query,props=batch)
+                result = tx.run(query,props=batch)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
                     raise MissingNodesEx("Excepted {} Nodes to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
