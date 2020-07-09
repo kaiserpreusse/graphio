@@ -2,10 +2,10 @@ language: python
 services:
   - docker
 python:
-#- '3.5'
-#- '3.6'
+- '3.5'
+- '3.6'
 - '3.7'
-#- '3.8'
+- '3.8'
 before_install:
 - pip install -r test_requirements.txt
 - docker run -d -p 9474:7474 -p 9473:7473 -p 9687:7687 -e NEO4J_AUTH=neo4j/test --name neo4j_graphio_test_35 neo4j:3.5
