@@ -1,4 +1,3 @@
-import docker
 import pytest
 import logging
 from neo4j import GraphDatabase
@@ -21,7 +20,7 @@ NEO4J_VERSIONS = [
 
 @pytest.fixture(scope='session', autouse=True)
 def run_neo4j():
-    # log.debug("Run Docker container.")
+    log.debug("Run Docker container.")
     # client = docker.from_env()
     #
     # containers = []
