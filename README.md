@@ -38,7 +38,7 @@ All tests that use the `graph` fixture found in `tests/conftest.py` will run aga
 - create a new Python environment
 - install package dependencies with `pip install -r requirements.txt`
 - install test dependencies with `pip install -r test_requirements.txt`
-- run the script `run_test_local_env.sh`, the script will start two Docker containers with Neo4j and run pytest against the source
+- run the script `run_test_local_env.sh`, the script will start two Docker containers with Neo4j and run pytest against the source files
 
 
 ### Run test suite with tox
@@ -46,8 +46,8 @@ All tests that use the `graph` fixture found in `tests/conftest.py` will run aga
 It can run the tests against multiple Python versions. You have to install all Python versions that are tested and they have to be discoverable
 by [tox](https://tox.readthedocs.io/en/latest/). The suggested way to install multiple Python versions is [pyenv](https://github.com/pyenv/pyenv).
 
-- install Python 3.5, 3.6, 3.7, 3.8 with pyenv
-- allow tox to discover the Python executables by using [`pyenv local`](https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-local) in the graphio source directory
+- install Python 3.5, 3.6, 3.7, 3.8 with [pyenv](https://github.com/pyenv/pyenv)
+- allow [tox](https://tox.readthedocs.io/en/latest/) to discover the Python executables by using [`pyenv local`](https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-local) in the graphio source directory
 - run the script `run_test_tox.sh`, the script will start two Docker containers with Neo4j and run `tox` with the `--recreate` flag.
 
 
