@@ -7,6 +7,18 @@ from graphio.objects.nodeset import NodeSet, RelationshipSet
 
 
 @pytest.fixture
+def small_relationshipset():
+    rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+
+    for i in range(100):
+        rs.add_relationship(
+            {'uuid': i}, {'uuid': i}, {}
+        )
+
+    return rs
+
+
+@pytest.fixture(scope='function')
 def create_nodes_test(graph, clear_graph):
     ns1 = NodeSet(['Test'], merge_keys=['uuid'])
     ns2 = NodeSet(['Foo'], merge_keys=['uuid'])
@@ -21,17 +33,22 @@ def create_nodes_test(graph, clear_graph):
     return ns1, ns2
 
 
-class TestRelationshipSet:
+class TestRelationshipSetSet:
+    """
+    Test basic function such as adding rels.
+    """
 
-    def test_relationshipset_create_number(self, graph, create_nodes_test):
-        rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+    def test_item_iterator(self, small_relationshipset):
+        for i in small_relationshipset.item_iterator():
+            assert i['start_node_properties']
+            assert i['end_node_properties']
 
-        for i in range(10):
-            rs.add_relationship(
-                {'uuid': i}, {'uuid': i}, {}
-            )
 
-        rs.create(graph)
+class TestRelationshipSetCreate:
+
+    def test_relationshipset_create_number(self, graph, create_nodes_test, small_relationshipset):
+
+        small_relationshipset.create(graph)
 
         result = list(
             graph.run(
@@ -40,12 +57,11 @@ class TestRelationshipSet:
         )
         print(result)
         print(result[0])
-        assert result[0][0] == 10
+        assert result[0][0] == 100
 
-    def test_relationship_create_single_index(self, graph, clear_graph):
-        rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+    def test_relationship_create_single_index(self, graph, clear_graph, small_relationshipset):
 
-        rs.create_index(graph)
+        small_relationshipset.create_index(graph)
 
         result = list(
             graph.run("CALL db.indexes()")

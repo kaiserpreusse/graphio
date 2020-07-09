@@ -71,6 +71,16 @@ class NodeSet:
         # add node if not found
         self.add_node(properties)
 
+    def item_iterator(self):
+        """
+        Generator function that yields the node properties for all nodes in this NodeSet.
+
+        This is used to create chunks of the nodes without iterating all nodes. This can be removes in future
+        when NodeSet and RelationshipSet fully support generators (instead of lists of nodes/relationships).
+        """
+        for node in self.nodes:
+            yield node
+
     def to_dict(self):
         """
         Create dictionary defining the nodeset.

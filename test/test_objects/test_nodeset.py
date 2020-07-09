@@ -21,6 +21,16 @@ def nodeset_multiple_labels():
     return ns
 
 
+class TestNodeSet:
+    """
+    Test basic function such as adding nodes.
+    """
+    def test_item_iterator(self, small_nodeset):
+        for i in small_nodeset.item_iterator():
+            assert i['key'] == 'value'
+            assert isinstance(i['uuid'], int)
+
+
 class TestNodeSetCreate:
 
     def test_nodeset_create_number(self, small_nodeset, graph, clear_graph):
