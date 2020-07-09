@@ -73,10 +73,15 @@ class NodeSet:
 
     def to_dict(self):
         """
-        Create dictionary defining each node.
+        Create dictionary defining the nodeset.
         """
-        for node in self.nodes:
-            yield dict(node)
+        return {"labels":self.labels,"merge_keys":self.merge_keys,"nodes":self.nodes}
+
+    @classmethod
+    def from_dict(cls,nodeset_dict,batch_size=None):
+        ns = cls(labels=nodeset_dict["labels"],merge_keys=nodeset_dict["merge_keys"])
+        ns.add_nodes(nodeset_dict["nodes"])
+        return ns
 
     def create(self, graph, batch_size=None):
         """

@@ -80,8 +80,25 @@ class RelationshipSet:
             self.relationships.append(rel)
 
     def to_dict(self):
-        for rel in self.relationships:
-            yield rel.to_dict()
+        return {"rel_type":self.rel_type,
+                "start_node_labels":self.start_node_labels,
+                "end_node_labels":self.end_node_labels,
+                "start_node_properties":self.start_node_properties,
+                "end_node_properties":self.end_node_properties,
+                "unique":self.unique,
+                "relationships":[rel.to_dict() for rel in self.relationships]}
+
+    @classmethod  
+    def from_dict(cls,relationship_dict,batch_size=None):
+        rs = cls(rel_type=relationship_dict["rel_type"],
+            start_node_labels=relationship_dict["start_node_labels"],
+            end_node_labels=relationship_dict["end_node_labels"],
+            start_node_properties=relationship_dict["start_node_properties"],
+            end_node_properties=relationship_dict["end_node_properties"],
+            batch_size=batch_size)
+        rs.unique = relationship_dict["unique"]
+        [rs.add_relationship(start_node_properties=rel["start_node_properties"],end_node_properties=rel["end_node_properties"],properties=rel["properties"]) for rel in relationship_dict["relationships"]]
+        return rs
 
     def filter_relationships_target_node(self, filter_func):
         """
