@@ -25,3 +25,15 @@ class Relationship(object):
             'end_node_properties': self.end_node_properties,
             'properties': self.properties
         }
+
+    def __hash__(self):
+        # WARNING: whis is a bit risky as we expect only to be used in context of a certain RelationshipSet
+         return hash((self.start_node_properties, self.end_node_properties, self.properties))
+
+    def __eq__(self, other):
+        # WARNING: whis is a bit risky as we expect only to be used in context of a certain RelationshipSet
+         return (
+             self.start_node_properties == other.start_node_properties and
+             self.end_node_properties == other.end_node_properties and 
+             self.properties == other.properties
+         )

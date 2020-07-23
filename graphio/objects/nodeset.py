@@ -52,6 +52,9 @@ class NodeSet:
         for properties in list_of_properties:
             self.add_node(properties)
 
+    def make_distinct(self):
+        self.nodes = [dict(n) for n in set(tuple(n.items()) for n in self.nodes)]
+
     def add_unique(self, properties):
         """
         Add a node to this NodeSet only if a node with the same `merge_keys` does not exist yet.
