@@ -271,7 +271,7 @@ class RelationshipSet:
         )
         new_set.unique = self.unique
         new_set.failed_batch_handler = self.failed_batch_handler
-        new_set.relationshipsets = content
+        new_set.relationships = content
         return new_set
 
 class MissingRelationShipsEx(Exception):
