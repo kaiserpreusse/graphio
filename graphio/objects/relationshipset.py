@@ -173,7 +173,7 @@ class RelationshipSet:
                 tx.commit()
                 count = result.data()[0]["cnt"]
                 if raise_on_result_count_deviation and count < len(batch):
-                    raise MissingRelationShipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
+                    raise MissingRelationshipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
                     self.failed_batch_handler(self,e, query, batch)
@@ -216,7 +216,7 @@ class RelationshipSet:
                 tx.commit()
                 count = result.data()[0]["cnt"]
                 if raise_on_result_count_deviation and count < len(batch):
-                    raise MissingRelationShipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
+                    raise MissingRelationshipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
             except Exception as e:
                 if self.failed_batch_handler is not None:
                     self.failed_batch_handler(self,e, query, batch)
@@ -277,5 +277,5 @@ class RelationshipSet:
         new_set.relationships = content
         return new_set
 
-class MissingRelationShipsEx(Exception):
+class MissingRelationshipsEx(Exception):
     pass
