@@ -253,12 +253,14 @@ class RelationshipSet:
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties)
 
-    def copy(self, content=[]):
+    def copy(self, content=None):
         """Copy the RelationshipSet metadata into new RelationshipSet. By default it will copy all attributes of the set but not the relationsship itself.
 
         Args:
             relationships (list, optional): [description]. Defaults to []. Content of the new relationship set.
         """
+        if content is None:
+            content = []
         new_set = type(self)(
             rel_type=self.rel_type,
             start_node_labels=self.start_node_labels.copy(),
