@@ -28,7 +28,7 @@ class Relationship(object):
 
     def __hash__(self):
         # WARNING: whis is a bit risky as we expect only to be used in context of a certain RelationshipSet
-        return hash((tuple(self.start_node_properties), tuple(self.end_node_properties), tuple(self.properties)))
+        return hash((frozenset(self.start_node_properties.items()), frozenset(self.end_node_properties.items()), frozenset(self.properties.items())))
 
     def __eq__(self, other):
         # WARNING: whis is a bit risky as we expect only to be used in context of a certain RelationshipSet

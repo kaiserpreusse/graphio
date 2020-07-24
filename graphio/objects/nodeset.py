@@ -59,7 +59,7 @@ class NodeSet:
             distinct_node_ids = []
             distinct_nodes = []
             for n in self.nodes:
-                nid = tuple(v for k,v in n.items() if k in self.merge_keys)
+                nid = frozenset(v for k,v in n.items() if k in self.merge_keys)
                 if nid not in distinct_node_ids:
                     distinct_node_ids.append(nid)
                     distinct_nodes.append(n)
