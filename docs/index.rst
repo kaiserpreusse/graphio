@@ -21,7 +21,7 @@ graphio is made to quickly build a Neo4j database from existing data sets.
 
 Version
 -----------
-Latest version: :code:`0.0.9`. Install with::
+Latest version: :code:`0.0.15`. Install with::
 
    pip install -U graphio
 
@@ -97,7 +97,6 @@ Contents
    getting_started
    objects
    queries
-   metadata
 
 
 

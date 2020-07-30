@@ -2,6 +2,7 @@ import pytest
 
 from graphio.objects.nodeset import NodeSet
 
+
 @pytest.fixture
 def small_nodeset():
     ns = NodeSet(['Test'], merge_keys=['uuid'])
@@ -20,59 +21,64 @@ def nodeset_multiple_labels():
     return ns
 
 
+class TestNodeSet:
+    """
+    Test basic function such as adding nodes.
+    """
+    def test_item_iterator(self, small_nodeset):
+        for i in small_nodeset.item_iterator():
+            assert i['key'] == 'value'
+            assert isinstance(i['uuid'], int)
+
+
 class TestNodeSetCreate:
 
     def test_nodeset_create_number(self, small_nodeset, graph, clear_graph):
         small_nodeset.create(graph)
 
-        with graph.session() as s:
-
-            result = list(
-                s.run(
-                    "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
-                )
+        result = list(
+            graph.run(
+                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
             )
-            print(result)
-            assert result[0][0] == 100
+        )
+        print(result)
+        assert result[0][0] == 100
 
     def test_nodeset_create_twice_number(self, small_nodeset, graph, clear_graph):
         small_nodeset.create(graph)
         small_nodeset.create(graph)
 
-        with graph.session() as s:
-
-            result = list(
-                s.run(
-                    "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
-                )
+        result = list(
+            graph.run(
+                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
             )
-            print(result)
-            assert result[0][0] == 200
+        )
+        print(result)
+        assert result[0][0] == 200
 
     def test_nodeset_create_properties(self, small_nodeset, graph, clear_graph):
         small_nodeset.create(graph)
 
-        with graph.session() as s:
-            result = list(
-                s.run(
-                    "MATCH (n:{}) RETURN n".format(':'.join(small_nodeset.labels))
-                )
+        result = list(
+            graph.run(
+                "MATCH (n:{}) RETURN n".format(':'.join(small_nodeset.labels))
             )
+        )
 
-            for row in result:
-                node = row[0]
-                assert node['key'] == 'value'
+        for row in result:
+            node = row[0]
+            assert node['key'] == 'value'
 
     def test_create_nodeset_multiple_labels(self, nodeset_multiple_labels, graph, clear_graph):
         nodeset_multiple_labels.create(graph)
-        with graph.session() as s:
-            result = list(
-                s.run(
-                    "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.labels))
-                )
-            )
 
-            assert result[0][0] == 100
+        result = list(
+            graph.run(
+                "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.labels))
+            )
+        )
+
+        assert result[0][0] == 100
 
     def test_create_node_set_from_dict(self):
         people = NodeSet(["Person"], merge_keys=["name"])
@@ -91,21 +97,20 @@ class TestNodeSetIndex:
 
         ns.create_index(graph)
 
-        with graph.session() as s:
-            result = list(
-                s.run("CALL db.indexes()")
-            )
+        result = list(
+            graph.run("CALL db.indexes()")
+        )
 
-            for row in result:
-                # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
-                # this should also be synced with differences in py2neo versions
-                if 'tokenNames' in row:
-                    assert row['tokenNames'] == labels and row['properties'] == properties \
-                           or row['tokenNames'] == labels and row['properties'] == properties
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            if 'tokenNames' in row:
+                assert row['tokenNames'] == labels and row['properties'] == properties \
+                       or row['tokenNames'] == labels and row['properties'] == properties
 
-                elif 'labelsOrTypes' in row:
-                    assert row['labelsOrTypes'] == labels and row['properties'] == properties \
-                           or row['labelsOrTypes'] == labels and row['properties'] == properties
+            elif 'labelsOrTypes' in row:
+                assert row['labelsOrTypes'] == labels and row['properties'] == properties \
+                       or row['labelsOrTypes'] == labels and row['properties'] == properties
 
     def test_nodeset_create_composite_index(self, graph, clear_graph):
         labels = ['TestNode']
@@ -114,22 +119,20 @@ class TestNodeSetIndex:
 
         ns.create_index(graph)
 
-        with graph.session() as s:
+        result = list(
+            graph.run("CALL db.indexes()")
+        )
 
-            result = list(
-                s.run("CALL db.indexes()")
-            )
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            if 'tokenNames' in row:
+                assert row['tokenNames'] == labels and row['properties'] == properties \
+                       or row['tokenNames'] == labels and row['properties'] == properties
 
-            for row in result:
-                # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
-                # this should also be synced with differences in py2neo versions
-                if 'tokenNames' in row:
-                    assert row['tokenNames'] == labels and row['properties'] == properties \
-                           or row['tokenNames'] == labels and row['properties'] == properties
-
-                elif 'labelsOrTypes' in row:
-                    assert row['labelsOrTypes'] == labels and row['properties'] == properties \
-                           or row['labelsOrTypes'] == labels and row['properties'] == properties
+            elif 'labelsOrTypes' in row:
+                assert row['labelsOrTypes'] == labels and row['properties'] == properties \
+                       or row['labelsOrTypes'] == labels and row['properties'] == properties
 
     def test_nodeset_recreate_existing_single_index(self, graph, clear_graph):
         """
@@ -155,11 +158,9 @@ class TestNodeSetMerge:
         small_nodeset.merge(graph)
         small_nodeset.merge(graph)
 
-        with graph.session() as s:
+        result = list(
+            graph.run("MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
+        )
 
-            result = list(
-                s.run("MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
-            )
-
-            print(result)
-            assert result[0][0] == 100
+        print(result)
+        assert result[0][0] == 100

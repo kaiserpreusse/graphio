@@ -1,6 +1,5 @@
 import logging
 from uuid import uuid4
-from neo4j import GraphDatabase
 
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
@@ -72,6 +71,16 @@ class NodeSet:
         # add node if not found
         self.add_node(properties)
 
+    def item_iterator(self):
+        """
+        Generator function that yields the node properties for all nodes in this NodeSet.
+
+        This is used to create chunks of the nodes without iterating all nodes. This can be removes in future
+        when NodeSet and RelationshipSet fully support generators (instead of lists of nodes/relationships).
+        """
+        for node in self.nodes:
+            yield node
+
     def to_dict(self):
         """
         Create dictionary defining the nodeset.
@@ -100,10 +109,8 @@ class NodeSet:
 
             query = nodes_create_unwind(self.labels)
             log.debug(query)
-            print(query)
 
-            with graph.session() as s:
-                result = s.run(query, props=batch)
+            result = graph.run(query, props=batch)
 
             i += 1
 
@@ -161,8 +168,8 @@ class NodeSet:
             batch = list(batch)
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
-            with graph.session() as s:
-                s.run(query, props=batch)
+
+            graph.run(query, props=batch)
             i += 1
 
     def map_to_1(self, graph, target_labels, target_properties, rel_type=None):
