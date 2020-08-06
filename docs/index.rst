@@ -46,7 +46,7 @@ The goal is to create the follwing data in Neo4j:
    # under the hood py2neo is used to connect to Neo4j
    # you always need a py2neo.Graph instance
    from py2neo import Graph
-   graph = Graph(password='password')
+   graph = Graph()
 
    from graphio import NodeSet, RelationshipSet
 
