@@ -7,7 +7,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='graphio',
-      version='0.0.15',
+      version='0.0.16',
       description='Library to load data sets to Neo4j.',
       long_description=long_description,
       long_description_content_type='text/markdown',
@@ -17,7 +17,7 @@ setup(name='graphio',
       license='Apache License 2.0',
       packages=find_packages(),
       install_requires=[
-          'py2neo'
+          'py2neo>=2020.0.0'
       ],
       keywords=['NEO4J'],
       zip_safe=False,
