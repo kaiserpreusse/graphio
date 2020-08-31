@@ -1,6 +1,7 @@
 import pytest
 import logging
 from py2neo import Graph
+from py2neo.wiring import WireError
 
 from time import sleep
 
@@ -37,7 +38,7 @@ def run_neo4j():
                 graph.run("MATCH (n) RETURN n LIMIT 1").data()
             connected = True
 
-        except (ConnectionRefusedError, ConnectionResetError):
+        except (ConnectionRefusedError, WireError, ConnectionResetError):
             retries += 1
             if retries > max_retries:
                 break
