@@ -34,7 +34,7 @@ def run_neo4j():
             for v in NEO4J_VERSIONS:
                 # get Graph, bolt connection to localhost is default
                 graph = Graph(password=NEO4J_PASSWORD, port=v['ports'][2], scheme='bolt')
-                graph.run("MATCH (n) RETURN n LIMIT 1")
+                graph.run("MATCH (n) RETURN n LIMIT 1").data()
             connected = True
 
         except (ConnectionRefusedError, ConnectionResetError):
@@ -46,7 +46,7 @@ def run_neo4j():
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request):
-    yield Graph(password=NEO4J_PASSWORD, port=request.param['ports'][2])
+    yield Graph(password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt')
 
 
 @pytest.fixture
