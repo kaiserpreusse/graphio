@@ -37,7 +37,7 @@ def run_neo4j():
                 graph.run("MATCH (n) RETURN n LIMIT 1")
             connected = True
 
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, ConnectionResetError):
             retries += 1
             if retries > max_retries:
                 break
