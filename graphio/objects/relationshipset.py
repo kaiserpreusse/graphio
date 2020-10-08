@@ -15,6 +15,7 @@ class RelationshipSet:
     """
     Container for a set of Relationships with the same type of start and end nodes.
     """
+    failed_batch_handler = None
 
     def __init__(self, rel_type, start_node_labels, end_node_labels, start_node_properties, end_node_properties,
                  batch_size=None):
@@ -149,9 +150,11 @@ class RelationshipSet:
             if rel.start_node_properties == start_node_properties and rel.end_node_properties == end_node_properties and rel.properties == properties:
                 return True
 
-    def create(self, graph, batch_size=None):
+    def create(self, graph, batch_size=None, raise_on_result_count_deviation=False):
         """
         Create relationships in this RelationshipSet
+
+        :raise_on_result_count_deviation: boolean. Raise if less relationships were processed on DB side as sended with the query. This can happen in parallel processing environments. set RelationshipSet.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
@@ -172,13 +175,30 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-
-            graph.run(query, **query_parameters)
+            try:
+                tx = graph.begin()
+                tx.run(query,**query_parameters)
+                result = tx.run(query,**query_parameters)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
+                    raise MissingRelationshipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(self,e, query, batch)
+                else:
+                    raise
+            
             i += 1
+            #with graph.session() as s:
+            #    s.run(query, **query_parameters)
+            #    i += 1
 
-    def merge(self, graph, batch_size=None):
+    def merge(self, graph, batch_size=None, raise_on_result_count_deviation=False):
         """
         Create relationships in this RelationshipSet
+
+        :raise_on_result_count_deviation: boolean. Raise if less relationships were processed on DB side as sended with the query. This can happen in parallel processing environments. set RelationshipSet.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
@@ -199,9 +219,24 @@ class RelationshipSet:
             # get parameters
             query_parameters = params_create_rels_unwind_from_objects(batch)
             log.debug(json.dumps(query_parameters))
-
-            graph.run(query, **query_parameters)
+            
+            try:
+                tx = graph.begin()
+                tx.run(query,**query_parameters)
+                result = tx.run(query,**query_parameters)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
+                    raise MissingRelationshipsEx("Excepted {} RelationShips to be inserted, got {}", len(batch), count)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(self,e, query, batch)
+                else:
+                    raise
             i += 1
+            #with graph.session() as s:
+            #    graph.run(query, **query_parameters)
+            #    i += 1
 
     def create_index(self, graph):
         """
@@ -231,3 +266,27 @@ class RelationshipSet:
             # composite indexes
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties)
+
+    def copy(self, content=None):
+        """Copy the RelationshipSet metadata into new RelationshipSet. By default it will copy all attributes of the set but not the relationsship itself.
+
+        Args:
+            relationships (list, optional): [description]. Defaults to []. Content of the new relationship set.
+        """
+        if content is None:
+            content = []
+        new_set = type(self)(
+            rel_type=self.rel_type,
+            start_node_labels=self.start_node_labels.copy(),
+            end_node_labels=self.end_node_labels.copy(),
+            start_node_properties=self.start_node_properties.copy() if self.start_node_properties is not None else None,
+            end_node_properties=self.end_node_properties.copy() if self.end_node_properties is not None else None,
+            batch_size=self.batch_size,
+        )
+        new_set.unique = self.unique
+        new_set.failed_batch_handler = self.failed_batch_handler
+        new_set.relationships = content
+        return new_set
+
+class MissingRelationshipsEx(Exception):
+    pass

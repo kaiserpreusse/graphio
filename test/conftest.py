@@ -1,7 +1,8 @@
 import pytest
 import logging
 from py2neo import Graph
-from neobolt.exceptions import ServiceUnavailable
+from py2neo.wiring import WireError
+
 from time import sleep
 
 logging.basicConfig()
@@ -33,11 +34,11 @@ def run_neo4j():
             # throw a ServiceUnavailable error
             for v in NEO4J_VERSIONS:
                 # get Graph, bolt connection to localhost is default
-                graph = Graph(password=NEO4J_PASSWORD, port=v['ports'][2])
-                graph.run("MATCH (n) RETURN n LIMIT 1")
+                graph = Graph(password=NEO4J_PASSWORD, port=v['ports'][2], scheme='bolt')
+                graph.run("MATCH (n) RETURN n LIMIT 1").data()
             connected = True
 
-        except ServiceUnavailable:
+        except (ConnectionRefusedError, WireError, ConnectionResetError):
             retries += 1
             if retries > max_retries:
                 break
@@ -46,7 +47,7 @@ def run_neo4j():
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request):
-    yield Graph(password=NEO4J_PASSWORD, port=request.param['ports'][2])
+    yield Graph(password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt')
 
 
 @pytest.fixture

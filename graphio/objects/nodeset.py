@@ -12,7 +12,11 @@ log = logging.getLogger(__name__)
 class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
+
+    :failed_batch_handler set NodeSet.failed_batch_handler(error,query,batch) to catch single failed batches
+
     """
+    failed_batch_handler=None
 
     def __init__(self, labels, merge_keys=None, batch_size=None):
         """
@@ -93,9 +97,12 @@ class NodeSet:
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
 
-    def create(self, graph, batch_size=None):
+    def create(self, graph, batch_size=None,raise_on_result_count_deviation=False):
         """
         Create all nodes from NodeSet.
+
+
+        :raise_on_result_count_deviation: boolean. Raise if less nodes were processed on DB side as sended with the query. This can happen in parallel processing environments. set Nodeset.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Create NodeSet')
         if not batch_size:
@@ -109,12 +116,25 @@ class NodeSet:
 
             query = nodes_create_unwind(self.labels)
             log.debug(query)
+            try:
+                tx = graph.begin()
+                tx.run(query,props=batch)
+                result = tx.run(query,props=batch)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
+                    raise MissingNodesEx("Excepted {} Nodes to be inserted, got {}", len(batch), count)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(self,e, query, batch)
+                else:
+                    raise
 
-            result = graph.run(query, props=batch)
+            #with graph.session() as s:
+            #    result = s.run(query, props=batch)
 
             i += 1
 
-    # TODO remove py2neo Node here, the node is just a dict now
     def filter_nodes(self, filter_func):
         """
         Filter node properties with a filter function, remove nodes that do not match from main list.
@@ -131,7 +151,6 @@ class NodeSet:
         self.nodes = filtered_nodes
         self.discarded_nodes = discarded_nodes
 
-    # TODO remove py2neo Node here, the node is just a dict now
     def reduce_node_properties(self, *keep_props):
         filtered_nodes = []
         for n in self.nodes:
@@ -140,15 +159,17 @@ class NodeSet:
                 if k in keep_props:
                     new_props[k] = v
 
-            filtered_nodes.append(Node(*self.labels, **new_props))
+            filtered_nodes.append(new_props)
 
         self.nodes = filtered_nodes
 
-    def merge(self, graph, merge_properties=None, batch_size=None):
+    def merge(self, graph, merge_properties=None, batch_size=None, raise_on_result_count_deviation=False):
         """
         Merge nodes from NodeSet on merge properties.
 
         :param merge_properties: The merge properties.
+
+        :raise_on_result_count_deviation: boolean. Raise if less nodes were processed on DB side as sended with the query. This can happen in parallel processing environments. set Nodeset.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Merge NodeSet on {}'.format(merge_properties))
 
@@ -162,14 +183,24 @@ class NodeSet:
 
         query = nodes_merge_unwind(self.labels, merge_properties)
         log.debug(query)
-
         i = 1
         for batch in chunks(self.node_properties(), size=batch_size):
             batch = list(batch)
             log.debug('Batch {}'.format(i))
             log.debug(batch[0])
-
-            graph.run(query, props=batch)
+            try:
+                tx = graph.begin()
+                tx.run(query,props=batch)
+                result = tx.run(query,props=batch)
+                tx.commit()
+                count = result.data()[0]["cnt"]
+                if raise_on_result_count_deviation and count < len(batch):
+                    raise MissingNodesEx("Excepted {} Nodes to be inserted, got {}", len(batch), count)
+            except Exception as e:
+                if self.failed_batch_handler is not None:
+                    self.failed_batch_handler(self,e, query, batch)
+                else:
+                    raise
             i += 1
 
     def map_to_1(self, graph, target_labels, target_properties, rel_type=None):
@@ -236,3 +267,23 @@ class NodeSet:
                 # composite indexes
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys)
+
+    def copy(self, content=None):
+        """Copy the NodeSet. By default it will copy all attributes of the set but not the Nodes itself.
+
+        Args:
+            relationships (list, optional): [description]. Defaults to []. Nodes of the new NodeSet.
+        """
+        if content is None:
+            content = []
+        new_set = type(self)(
+            labels=self.labels.copy(),
+            merge_keys=self.merge_keys.copy() if self.merge_keys is not None else None, 
+            batch_size=self.batch_size
+        )
+        new_set.failed_batch_handler = self.failed_batch_handler
+        new_set.nodes = content
+        return new_set
+
+class MissingNodesEx(Exception):
+    pass
