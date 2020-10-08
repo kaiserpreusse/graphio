@@ -1,6 +1,5 @@
 import logging
 from uuid import uuid4
-from neo4j import GraphDatabase
 
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
@@ -86,6 +85,16 @@ class NodeSet:
         # add node if not found
         self.add_node(properties)
 
+    def item_iterator(self):
+        """
+        Generator function that yields the node properties for all nodes in this NodeSet.
+
+        This is used to create chunks of the nodes without iterating all nodes. This can be removes in future
+        when NodeSet and RelationshipSet fully support generators (instead of lists of nodes/relationships).
+        """
+        for node in self.nodes:
+            yield node
+
     def to_dict(self):
         """
         Create dictionary defining the nodeset.
@@ -133,7 +142,6 @@ class NodeSet:
 
             i += 1
 
-    # TODO remove py2neo Node here, the node is just a dict now
     def filter_nodes(self, filter_func):
         """
         Filter node properties with a filter function, remove nodes that do not match from main list.
@@ -150,7 +158,6 @@ class NodeSet:
         self.nodes = filtered_nodes
         self.discarded_nodes = discarded_nodes
 
-    # TODO remove py2neo Node here, the node is just a dict now
     def reduce_node_properties(self, *keep_props):
         filtered_nodes = []
         for n in self.nodes:
@@ -159,7 +166,7 @@ class NodeSet:
                 if k in keep_props:
                     new_props[k] = v
 
-            filtered_nodes.append(Node(*self.labels, **new_props))
+            filtered_nodes.append(new_props)
 
         self.nodes = filtered_nodes
 

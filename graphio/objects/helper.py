@@ -1,6 +1,6 @@
 from itertools import chain, islice
 import logging
-from py2neo.database import ClientError
+from py2neo import ClientError
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +32,6 @@ def create_single_index(graph, label, prop):
         q = "CREATE INDEX ON :{0}({1})".format(label, prop)
         log.debug(q)
         graph.run(q)
-        #with graph.session() as s:
-        #    s.run(q)
 
     except ClientError:
         # TODO check if the index exists instead of catching the (very general) ClientError
@@ -53,8 +51,6 @@ def create_composite_index(graph, label, properties):
         q = "CREATE INDEX ON :{0}({1})".format(label, property_string)
         log.debug(q)
         graph.run(q)
-        #with graph.session() as s:
-        #    s.run(q)
 
     except ClientError:
         # TODO check if the index exists instead of catching the (very general) ClientError

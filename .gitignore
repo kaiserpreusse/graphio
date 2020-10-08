@@ -146,3 +146,4 @@ crashlytics-build.properties
 local\.conf
 
 .pytest_cache
+.python-version

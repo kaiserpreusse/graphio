@@ -80,6 +80,16 @@ class RelationshipSet:
                                end_node_properties, properties)
             self.relationships.append(rel)
 
+    def item_iterator(self):
+        """
+        Generator function that yields the to_dict function for all relationships in this RelationshipSet.
+
+        This is used to create chunks of the relationships without iterating all relationships. This can be removes in future
+        when NodeSet and RelationshipSet fully support generators (instead of lists of nodes/relationships).
+        """
+        for rel in self.relationships:
+            yield rel.to_dict()
+
     def to_dict(self):
         return {"rel_type":self.rel_type,
                 "start_node_labels":self.start_node_labels,

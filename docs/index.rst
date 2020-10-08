@@ -21,7 +21,7 @@ graphio is made to quickly build a Neo4j database from existing data sets.
 
 Version
 -----------
-Latest version: :code:`0.0.9`. Install with::
+Latest version: :code:`0.0.15`. Install with::
 
    pip install -U graphio
 
@@ -58,23 +58,24 @@ The goal is to create the follwing data in Neo4j:
    with open('people.tsv') as my_file:
       for line in my_file:
          # prepare data from the line
-         name, movies = line.split(';')
+         name, titles = line.split(';')
          # split up the movies
-         movies = movies.strip().split(',')
+         titles = titles.strip().split(',')
 
          # add one (Person) node per line
          people.add_node({'name': name})
 
          # add (Movie) nodes and :LIKES relationships
-         for movie_title in movies:
-            movies.add_node({'name': movie_name})
-            person_likes_movie.add_relationship({'name': name}, {'title': movie_title}, {'source': 'my_file'})
+         for title in titles:
+            movies.add_node({'title': title})
+            person_likes_movie.add_relationship({'name': name}, {'title': title}, {'source': 'my_file'})
 
 
    # create the nodes in NodeSet, needs a py2neo.Graph instance
    people.create(graph)
    movies.create(graph)
    person_likes_movie.create(graph)
+
 
 The code in the example should be easy to understand:
 
@@ -97,7 +98,6 @@ Contents
    getting_started
    objects
    queries
-   metadata
 
 
 
