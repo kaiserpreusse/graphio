@@ -25,3 +25,4 @@ class Relationship(object):
             'end_node_properties': self.end_node_properties,
             'properties': self.properties
         }
+        

@@ -153,6 +153,8 @@ class RelationshipSet:
     def create(self, graph, batch_size=None, raise_on_result_count_deviation=False):
         """
         Create relationships in this RelationshipSet
+
+        :raise_on_result_count_deviation: boolean. Raise if less relationships were processed on DB side as sended with the query. This can happen in parallel processing environments. set RelationshipSet.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
@@ -195,6 +197,8 @@ class RelationshipSet:
     def merge(self, graph, batch_size=None, raise_on_result_count_deviation=False):
         """
         Create relationships in this RelationshipSet
+
+        :raise_on_result_count_deviation: boolean. Raise if less relationships were processed on DB side as sended with the query. This can happen in parallel processing environments. set RelationshipSet.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Create RelationshipSet')
         if not batch_size:

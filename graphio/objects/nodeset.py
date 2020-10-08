@@ -12,6 +12,9 @@ log = logging.getLogger(__name__)
 class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
+
+    :failed_batch_handler set NodeSet.failed_batch_handler(error,query,batch) to catch single failed batches
+
     """
     failed_batch_handler=None
 
@@ -97,6 +100,9 @@ class NodeSet:
     def create(self, graph, batch_size=None,raise_on_result_count_deviation=False):
         """
         Create all nodes from NodeSet.
+
+
+        :raise_on_result_count_deviation: boolean. Raise if less nodes were processed on DB side as sended with the query. This can happen in parallel processing environments. set Nodeset.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Create NodeSet')
         if not batch_size:
@@ -162,6 +168,8 @@ class NodeSet:
         Merge nodes from NodeSet on merge properties.
 
         :param merge_properties: The merge properties.
+
+        :raise_on_result_count_deviation: boolean. Raise if less nodes were processed on DB side as sended with the query. This can happen in parallel processing environments. set Nodeset.failed_batch_handler(error,query,batch) to catch single failed batches
         """
         log.debug('Merge NodeSet on {}'.format(merge_properties))
 
