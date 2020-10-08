@@ -111,9 +111,6 @@ class RelationshipSet:
         [rs.add_relationship(start_node_properties=rel["start_node_properties"],end_node_properties=rel["end_node_properties"],properties=rel["properties"]) for rel in relationship_dict["relationships"]]
         return rs
 
-    def make_distinct(self):
-        self.relationships = list(set(self.relationships))
-
     def filter_relationships_target_node(self, filter_func):
         """
         Filter properties of target node with a filter function, remove relationships that do not match from main list.
