@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/graphio)](https://pypi.org/project/graphio)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Neo4j](https://img.shields.io/badge/Neo4j-3.4%20%7C%203.5%20%7C%204.0-blue)](https://neo4j.com)
+[![Downloads](https://pepy.tech/badge/graphio)](https://pepy.tech/project/graphio)
 
 A Python library to quickly build data sets and load them to Neo4j. Built by [Kaiser & Preusse](https://kaiser-preusse.com).
 
