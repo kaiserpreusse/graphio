@@ -68,7 +68,7 @@ class RelationshipSet:
         start_node_data = tuple(start_node_properties[x] for x in self.fixed_order_start_node_properties)
         if len(start_node_data) == 1:
             start_node_data = start_node_data[0]
-        end_node_data = tuple(end_node_properties[x] for x in self.fixed_order_start_node_properties)
+        end_node_data = tuple(end_node_properties[x] for x in self.fixed_order_end_node_properties)
         if len(end_node_data) == 1:
             end_node_data = end_node_data[0]
 
