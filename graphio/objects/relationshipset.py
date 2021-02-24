@@ -1,11 +1,9 @@
 from uuid import uuid4
 import logging
 import json
+from py2neo.bulk import create_relationships, merge_relationships
 
-from graphio.objects.relationship import Relationship
 from graphio import defaults
-from graphio.queries import query_create_rels_unwind, query_merge_rels_unwind
-from graphio.queries.query_parameters import params_create_rels_unwind_from_objects
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
 
 log = logging.getLogger(__name__)
@@ -40,6 +38,9 @@ class RelationshipSet:
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
 
+        self.fixed_order_start_node_properties = tuple(self.start_node_properties)
+        self.fixed_order_end_node_properties = tuple(self.end_node_properties)
+
         self.uuid = str(uuid4())
         self.combined = '{0}_{1}_{2}_{3}_{4}'.format(self.rel_type,
                                                      '_'.join(sorted(self.start_node_labels)),
@@ -58,6 +59,21 @@ class RelationshipSet:
         self.unique = False
         self.unique_rels = set()
 
+    def __relationship_from_dictionary(self, start_node_properties, end_node_properties, properties):
+        """
+        Transform the input dictionary into the relationship data type used for py2neo.
+
+        :return: Relationship data.
+        """
+        start_node_data = tuple(start_node_properties[x] for x in self.fixed_order_start_node_properties)
+        if len(start_node_data) == 1:
+            start_node_data = start_node_data[0]
+        end_node_data = tuple(end_node_properties[x] for x in self.fixed_order_start_node_properties)
+        if len(end_node_data) == 1:
+            end_node_data = end_node_data[0]
+
+        return (start_node_data, properties, end_node_data)
+
     def add_relationship(self, start_node_properties, end_node_properties, properties):
         """
         Add a relationship to this RelationshipSet.
@@ -70,44 +86,33 @@ class RelationshipSet:
                 list(start_node_properties.values()) + list(end_node_properties.values()) + list(properties.values()))
 
             if check_set not in self.unique_rels:
-                rel = Relationship(self.start_node_labels, self.end_node_labels, start_node_properties,
-                                   end_node_properties, properties)
-                self.relationships.append(rel)
+                self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, properties))
                 self.unique_rels.add(check_set)
         else:
-            rel = Relationship(self.start_node_labels, self.end_node_labels, start_node_properties,
-                               end_node_properties, properties)
-            self.relationships.append(rel)
+            self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, properties))
 
-    def item_iterator(self):
-        """
-        Generator function that yields the to_dict function for all relationships in this RelationshipSet.
-
-        This is used to create chunks of the relationships without iterating all relationships. This can be removes in future
-        when NodeSet and RelationshipSet fully support generators (instead of lists of nodes/relationships).
-        """
-        for rel in self.relationships:
-            yield rel.to_dict()
 
     def to_dict(self):
-        return {"rel_type":self.rel_type,
-                "start_node_labels":self.start_node_labels,
-                "end_node_labels":self.end_node_labels,
-                "start_node_properties":self.start_node_properties,
-                "end_node_properties":self.end_node_properties,
-                "unique":self.unique,
-                "relationships":[rel.to_dict() for rel in self.relationships]}
+        return {"rel_type": self.rel_type,
+                "start_node_labels": self.start_node_labels,
+                "end_node_labels": self.end_node_labels,
+                "start_node_properties": self.start_node_properties,
+                "end_node_properties": self.end_node_properties,
+                "unique": self.unique,
+                "relationships": [rel.to_dict() for rel in self.relationships]}
 
-    @classmethod  
-    def from_dict(cls,relationship_dict,batch_size=None):
+    @classmethod
+    def from_dict(cls, relationship_dict, batch_size=None):
         rs = cls(rel_type=relationship_dict["rel_type"],
-            start_node_labels=relationship_dict["start_node_labels"],
-            end_node_labels=relationship_dict["end_node_labels"],
-            start_node_properties=relationship_dict["start_node_properties"],
-            end_node_properties=relationship_dict["end_node_properties"],
-            batch_size=batch_size)
+                 start_node_labels=relationship_dict["start_node_labels"],
+                 end_node_labels=relationship_dict["end_node_labels"],
+                 start_node_properties=relationship_dict["start_node_properties"],
+                 end_node_properties=relationship_dict["end_node_properties"],
+                 batch_size=batch_size)
         rs.unique = relationship_dict["unique"]
-        [rs.add_relationship(start_node_properties=rel["start_node_properties"],end_node_properties=rel["end_node_properties"],properties=rel["properties"]) for rel in relationship_dict["relationships"]]
+        [rs.add_relationship(start_node_properties=rel["start_node_properties"],
+                             end_node_properties=rel["end_node_properties"], properties=rel["properties"]) for rel in
+         relationship_dict["relationships"]]
         return rs
 
     def filter_relationships_target_node(self, filter_func):
@@ -152,28 +157,29 @@ class RelationshipSet:
     def create(self, graph, batch_size=None):
         """
         Create relationships in this RelationshipSet
+
+        py2neo bulk works with tuples and th order of elements in the tuple. The underlying Relationship used in the
+        RelationshipSet uses a dictionary. Work around this for now, adapt the RelSet.add_relationship() method later.
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        # get query
-        query = query_create_rels_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                                         self.end_node_properties, self.rel_type)
-        log.debug(query)
-
         i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
             batch = list(batch)
-            log.debug('Batch {}'.format(i))
-            log.debug(batch[0])
-            # get parameters
-            query_parameters = params_create_rels_unwind_from_objects(batch)
-            log.debug(json.dumps(query_parameters))
+            print(batch)
 
-            graph.run(query, **query_parameters)
+            log.debug('Batch {}'.format(i))
+
+            create_relationships(graph.auto(),
+                                 batch,
+                                 self.rel_type,
+                                 start_node_key=(tuple(self.start_node_labels), *self.fixed_order_start_node_properties),
+                                 end_node_key=(tuple(self.end_node_labels), *self.fixed_order_end_node_properties))
+
             i += 1
 
     def merge(self, graph, batch_size=None):
@@ -185,22 +191,24 @@ class RelationshipSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        # get query
-        query = query_merge_rels_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                                        self.end_node_properties, self.rel_type)
-        log.debug(query)
+        fixed_order_start_node_properties = tuple(self.start_node_properties)
+        fixed_order_end_node_properties = tuple(self.end_node_properties)
+        print(fixed_order_start_node_properties, fixed_order_end_node_properties)
 
         i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
-            batch = list(batch)
             log.debug('Batch {}'.format(i))
-            log.debug(batch[0])
-            # get parameters
-            query_parameters = params_create_rels_unwind_from_objects(batch)
-            log.debug(json.dumps(query_parameters))
+            batch = list(batch)
 
-            graph.run(query, **query_parameters)
+            merge_relationships(graph,
+                                [x.topy2neo(fixed_order_start_node_properties, fixed_order_end_node_properties) for x in
+                                 batch],
+                                self.rel_type,
+                                start_node_key=(tuple(self.start_node_labels), *fixed_order_start_node_properties),
+                                end_node_key=(tuple(self.end_node_labels), *fixed_order_end_node_properties)
+                                )
+
             i += 1
 
     def create_index(self, graph):
@@ -227,7 +235,7 @@ class RelationshipSet:
         for label in self.end_node_labels:
             for prop in self.end_node_properties:
                 create_single_index(graph, label, prop)
-                
+
             # composite indexes
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties)
