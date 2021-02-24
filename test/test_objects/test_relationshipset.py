@@ -33,15 +33,15 @@ def create_nodes_test(graph, clear_graph):
     return ns1, ns2
 
 
-class TestRelationshipSetSet:
-    """
-    Test basic function such as adding rels.
-    """
-
-    def test_item_iterator(self, small_relationshipset):
-        for i in small_relationshipset.item_iterator():
-            assert i['start_node_properties']
-            assert i['end_node_properties']
+# class TestRelationshipSetSet:
+#     """
+#     Test basic function such as adding rels.
+#     """
+#
+#     def test_item_iterator(self, small_relationshipset):
+#         for i in small_relationshipset.item_iterator():
+#             assert i['start_node_properties']
+#             assert i['end_node_properties']
 
 
 class TestRelationshipSetCreate:
