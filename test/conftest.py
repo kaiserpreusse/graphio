@@ -3,6 +3,7 @@ import logging
 import os
 from py2neo import Graph
 from py2neo.wiring import WireError
+from py2neo.client import ConnectionUnavailable
 
 from time import sleep
 
@@ -30,13 +31,12 @@ else:
     ]
 
 
-@pytest.fixture(scope='session', autouse=True)
-def run_neo4j():
-    log.debug("Run Docker container.")
+@pytest.fixture(scope='session')
+def wait_for_neo4j():
 
     # check availability for both containers
     connected = False
-    max_retries = 120
+    max_retries = 180
     retries = 0
 
     while not connected:
@@ -45,20 +45,21 @@ def run_neo4j():
             # throw a ServiceUnavailable error
             for v in NEO4J_VERSIONS:
                 # get Graph, bolt connection to localhost is default
-                graph = Graph(password=NEO4J_PASSWORD, port=v['ports'][2], scheme='bolt')
-                graph.run("MATCH (n) RETURN n LIMIT 1").data()
+                graph = Graph(host=v['host'], password=NEO4J_PASSWORD, port=v['ports'][2], scheme='bolt')
+                graph.run("MATCH (n) RETURN n LIMIT 1")
             connected = True
 
-        except (ConnectionRefusedError, WireError, ConnectionResetError):
+        except (ConnectionRefusedError, WireError, ConnectionResetError, ConnectionUnavailable):
             retries += 1
+            log.warning(f"Connection unavailable on try {retries}. Try again in 1 second.")
             if retries > max_retries:
                 break
             sleep(1)
 
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
-def graph(request):
-    yield Graph(password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt')
+def graph(request, wait_for_neo4j):
+    yield Graph(host=request.param['host'], password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt', secure=False)
 
 
 @pytest.fixture
