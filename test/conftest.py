@@ -1,5 +1,6 @@
 import pytest
 import logging
+import os
 from py2neo import Graph
 from py2neo.wiring import WireError
 
@@ -13,10 +14,20 @@ CONTAINER_NAME = 'neo4j_graphio_test_run'
 
 NEO4J_PASSWORD = 'test'
 
-NEO4J_VERSIONS = [
-    {'version': '3.5', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt'},
-    {'version': '4.0', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt'}
-]
+RUN_ENVIRONMENT = os.getenv('RUN_ENVIRONMENT', None)
+
+if RUN_ENVIRONMENT == 'github_actions':
+    NEO4J_VERSIONS = [
+        {'host': 'neo4j35', 'version': '3.5', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'},
+        {'host': 'neo4j41', 'version': '4.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'},
+        {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'}
+    ]
+else:
+    NEO4J_VERSIONS = [
+        {'host': 'localhost', 'version': '3.5', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt'},
+        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt'},
+        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt'}
+    ]
 
 
 @pytest.fixture(scope='session', autouse=True)

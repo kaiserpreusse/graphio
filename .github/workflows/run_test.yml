@@ -1,0 +1,48 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      RUN_ENVIRONMENT: 'github_actions'
+
+    services:
+      neo4j35:
+        image: neo4j:3.5
+        env:
+          NEO4J_AUTH: neo4j/test
+      neo4j41:
+        image: neo4j:4.1
+        env:
+          NEO4J_AUTH: neo4j/test
+      neo4j42:
+        image: neo4j:4.2
+        env:
+          NEO4J_AUTH: neo4j/test
+
+    strategy:
+      matrix:
+        python-container: ["python:3.7", "python:3.8", "python:3.9"]
+
+    container: ${{ matrix.python-container }}
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
+    - name: Test with pytest
+      run: |
+        python -m pytest

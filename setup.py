@@ -7,7 +7,12 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(name='graphio',
-      version='0.0.16',
+      use_scm_version={
+          "root": ".",
+          "relative_to": __file__,
+          "local_scheme": "node-and-timestamp"
+      },
+      setup_requires=['setuptools_scm'],
       description='Library to load data sets to Neo4j.',
       long_description=long_description,
       long_description_content_type='text/markdown',
