@@ -1,7 +1,7 @@
 import logging
 from uuid import uuid4
+from py2neo.bulk import create_nodes, merge_nodes
 
-from graphio.queries import nodes_create_unwind, nodes_merge_unwind
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.objects.relationshipset import RelationshipSet
@@ -107,10 +107,7 @@ class NodeSet:
             batch = list(batch)
             log.debug('Batch {}'.format(i))
 
-            query = nodes_create_unwind(self.labels)
-            log.debug(query)
-
-            result = graph.run(query, props=batch)
+            create_nodes(graph, batch, labels=self.labels)
 
             i += 1
 
@@ -160,16 +157,12 @@ class NodeSet:
 
         log.debug('Batch Size: {}'.format(batch_size))
 
-        query = nodes_merge_unwind(self.labels, merge_properties)
-        log.debug(query)
-
         i = 1
         for batch in chunks(self.node_properties(), size=batch_size):
             batch = list(batch)
             log.debug('Batch {}'.format(i))
-            log.debug(batch[0])
+            merge_nodes(graph, batch, (tuple(self.labels), *merge_properties))
 
-            graph.run(query, props=batch)
             i += 1
 
     def map_to_1(self, graph, target_labels, target_properties, rel_type=None):
