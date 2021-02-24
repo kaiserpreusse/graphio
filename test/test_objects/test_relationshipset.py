@@ -22,26 +22,18 @@ def small_relationshipset():
 def create_nodes_test(graph, clear_graph):
     ns1 = NodeSet(['Test'], merge_keys=['uuid'])
     ns2 = NodeSet(['Foo'], merge_keys=['uuid'])
+    ns3 = NodeSet(['Bar'], merge_keys=['uuid', 'key'])
 
     for i in range(100):
         ns1.add_node({'uuid': i})
         ns2.add_node({'uuid': i})
+        ns3.add_node({'uuid': i, 'key': i})
 
     ns1.create(graph)
     ns2.create(graph)
+    ns3.create(graph)
 
-    return ns1, ns2
-
-
-# class TestRelationshipSetSet:
-#     """
-#     Test basic function such as adding rels.
-#     """
-#
-#     def test_item_iterator(self, small_relationshipset):
-#         for i in small_relationshipset.item_iterator():
-#             assert i['start_node_properties']
-#             assert i['end_node_properties']
+    return ns1, ns2, ns3
 
 
 class TestRelationshipSetCreate:
@@ -58,6 +50,27 @@ class TestRelationshipSetCreate:
         print(result)
         print(result[0])
         assert result[0][0] == 100
+
+    def test_relationshipset_create_mulitple_node_props(self, graph, create_nodes_test):
+
+        rs = RelationshipSet('TEST', ['Test'], ['Bar'], ['uuid'], ['uuid', 'key'])
+
+        for i in range(100):
+            rs.add_relationship(
+                {'uuid': i}, {'uuid': i, 'key': i}, {}
+            )
+
+        rs.create(graph)
+
+        result = list(
+            graph.run(
+                "MATCH (:Test)-[r:TEST]->(:Bar) RETURN count(r)"
+            )
+        )
+        print(result)
+        print(result[0])
+        assert result[0][0] == 100
+
 
     def test_relationship_create_single_index(self, graph, clear_graph, small_relationshipset):
 
