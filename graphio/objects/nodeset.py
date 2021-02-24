@@ -71,24 +71,14 @@ class NodeSet:
         # add node if not found
         self.add_node(properties)
 
-    def item_iterator(self):
-        """
-        Generator function that yields the node properties for all nodes in this NodeSet.
-
-        This is used to create chunks of the nodes without iterating all nodes. This can be removes in future
-        when NodeSet and RelationshipSet fully support generators (instead of lists of nodes/relationships).
-        """
-        for node in self.nodes:
-            yield node
-
     def to_dict(self):
         """
         Create dictionary defining the nodeset.
         """
-        return {"labels":self.labels,"merge_keys":self.merge_keys,"nodes":self.nodes}
+        return {"labels":self.labels, "merge_keys":self.merge_keys, "nodes":self.nodes}
 
     @classmethod
-    def from_dict(cls,nodeset_dict,batch_size=None):
+    def from_dict(cls,nodeset_dict, batch_size=None):
         ns = cls(labels=nodeset_dict["labels"],merge_keys=nodeset_dict["merge_keys"])
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
@@ -104,42 +94,12 @@ class NodeSet:
 
         i = 1
         for batch in chunks(self.nodes, size=batch_size):
-            batch = list(batch)
+
             log.debug('Batch {}'.format(i))
 
             create_nodes(graph, batch, labels=self.labels)
 
             i += 1
-
-    # TODO remove py2neo Node here, the node is just a dict now
-    def filter_nodes(self, filter_func):
-        """
-        Filter node properties with a filter function, remove nodes that do not match from main list.
-        """
-        filtered_nodes = []
-        discarded_nodes = []
-        for n in self.nodes:
-            node_properties = dict(n)
-            if filter_func(node_properties):
-                filtered_nodes.append(n)
-            else:
-                discarded_nodes.append(n)
-
-        self.nodes = filtered_nodes
-        self.discarded_nodes = discarded_nodes
-
-    # TODO remove py2neo Node here, the node is just a dict now
-    def reduce_node_properties(self, *keep_props):
-        filtered_nodes = []
-        for n in self.nodes:
-            new_props = {}
-            for k, v in dict(n).items():
-                if k in keep_props:
-                    new_props[k] = v
-
-            filtered_nodes.append(Node(*self.labels, **new_props))
-
-        self.nodes = filtered_nodes
 
     def merge(self, graph, merge_properties=None, batch_size=None):
         """
@@ -159,7 +119,7 @@ class NodeSet:
 
         i = 1
         for batch in chunks(self.node_properties(), size=batch_size):
-            batch = list(batch)
+
             log.debug('Batch {}'.format(i))
             merge_nodes(graph, batch, (tuple(self.labels), *merge_properties))
 

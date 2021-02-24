@@ -21,14 +21,13 @@ def nodeset_multiple_labels():
     return ns
 
 
-class TestNodeSet:
-    """
-    Test basic function such as adding nodes.
-    """
-    def test_item_iterator(self, small_nodeset):
-        for i in small_nodeset.item_iterator():
-            assert i['key'] == 'value'
-            assert isinstance(i['uuid'], int)
+def test_node_set_from_dict():
+    people = NodeSet(["Person"], merge_keys=["name"])
+    people.add_node({"name": "Tom"})
+    people.add_node({"name": "Mary"})
+    people_dic = people.to_dict()
+    people_copy = NodeSet.from_dict(people_dic)
+    assert people_copy.to_dict() == people_dic
 
 
 class TestNodeSetCreate:
@@ -80,13 +79,6 @@ class TestNodeSetCreate:
 
         assert result[0][0] == 100
 
-    def test_create_node_set_from_dict(self):
-        people = NodeSet(["Person"], merge_keys=["name"])
-        people.add_node({"name": "Tom"})
-        people.add_node({"name": "Mary"})
-        people_dic = people.to_dict()
-        people_copy = NodeSet.from_dict(people_dic)
-        assert people_copy.to_dict() == people_dic
 
 class TestNodeSetIndex:
 
