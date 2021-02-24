@@ -36,6 +36,17 @@ def create_nodes_test(graph, clear_graph):
     return ns1, ns2, ns3
 
 
+def test_relationshuo_set_from_dict():
+    rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
+    rs.add_relationship({'uid': 1}, {'name': 'peter'}, {})
+    rs.add_relationship({'uid': 2}, {'name': 'tim'}, {})
+
+    rs_dictionary = rs.to_dict()
+
+    rs_copy = RelationshipSet.from_dict(rs_dictionary)
+    assert rs_copy.to_dict() == rs_dictionary
+
+
 class TestRelationshipSetCreate:
 
     def test_relationshipset_create_number(self, graph, create_nodes_test, small_relationshipset):

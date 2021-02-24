@@ -99,7 +99,7 @@ class RelationshipSet:
                 "start_node_properties": self.start_node_properties,
                 "end_node_properties": self.end_node_properties,
                 "unique": self.unique,
-                "relationships": [rel.to_dict() for rel in self.relationships]}
+                "relationships": self.relationships}
 
     @classmethod
     def from_dict(cls, relationship_dict, batch_size=None):
@@ -110,49 +110,9 @@ class RelationshipSet:
                  end_node_properties=relationship_dict["end_node_properties"],
                  batch_size=batch_size)
         rs.unique = relationship_dict["unique"]
-        [rs.add_relationship(start_node_properties=rel["start_node_properties"],
-                             end_node_properties=rel["end_node_properties"], properties=rel["properties"]) for rel in
-         relationship_dict["relationships"]]
+        rs.relationships = relationship_dict["relationships"]
+
         return rs
-
-    def filter_relationships_target_node(self, filter_func):
-        """
-        Filter properties of target node with a filter function, remove relationships that do not match from main list.
-        """
-        filtered_rels = []
-        discarded_rels = []
-
-        for rel in self.relationships:
-
-            if filter_func(rel.end_node_properties):
-                filtered_rels.append(rel)
-            else:
-                discarded_rels.append(rel)
-
-        self.relationships = filtered_rels
-        self.discarded_nodes = discarded_rels
-
-    def filter_relationships_start_node(self, filter_func):
-        """
-        Filter properties of target node with a filter function, remove relationships that do not match from main list.
-        """
-        filtered_rels = []
-        discarded_rels = []
-
-        for rel in self.relationships:
-
-            if filter_func(rel.start_node_properties):
-                filtered_rels.append(rel)
-            else:
-                discarded_rels.append(rel)
-
-        self.relationships = filtered_rels
-        self.discarded_nodes = discarded_rels
-
-    def check_if_rel_exists(self, start_node_properties, end_node_properties, properties):
-        for rel in self.relationships:
-            if rel.start_node_properties == start_node_properties and rel.end_node_properties == end_node_properties and rel.properties == properties:
-                return True
 
     def create(self, graph, batch_size=None):
         """
@@ -169,8 +129,6 @@ class RelationshipSet:
         i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
-            batch = list(batch)
-            print(batch)
 
             log.debug('Batch {}'.format(i))
 
@@ -199,7 +157,6 @@ class RelationshipSet:
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
             log.debug('Batch {}'.format(i))
-            batch = list(batch)
 
             merge_relationships(graph,
                                 [x.topy2neo(fixed_order_start_node_properties, fixed_order_end_node_properties) for x in
