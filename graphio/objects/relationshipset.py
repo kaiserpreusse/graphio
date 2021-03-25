@@ -158,12 +158,11 @@ class RelationshipSet:
         for batch in chunks(self.relationships, size=batch_size):
             log.debug('Batch {}'.format(i))
 
-            merge_relationships(graph,
-                                [x.topy2neo(fixed_order_start_node_properties, fixed_order_end_node_properties) for x in
-                                 batch],
+            merge_relationships(graph.auto(),
+                                batch,
                                 self.rel_type,
-                                start_node_key=(tuple(self.start_node_labels), *fixed_order_start_node_properties),
-                                end_node_key=(tuple(self.end_node_labels), *fixed_order_end_node_properties)
+                                start_node_key=(tuple(self.start_node_labels), *self.fixed_order_start_node_properties),
+                                end_node_key=(tuple(self.end_node_labels), *self.fixed_order_end_node_properties)
                                 )
 
             i += 1

@@ -101,3 +101,31 @@ class TestRelationshipSetCreate:
             elif 'labelsOrTypes' in row:
                 assert row['labelsOrTypes'] == ['Test'] and row['properties'] == ['uuid'] \
                        or row['labelsOrTypes'] == ['Test'] and row['properties'] == ['uuid']
+
+
+class TestRelationshipSetMerge:
+
+    def test_relationshipset_merge_number(self, graph, create_nodes_test, small_relationshipset):
+
+        small_relationshipset.merge(graph)
+
+        result = list(
+            graph.run(
+                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
+            )
+        )
+        print(result)
+        print(result[0])
+        assert result[0][0] == 100
+
+        # merge again to check that number stays the same
+        small_relationshipset.merge(graph)
+
+        result = list(
+            graph.run(
+                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
+            )
+        )
+        print(result)
+        print(result[0])
+        assert result[0][0] == 100
