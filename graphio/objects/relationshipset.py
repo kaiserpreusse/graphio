@@ -149,10 +149,6 @@ class RelationshipSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        fixed_order_start_node_properties = tuple(self.start_node_properties)
-        fixed_order_end_node_properties = tuple(self.end_node_properties)
-        print(fixed_order_start_node_properties, fixed_order_end_node_properties)
-
         i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
