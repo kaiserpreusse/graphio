@@ -59,6 +59,9 @@ class RelationshipSet:
         self.unique = False
         self.unique_rels = set()
 
+    def __str__(self):
+        return f"<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>"
+
     def __relationship_from_dictionary(self, start_node_properties, end_node_properties, properties):
         """
         Transform the input dictionary into the relationship data type used for py2neo.

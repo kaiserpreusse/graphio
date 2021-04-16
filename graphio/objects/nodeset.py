@@ -37,6 +37,9 @@ class NodeSet:
 
         self.nodes = []
 
+    def __str__(self):
+        return f"<NodeSet ({self.labels}; {self.merge_keys})>"
+
     def add_node(self, properties):
         """
         Create a node in this NodeSet.

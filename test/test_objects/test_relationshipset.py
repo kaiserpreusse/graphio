@@ -36,6 +36,12 @@ def create_nodes_test(graph, clear_graph):
     return ns1, ns2, ns3
 
 
+def test_str():
+    rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
+
+    assert str(rs) == "<RelationshipSet (['Source']; ['uid'])-[TEST]->(['Target']; ['name'])>"
+
+
 def test_relationshuo_set_from_dict():
     rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
     rs.add_relationship({'uid': 1}, {'name': 'peter'}, {})

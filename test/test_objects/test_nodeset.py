@@ -30,6 +30,10 @@ def test_node_set_from_dict():
     assert people_copy.to_dict() == people_dic
 
 
+def test_str():
+    ns = NodeSet(['Test', 'Foo'], merge_keys=['uuid'])
+    assert str(ns) == "<NodeSet (['Test', 'Foo']; ['uuid'])>"
+
 class TestNodeSetCreate:
 
     def test_nodeset_create_number(self, small_nodeset, graph, clear_graph):
