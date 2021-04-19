@@ -1,9 +1,11 @@
 # note: integration tests for creating relationships needs nodes in the database
 # we create the nodes with graphio, this could mean that issues are difficult to resolve
 # however, NodeSets are also tested separately
-
+import os
+import json
 import pytest
-from graphio.objects.nodeset import NodeSet, RelationshipSet
+from graphio.objects.nodeset import NodeSet
+from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
 
 
 @pytest.fixture
@@ -13,6 +15,30 @@ def small_relationshipset():
     for i in range(100):
         rs.add_relationship(
             {'uuid': i}, {'uuid': i}, {}
+        )
+
+    return rs
+
+
+@pytest.fixture
+def small_relationshipset_multiple_labels():
+    rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid'], ['uuid'])
+
+    for i in range(100):
+        rs.add_relationship(
+            {'uuid': i}, {'uuid': i}, {}
+        )
+
+    return rs
+
+
+@pytest.fixture
+def small_relationshipset_multiple_labels_multiple_merge_keys():
+    rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+
+    for i in range(100):
+        rs.add_relationship(
+            {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {}
         )
 
     return rs
@@ -51,6 +77,14 @@ def test_relationshuo_set_from_dict():
 
     rs_copy = RelationshipSet.from_dict(rs_dictionary)
     assert rs_copy.to_dict() == rs_dictionary
+
+
+def test__tuplify_json_list():
+    l = [[0, 1], {}, [0, 'foo']]
+
+    t = tuplify_json_list(l)
+
+    assert t == ((0, 1), {}, (0, 'foo'))
 
 
 class TestRelationshipSetCreate:
@@ -135,3 +169,40 @@ class TestRelationshipSetMerge:
         print(result)
         print(result[0])
         assert result[0][0] == 100
+
+class TestRelationshipSetSerialize:
+
+    def test_object_file_name(self, small_relationshipset):
+        # set fixed uuid for relationshipset
+        uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
+        small_relationshipset.uuid = uuid
+
+        assert small_relationshipset.object_file_name() == f"relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0"
+        assert small_relationshipset.object_file_name(suffix='.json') == "relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
+
+
+    def test_serialize(self, small_relationshipset, small_relationshipset_multiple_labels, small_relationshipset_multiple_labels_multiple_merge_keys, tmp_path):
+        """
+        Test serialization with different test NodeSets.
+        """
+
+        for test_rs in [small_relationshipset, small_relationshipset_multiple_labels, small_relationshipset_multiple_labels_multiple_merge_keys]:
+
+            uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
+            test_rs.uuid = uuid
+
+            test_rs.serialize(str(tmp_path))
+
+            target_file_path = os.path.join(tmp_path, test_rs.object_file_name(suffix='.json'))
+
+            assert os.path.exists(target_file_path)
+
+            with open(target_file_path, 'rt') as f:
+                reloaded_relset = RelationshipSet.from_dict(json.load(f))
+
+                assert reloaded_relset.start_node_labels == test_rs.start_node_labels
+                assert reloaded_relset.start_node_properties == test_rs.start_node_properties
+                assert reloaded_relset.end_node_labels == test_rs.end_node_labels
+                assert reloaded_relset.end_node_properties == test_rs.end_node_properties
+                assert reloaded_relset.relationships == test_rs.relationships
+                assert len(reloaded_relset.relationships) == len(test_rs.relationships)

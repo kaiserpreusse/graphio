@@ -1,10 +1,12 @@
 import pytest
+import os
+import json
 
 from graphio.objects.nodeset import NodeSet
 
 
 @pytest.fixture
-def small_nodeset():
+def small_nodeset() -> NodeSet:
     ns = NodeSet(['Test'], merge_keys=['uuid'])
     for i in range(100):
         ns.add_node({'uuid': i, 'key': 'value'})
@@ -16,6 +18,14 @@ def small_nodeset():
 def nodeset_multiple_labels():
     ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'])
     for i in range(100):
+        ns.add_node({'uuid': i})
+
+    return ns
+
+@pytest.fixture
+def nodeset_multiple_labels_multiple_merge_keys():
+    ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid', 'other'])
+    for i in range(1000):
         ns.add_node({'uuid': i})
 
     return ns
@@ -160,3 +170,38 @@ class TestNodeSetMerge:
 
         print(result)
         assert result[0][0] == 100
+
+
+class TestNodeSetSerialize:
+
+    def test_nodeset_file_name(self, small_nodeset):
+        # set fixed uuid for small nodeset
+        uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
+        small_nodeset.uuid = uuid
+        assert small_nodeset.object_file_name() == f"nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0"
+        assert small_nodeset.object_file_name(suffix='.json') == "nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
+
+
+    def test_serialize(self, small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys, tmp_path):
+        """
+        Test serialization with different test NodeSets.
+        """
+
+        for test_ns in [small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys]:
+
+            uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
+            test_ns.uuid = uuid
+
+            test_ns.serialize(str(tmp_path))
+
+            target_file_path = os.path.join(tmp_path, test_ns.object_file_name(suffix='.json'))
+
+            assert os.path.exists(target_file_path)
+
+            with open(target_file_path, 'rt') as f:
+                reloaded_nodeset = NodeSet.from_dict(json.load(f))
+
+                assert reloaded_nodeset.labels == test_ns.labels
+                assert reloaded_nodeset.merge_keys == test_ns.merge_keys
+                assert reloaded_nodeset.nodes == test_ns.nodes
+                assert len(reloaded_nodeset.nodes) == len(test_ns.nodes)

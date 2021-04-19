@@ -1,6 +1,8 @@
 import logging
 from uuid import uuid4
 from py2neo.bulk import create_nodes, merge_nodes
+import os
+import json
 
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
@@ -85,6 +87,30 @@ class NodeSet:
         ns = cls(labels=nodeset_dict["labels"],merge_keys=nodeset_dict["merge_keys"])
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
+
+    def object_file_name(self, suffix: str = None) -> str:
+        """
+        Create a unique name for this NodeSet that indicates content. Pass an optional suffix.
+        NOTE: suffix has to include the '.' for a filename!
+
+            `nodeset_Label_merge-key_uuid`
+
+        With suffix:
+
+            `nodeset_Label_merge-key_uuid.json`
+        """
+        basename = f"nodeset_{'_'.join(self.labels)}_{'_'.join(self.merge_keys)}_{self.uuid}"
+        if suffix:
+            basename += suffix
+        return basename
+
+    def serialize(self, target_dir: str):
+        """
+        Serialize NodeSet to a JSON file in a target directory.
+        """
+        path = os.path.join(target_dir, self.object_file_name(suffix='.json'))
+        with open(path, 'wt') as f:
+            json.dump(self.to_dict(), f, indent=4)
 
     def create(self, graph, batch_size=None):
         """

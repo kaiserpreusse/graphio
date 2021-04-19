@@ -1,12 +1,34 @@
 from uuid import uuid4
 import logging
 import json
+import os
 from py2neo.bulk import create_relationships, merge_relationships
 
 from graphio import defaults
 from graphio.objects.helper import chunks, create_single_index, create_composite_index
 
 log = logging.getLogger(__name__)
+
+
+def tuplify_json_list(list_object: list) -> tuple:
+    """
+    JSON.dump() stores tuples as JSON lists. This function receives a list (with sub lists)
+    and creates a tuple of tuples from the list. The tuples are the preferred input type for py2neo.
+
+    E.g.
+
+        [[a, b], [c, d]] -> ((a, b), (c, d))
+
+    :param list_object: A list with sub-lists.
+    :return: A tuple version of the list object.
+    """
+    output = tuple()
+    for element in list_object:
+        if isinstance(element, list):
+            output = output + (tuple(element), )
+        else:
+            output = output + (element, )
+    return output
 
 
 class RelationshipSet:
@@ -94,7 +116,6 @@ class RelationshipSet:
         else:
             self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, properties))
 
-
     def to_dict(self):
         return {"rel_type": self.rel_type,
                 "start_node_labels": self.start_node_labels,
@@ -113,9 +134,33 @@ class RelationshipSet:
                  end_node_properties=relationship_dict["end_node_properties"],
                  batch_size=batch_size)
         rs.unique = relationship_dict["unique"]
-        rs.relationships = relationship_dict["relationships"]
+        rs.relationships = [tuplify_json_list(r) for r in relationship_dict["relationships"]]
 
         return rs
+
+    def object_file_name(self, suffix: str = None) -> str:
+        """
+        Create a unique name for this RelationshipSet that indicates content. Pass an optional suffix.
+        NOTE: suffix has to include the '.' for a filename!
+
+            `relationshipset_StartLabel_TYPE_EndLabel_uuid`
+
+        With suffix:
+
+            `relationshipset_StartLabel_TYPE_EndLabel_uuid.json`
+        """
+        basename = f"relationshipset_{'_'.join(self.start_node_labels)}_{self.rel_type}_{'_'.join(self.end_node_labels)}_{self.uuid}"
+        if suffix:
+            basename += suffix
+        return basename
+
+    def serialize(self, target_dir: str):
+        """
+        Serialize NodeSet to a JSON file in a target directory.
+        """
+        path = os.path.join(target_dir, self.object_file_name(suffix='.json'))
+        with open(path, 'wt') as f:
+            json.dump(self.to_dict(), f, indent=4)
 
     def create(self, graph, batch_size=None):
         """
