@@ -154,30 +154,6 @@ class NodeSet:
 
             i += 1
 
-    def map_to_1(self, graph, target_labels, target_properties, rel_type=None):
-        """
-        Create relationships from all nodes in this NodeSet to 1 target node.
-
-        :param graph: The py2neo Graph
-        :param other_node: The target node.
-        :param rel_type: Relationship Type
-        """
-
-        if not rel_type:
-            rel_type = 'FROM_SET'
-
-        rels = RelationshipSet(rel_type, self.labels, target_labels, self.merge_keys, target_properties)
-
-        for node in self.nodes:
-            # get properties for merge_keys
-            node_properties = {}
-            for k in self.merge_keys:
-                node_properties[k] = node[k]
-
-            rels.add_relationship(node_properties, target_properties, {})
-
-        rels.create(graph)
-
     def node_properties(self):
         """
         Yield properties of the nodes in this set. Used for create function.
