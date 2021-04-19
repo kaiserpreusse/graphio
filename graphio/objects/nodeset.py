@@ -16,7 +16,7 @@ class NodeSet:
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels, merge_keys=None, batch_size=None):
+    def __init__(self, labels, merge_keys=None, batch_size=None, default_props=None):
         """
 
         :param labels: The labels for the nodes in this NodeSet.
@@ -28,6 +28,7 @@ class NodeSet:
         """
         self.labels = labels
         self.merge_keys = merge_keys
+        self.default_props = default_props
 
         self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
         self.uuid = str(uuid4())
@@ -49,7 +50,12 @@ class NodeSet:
         :param properties: Node properties.
         :type properties: dict
         """
-        self.nodes.append(properties)
+        if self.default_props:
+            node_props = {**self.default_props, **properties}
+        else:
+            node_props = properties
+
+        self.nodes.append(node_props)
 
     def add_nodes(self, list_of_properties):
         for properties in list_of_properties:

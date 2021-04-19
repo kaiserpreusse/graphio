@@ -37,7 +37,7 @@ class RelationshipSet:
     """
 
     def __init__(self, rel_type, start_node_labels, end_node_labels, start_node_properties, end_node_properties,
-                 batch_size=None):
+                 batch_size=None, default_props=None):
         """
 
         :param rel_type: Realtionship type.
@@ -59,6 +59,7 @@ class RelationshipSet:
         self.end_node_labels = end_node_labels
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
+        self.default_props = default_props
 
         self.fixed_order_start_node_properties = tuple(self.start_node_properties)
         self.fixed_order_end_node_properties = tuple(self.end_node_properties)
@@ -105,16 +106,21 @@ class RelationshipSet:
 
         :param properties: Relationship properties.
         """
+        if self.default_props:
+            rel_props = {**self.default_props, **properties}
+        else:
+            rel_props = properties
+
         if self.unique:
             # construct a check set with start_node_properties (values), end_node_properties (values) and properties (values)
             check_set = frozenset(
-                list(start_node_properties.values()) + list(end_node_properties.values()) + list(properties.values()))
+                list(start_node_properties.values()) + list(end_node_properties.values()) + list(rel_props.values()))
 
             if check_set not in self.unique_rels:
-                self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, properties))
+                self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, rel_props))
                 self.unique_rels.add(check_set)
         else:
-            self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, properties))
+            self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, rel_props))
 
     def to_dict(self):
         return {"rel_type": self.rel_type,

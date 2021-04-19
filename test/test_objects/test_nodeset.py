@@ -44,6 +44,26 @@ def test_str():
     ns = NodeSet(['Test', 'Foo'], merge_keys=['uuid'])
     assert str(ns) == "<NodeSet (['Test', 'Foo']; ['uuid'])>"
 
+
+class TestDefaultProps:
+
+    def test_default_props(self):
+        ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'], default_props={'user': 'foo'})
+        for i in range(100):
+            ns.add_node({'uuid': i})
+
+        for n in ns.nodes:
+            assert n['user'] == 'foo'
+
+    def test_default_props_overwrite_from_node(self):
+        ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'], default_props={'user': 'foo'})
+        for i in range(100):
+            ns.add_node({'uuid': i, 'user': 'bar'})
+
+        for n in ns.nodes:
+            assert n['user'] == 'bar'
+
+
 class TestNodeSetCreate:
 
     def test_nodeset_create_number(self, small_nodeset, graph, clear_graph):

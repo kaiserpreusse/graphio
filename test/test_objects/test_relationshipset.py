@@ -68,7 +68,7 @@ def test_str():
     assert str(rs) == "<RelationshipSet (['Source']; ['uid'])-[TEST]->(['Target']; ['name'])>"
 
 
-def test_relationshuo_set_from_dict():
+def test_relationship_set_from_dict():
     rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
     rs.add_relationship({'uid': 1}, {'name': 'peter'}, {})
     rs.add_relationship({'uid': 2}, {'name': 'tim'}, {})
@@ -85,6 +85,25 @@ def test__tuplify_json_list():
     t = tuplify_json_list(l)
 
     assert t == ((0, 1), {}, (0, 'foo'))
+
+
+class TestDefaultProps:
+
+    def test_default_props(self):
+        rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'], default_props={'user': 'foo'})
+        rs.add_relationship({'uid': 1}, {'name': 'peter'}, {'some': 'value'})
+        rs.add_relationship({'uid': 2}, {'name': 'tim'}, {'some': 'value'})
+
+        for n in rs.relationships:
+            assert n[1]['user'] == 'foo'
+
+    def test_default_props_overwrite_from_node(self):
+        rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'], default_props={'user': 'foo'})
+        rs.add_relationship({'uid': 1}, {'name': 'peter'}, {'some': 'value', 'user': 'bar'})
+        rs.add_relationship({'uid': 2}, {'name': 'tim'}, {'some': 'value', 'user': 'bar'})
+
+        for r in rs.relationships:
+            assert r[1]['user'] == 'bar'
 
 
 class TestRelationshipSetCreate:
