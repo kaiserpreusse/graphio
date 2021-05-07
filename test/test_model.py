@@ -218,7 +218,7 @@ def test_create_using_types_with_different_values(graph, clear_graph):
 
     assert result[0]['num'] == 100
 
-    # result = graph.run("MATCH (t:Foo)-[r:MAPS]->(target:TargetFoo) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
-    # assert result[0]['test_nodes'] == 100
-    # assert result[0]['rels'] == 100
-    # assert result[0]['target_nodes'] == 100
+    result = graph.run("MATCH (t:Foo)-[r:MAPS]->(target:TargetFoo) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
+    assert result[0]['test_nodes'] == 100
+    assert result[0]['rels'] == 100
+    assert result[0]['target_nodes'] == 100
