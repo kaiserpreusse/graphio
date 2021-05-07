@@ -5,7 +5,7 @@ from graphio.objects.relationshipset import RelationshipSet
 
 
 class StringContainer:
-    def __init__(self, v):
+    def __init__(self, v:str = None):
         self.v = v
 
     def __repr__(self):
@@ -19,16 +19,22 @@ class StringContainer:
 
 
 class MergeKey(StringContainer):
-    def __init__(self, v):
+    def __init__(self, v:str = None):
         super(MergeKey, self).__init__(v)
 
 
 class Label(StringContainer):
-    def __init__(self, v):
+    def __init__(self, v: str = None):
         super(Label, self).__init__(v)
 
 
 class MetaNode(type):
+
+    def __init__(cls, *args, **kwargs):
+        for key, value in cls.__dict__.items():
+            if isinstance(value, StringContainer):
+                if not value.v:
+                    value.v = key
 
     @property
     def __merge_keys__(cls):
@@ -50,6 +56,7 @@ class MetaNode(type):
         value = super(MetaNode, cls).__getattribute__(item)
         if isinstance(value, StringContainer):
             return str(value)
+
         else:
             return value
 

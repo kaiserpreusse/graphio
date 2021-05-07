@@ -1,7 +1,5 @@
 from graphio.model import ModelNode, ModelRelationship, Label, MergeKey
 
-
-
 class TestModelNode:
 
     def test_instance(self):
@@ -31,12 +29,20 @@ class TestModelNode:
         assert Test.test == 'foo'
         assert Test.sid == 'bar'
 
+    def test_empty_attributes(self):
+        class Test(ModelNode):
+            Test = Label()
+            sid = MergeKey()
+
+        assert Test.Test == 'Test'
+        assert Test.sid == 'sid'
+
 
 def test_node_creation(graph, clear_graph):
 
     class TestNode(ModelNode):
-        test = Label('Test')
-        name = MergeKey('name')
+        Test = Label()
+        name = MergeKey()
 
     ns = TestNode.dataset()
 
