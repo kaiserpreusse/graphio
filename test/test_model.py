@@ -41,6 +41,29 @@ class TestModelNode:
 def test_node_creation(graph, clear_graph):
 
     class TestNode(ModelNode):
+        test = Label('Test')
+        name = MergeKey('name')
+
+    ns = TestNode.dataset()
+
+    for i in range(100):
+        ns.add_node({'name': i})
+
+    ns.create(graph)
+
+    result = graph.run("MATCH (t:Test) RETURN count(t) AS num").data()
+
+    assert result[0]['num'] == 100
+
+    ns.create(graph)
+
+    result = graph.run("MATCH (t:Test) RETURN count(t) AS num").data()
+
+    assert result[0]['num'] == 200
+
+
+def test_node_creation_empty(graph, clear_graph):
+    class TestNode(ModelNode):
         Test = Label()
         name = MergeKey()
 
