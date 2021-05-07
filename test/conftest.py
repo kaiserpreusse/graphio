@@ -11,8 +11,6 @@ logging.basicConfig()
 
 log = logging.getLogger(__name__)
 
-CONTAINER_NAME = 'neo4j_graphio_test_run'
-
 NEO4J_PASSWORD = 'test'
 
 RUN_ENVIRONMENT = os.getenv('RUN_ENVIRONMENT', None)
