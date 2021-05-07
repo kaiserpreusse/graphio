@@ -5,7 +5,7 @@ import os
 from py2neo.bulk import create_relationships, merge_relationships
 
 from graphio import defaults
-from graphio.objects.helper import chunks, create_single_index, create_composite_index
+from graphio.helper import chunks, create_single_index, create_composite_index
 
 log = logging.getLogger(__name__)
 

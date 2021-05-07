@@ -4,7 +4,7 @@ from py2neo.bulk import create_nodes, merge_nodes
 import os
 import json
 
-from graphio.objects.helper import chunks, create_single_index, create_composite_index
+from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.objects.relationshipset import RelationshipSet
 
