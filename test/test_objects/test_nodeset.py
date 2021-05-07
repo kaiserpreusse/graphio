@@ -71,7 +71,7 @@ class TestNodeSetCreate:
 
         result = list(
             graph.run(
-                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.__labels__))
+                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
             )
         )
         print(result)
@@ -83,7 +83,7 @@ class TestNodeSetCreate:
 
         result = list(
             graph.run(
-                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.__labels__))
+                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
             )
         )
         print(result)
@@ -94,7 +94,7 @@ class TestNodeSetCreate:
 
         result = list(
             graph.run(
-                "MATCH (n:{}) RETURN n".format(':'.join(small_nodeset.__labels__))
+                "MATCH (n:{}) RETURN n".format(':'.join(small_nodeset.labels))
             )
         )
 
@@ -107,7 +107,7 @@ class TestNodeSetCreate:
 
         result = list(
             graph.run(
-                "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.__labels__))
+                "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.labels))
             )
         )
 
@@ -185,7 +185,7 @@ class TestNodeSetMerge:
         small_nodeset.merge(graph)
 
         result = list(
-            graph.run("MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.__labels__)))
+            graph.run("MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
         )
 
         print(result)
@@ -221,7 +221,7 @@ class TestNodeSetSerialize:
             with open(target_file_path, 'rt') as f:
                 reloaded_nodeset = NodeSet.from_dict(json.load(f))
 
-                assert reloaded_nodeset.__labels__ == test_ns.__labels__
-                assert reloaded_nodeset.__merge_keys__ == test_ns.__merge_keys__
+                assert reloaded_nodeset.labels == test_ns.labels
+                assert reloaded_nodeset.merge_keys == test_ns.merge_keys
                 assert reloaded_nodeset.nodes == test_ns.nodes
                 assert len(reloaded_nodeset.nodes) == len(test_ns.nodes)
