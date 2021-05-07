@@ -72,7 +72,7 @@ class ModelNode(metaclass=MetaNode):
         return NodeSet(cls.__labels__, merge_keys=cls.__merge_keys__)
 
 
-class ModelRelationship():
+class ModelRelationship:
     source = None
     target = None
     type = ''
