@@ -31,10 +31,15 @@ class Label(StringContainer):
 class MetaNode(type):
 
     def __init__(cls, *args, **kwargs):
+        # set value on empty StringContainer
         for key, value in cls.__dict__.items():
             if isinstance(value, StringContainer):
                 if not value.v:
                     value.v = key
+
+        # add Label(ClassName) if none is given
+        if not cls.__labels__:
+            setattr(cls, cls.__name__, Label(cls.__name__))
 
     @property
     def __merge_keys__(cls):

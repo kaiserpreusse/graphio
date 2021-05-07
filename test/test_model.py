@@ -37,6 +37,14 @@ class TestModelNode:
         assert Test.Test == 'Test'
         assert Test.sid == 'sid'
 
+    def test_empty_attributes_no_label(self):
+        class Test(ModelNode):
+            sid = MergeKey()
+
+        assert Test.Test == 'Test'
+        assert 'Test' in Test.__labels__
+        assert Test.sid == 'sid'
+
 
 def test_node_creation(graph, clear_graph):
 
