@@ -4,6 +4,8 @@ services:
     image: neo4j:3.5
     environment:
       - NEO4J_AUTH=neo4j/test
+      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
     ports:
       - 8687:7687
       - 8474:7474
@@ -11,6 +13,8 @@ services:
     image: neo4j:4.1
     environment:
       - NEO4J_AUTH=neo4j/test
+      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
     ports:
       - 9687:7687
       - 9474:7474
@@ -18,6 +22,8 @@ services:
     image: neo4j:4.2
     environment:
       - NEO4J_AUTH=neo4j/test
+      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
     ports:
       - 10687:7687
       - 10474:7474

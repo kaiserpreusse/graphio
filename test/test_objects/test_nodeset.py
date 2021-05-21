@@ -22,6 +22,7 @@ def nodeset_multiple_labels():
 
     return ns
 
+
 @pytest.fixture
 def nodeset_multiple_labels_multiple_merge_keys():
     ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid', 'other'])
@@ -176,6 +177,87 @@ class TestNodeSetIndex:
 
 
 class TestNodeSetMerge:
+    def test_nodeset_merge_preserve(self, graph, clear_graph):
+        """
+        Merge a nodeset 3 times and check number of nodes.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'])
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+
+        ns.merge(graph)
+
+        do_not_overwrite_ns = NodeSet(['Test'], merge_keys=['uuid'], preserve=['key'])
+        for i in range(100):
+            do_not_overwrite_ns.add_node({'uuid': i, 'key': 'other_value'})
+
+        do_not_overwrite_ns.merge(graph)
+
+        assert list(graph.run("MATCH (n:Test) where n.key = 'value' RETURN count(n)"))[0][0] == 100
+        assert list(graph.run("MATCH (n:Test) where n.key = 'other_value' RETURN count(n)"))[0][0] == 0
+
+    def test_nodeset_merge_append_props(self, graph, clear_graph):
+        """
+        Merge a nodeset 3 times and check number of nodes.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+
+        ns.merge(graph)
+
+        append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        for i in range(100):
+            append_ns.add_node({'uuid': i, 'key': 'other_value'})
+
+        append_ns.merge(graph)
+        assert list(graph.run("MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)"))[0][
+                   0] == 100
+
+    def test_nodeset_merge_preserve_and_append_props(self, graph, clear_graph):
+        """
+        Merge a nodeset 3 times and check number of nodes.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['other_key'])
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value', 'other_key': 'bar'})
+
+        ns.merge(graph)
+        assert list(graph.run("MATCH (n:Test) where 'value' IN n.key RETURN count(n)"))[0][0] == 100
+        assert list(graph.run("MATCH (n:Test) where n.other_key = 'bar' RETURN count(n)"))[0][0] == 100
+
+        append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['other_key'])
+        for i in range(100):
+            append_ns.add_node({'uuid': i, 'key': 'other_value', 'other_key': 'foo'})
+
+        append_ns.merge(graph)
+
+        assert list(graph.run("MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)"))[0][
+                   0] == 100
+        assert list(graph.run("MATCH (n:Test) where n.other_key = 'bar' RETURN count(n)"))[0][0] == 100
+        assert list(graph.run("MATCH (n:Test) where n.other_key = 'foo' RETURN count(n)"))[0][0] == 0
+
+    def test_nodeset_merge_preserve_keeps_append_props(self, graph, clear_graph):
+        """
+        Merge a nodeset 3 times and check number of nodes.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['key'])
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+
+        ns.merge(graph)
+        assert list(graph.run("MATCH (n:Test) where 'value' IN n.key RETURN count(n)"))[0][0] == 100
+
+        append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['key'])
+        for i in range(100):
+            append_ns.add_node({'uuid': i, 'key': 'other_value'})
+
+
+        append_ns.merge(graph)
+
+        assert list(graph.run("MATCH (n:Test) where 'value' IN n.key RETURN count(n)"))[0][0] == 100
+        assert list(graph.run("MATCH (n:Test) where 'other_value' IN n.key RETURN count(n)"))[0][0] == 0
+
     def test_nodeset_merge_number(self, small_nodeset, graph, clear_graph):
         """
         Merge a nodeset 3 times and check number of nodes.
@@ -199,16 +281,16 @@ class TestNodeSetSerialize:
         uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
         small_nodeset.uuid = uuid
         assert small_nodeset.object_file_name() == f"nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0"
-        assert small_nodeset.object_file_name(suffix='.json') == "nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
+        assert small_nodeset.object_file_name(
+            suffix='.json') == "nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
-
-    def test_serialize(self, small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys, tmp_path):
+    def test_serialize(self, small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys,
+                       tmp_path):
         """
         Test serialization with different test NodeSets.
         """
 
         for test_ns in [small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys]:
-
             uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
             test_ns.uuid = uuid
 

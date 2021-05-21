@@ -7,6 +7,7 @@ import json
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.objects.relationshipset import RelationshipSet
+from graphio.queries import nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, nodes_merge_unwind_preserve_array_props
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class NodeSet:
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels, merge_keys=None, batch_size=None, default_props=None):
+    def __init__(self, labels, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None):
         """
 
         :param labels: The labels for the nodes in this NodeSet.
@@ -29,6 +30,8 @@ class NodeSet:
         self.labels = labels
         self.merge_keys = merge_keys
         self.default_props = default_props
+        self.preserve = preserve
+        self.append_props = append_props
 
         self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
         self.uuid = str(uuid4())
@@ -136,12 +139,19 @@ class NodeSet:
 
             i += 1
 
-    def merge(self, graph, merge_properties=None, batch_size=None):
+    def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None):
         """
         Merge nodes from NodeSet on merge properties.
 
         :param merge_properties: The merge properties.
         """
+        # overwrite if preserve is passed
+        if preserve:
+            self.preserve = preserve
+        # overwrite if array_props is passed
+        if append_props:
+            self.append_props = append_props
+
         log.debug('Merge NodeSet on {}'.format(merge_properties))
 
         if not batch_size:
@@ -152,13 +162,27 @@ class NodeSet:
 
         log.debug('Batch Size: {}'.format(batch_size))
 
-        i = 1
-        for batch in chunks(self.node_properties(), size=batch_size):
+        # use py2neo base functions if no properties are preserved
+        if not self.preserve and not self.append_props:
+            for batch in chunks(self.node_properties(), size=batch_size):
+                merge_nodes(graph, batch, (tuple(self.labels), *merge_properties))
 
-            log.debug('Batch {}'.format(i))
-            merge_nodes(graph, batch, (tuple(self.labels), *merge_properties))
+        elif self.preserve and not self.append_props:
+            q = nodes_merge_unwind_preserve(self.labels, self.merge_keys, property_parameter='props')
+            for batch in chunks(self.node_properties(), size=batch_size):
+                graph.run(q, props=list(batch), preserve=self.preserve)
 
-            i += 1
+        elif not self.preserve and self.append_props:
+            q = nodes_merge_unwind_array_props(self.labels, self.merge_keys, self.append_props, property_parameter='props')
+            for batch in chunks(self.node_properties(), size=batch_size):
+                graph.run(q, props=list(batch), append_props=self.append_props)
+
+        elif self.preserve and self.append_props:
+
+            q = nodes_merge_unwind_preserve_array_props(self.labels, self.merge_keys, self.append_props, self.preserve, property_parameter='props')
+            print(q)
+            for batch in chunks(self.node_properties(), size=batch_size):
+                graph.run(q, props=list(batch), append_props=self.append_props, preserve=self.preserve)
 
     def node_properties(self):
         """
