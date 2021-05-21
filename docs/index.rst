@@ -6,24 +6,31 @@
 graphio documentation
 ===================================
 
-Graphio is a Python library to quickly load data to Neo4j. The goal of graphio is to collect
+Graphio is a Python library to bulk load data to Neo4j. The goal of graphio is to collect
 multiple sets of nodes and relationships from files or other data sources and write them to Neo4j. Graphio only writes
 data, it is not meant for querying Neo4j and returning data. A common task is to parse a bunch of Excel files to create
 a Neo4j prototype.
 
 Graphio focuses on creating :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` which are groups of nodes
 and relationships with similiar properties. Graphio can write these data sets to Neo4j using :code:`CREATE` or :code:`MERGE` operations.
-Graphio enables you to store metadata by creating nodes and relationships from :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet`.
 
-Graphio is based on py2neo which is used to run queries. While py2neo is a comprehensive Neo4j library including object-graph mapping,
-graphio is made to quickly build a Neo4j database from existing data sets.
+Graphio uses py2neo in several places. Part of the bulk data loading logic developed for graphio was merged into py2neo.
+While py2neo is a comprehensive Neo4j library including object-graph mapping, graphio is made to quickly build a Neo4j database from existing data sets.
 
 
 Version
 -----------
-Latest version: :code:`0.0.15`. Install with::
 
-   pip install -U graphio
+.. image:: https://img.shields.io/pypi/v/graphio
+   :target: https://pypi.org/project/graphio
+
+
+Install
+++++++++++++++++++
+
+Use pip to install::
+
+  pip install -U graphio
 
 
 Example
@@ -85,6 +92,42 @@ The code in the example should be easy to understand:
 
 .. note::
    The example does create mulitple nodes with the same properties. You have to take care of uniqueness yourself.
+
+Create and Merge operations
+--------------------------
+
+Graphio can run both :code:`create()` and :code:`merge()` operations on :code:`NodeSet` and :code:`RelationshipSet`.
+
+See details in the documentation of  :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet`.
+
+Create
+++++++++
+:code:`create()` will, as the name suggests, create all data. This will create
+duplicate nodes even if a :code:`merge_key` is set on a :code:`NodeSet`.
+
+Merge
+++++++++
+:code:`merge()` will merge on the :code:`merge_key` defined on the :code:`NodeSet`.
+
+To control the merge operation, you can pass a list of properties that should not be overwritten on existing nodes::
+
+  NodeSet.merge(graph, preserve=['name', 'currency'])
+
+This is equivalent to::
+
+  ON CREATE SET ..all properties..
+  ON MATCH SET ..all properties except 'name' and 'currency'
+
+
+Graphio can also append properties to arrays::
+
+  NodeSet.merge(graph, append_props=['source'])
+
+This will create a list for the node property :code:`source` and append values :code:`ON MATCH`.
+
+Both can also be set on the :code:`NodeSet`::
+
+  nodeset = NodeSet(['Person'], ['name'], preserve=['country'], array_props=['source'])
 
 
 
