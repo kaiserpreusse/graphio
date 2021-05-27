@@ -1,9 +1,14 @@
+from pytest import raises
+
 from graphio.model import ModelNode, ModelRelationship, Label, MergeKey
 
-class TestModelNode:
+
+class TestModelNodeClass:
+    """
+    Test functions on class level.
+    """
 
     def test_instance(self):
-
         class Test(ModelNode):
             test = Label('test')
             sid = MergeKey('sid')
@@ -13,7 +18,6 @@ class TestModelNode:
         assert Test.foo == 'foo'
 
     def test_attribute_access(self):
-
         class Test(ModelNode):
             test = Label('test')
             sid = MergeKey('sid')
@@ -46,8 +50,139 @@ class TestModelNode:
         assert Test.sid == 'sid'
 
 
-def test_node_creation(graph, clear_graph):
+class TestModelNodeInstance:
+    """
+    Test functionalities to create instances of model nodes.
+    """
 
+    def test_merge_properties(self):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        t = TestNode(name='Peter')
+        assert t.merge_props == {'name': 'Peter'}
+
+    def test_merge_properties_type_error(self):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        with raises(TypeError):
+            t = TestNode(foo='Peter')
+
+    def test_exists(self, graph, clear_graph):
+        graph.run("CREATE (t:Test) SET t.name = 'Peter'")
+
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        t = TestNode(name='Peter')
+        assert t.exists(graph)
+
+        not_t = TestNode(name='NotPeter')
+        assert not_t.exists(graph) == False
+
+    def test_exists_raises_type_error(self, graph, clear_graph):
+        # create some more nodes
+        graph.run("UNWIND [1, 2] AS i CREATE (t:Test) SET t.name = 'Peter'")
+
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        t = TestNode(name='Peter')
+        with raises(TypeError):
+            t.exists(graph)
+
+    def test_simple_merge(self, graph, clear_graph):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        some_test = TestNode(name='Peter')
+        some_test.merge(graph)
+
+        result = graph.run("MATCH (t:Test) WHERE t.name = 'Peter' RETURN count(t) as num").data()
+        assert result[0]['num'] == 1
+
+        # try again, should not overwrite
+        some_test.merge(graph)
+        result = graph.run("MATCH (t:Test) WHERE t.name = 'Peter' RETURN count(t) as num").data()
+        assert result[0]['num'] == 1
+
+    def test_error_if_not_unique(self, graph, clear_graph):
+        # create some nodes
+        graph.run("UNWIND [1, 2] AS i CREATE (t:Test) SET t.name = 'Peter'")
+
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        some_test = TestNode(name='Peter')
+
+        with raises(TypeError):
+            some_test.merge(graph)
+
+    def test_link(self, graph, clear_graph):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        class Friend(ModelRelationship):
+            source = TestNode
+            target = TestNode
+            type = 'FRIEND'
+
+        peter = TestNode(name='Peter')
+        pan = TestNode(name='Pan')
+
+        peter.merge(graph)
+        pan.merge(graph)
+
+        peter.link(graph, Friend, pan)
+
+        result = graph.run(
+            "MATCH (:Test {name: 'Peter'})-[r:FRIEND]->(:Test {name: 'Pan'}) RETURN count(r) as num").data()
+
+        assert result[0]['num'] > 0
+
+
+class TestModelRelationshipInstance:
+    """
+    Test functionality of ModelRelationship instances.
+    """
+
+    def test_exists(self, graph, clear_graph):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        class Friend(ModelRelationship):
+            source = TestNode
+            target = TestNode
+            type = 'FRIEND'
+
+        peter = TestNode(name='Peter')
+        pan = TestNode(name='Pan')
+
+        peter_friend_pan = Friend(peter, pan)
+
+        # assert rel does not exist
+        assert not peter_friend_pan.exists(graph)
+
+        # create nodes, assert still does not exist
+        graph.run("CREATE (:Test {name: 'Peter'}), (:Test {name: 'Pan'})")
+        assert not peter_friend_pan.exists(graph)
+
+        # create relationship
+        graph.run("MATCH (s:Test {name: 'Peter'}), (t:Test {name: 'Pan'}) CREATE (s)-[:FRIEND]->(t)")
+
+        assert peter_friend_pan.exists(graph)
+
+
+def test_node_creation(graph, clear_graph):
     class TestNode(ModelNode):
         test = Label('Test')
         name = MergeKey('name')
@@ -94,7 +229,6 @@ def test_node_creation_empty(graph, clear_graph):
 
 
 def test_create_nodes_using_types_different_values(graph, clear_graph):
-
     class Test(ModelNode):
         test = Label('Foo')
         name = MergeKey('bar')
@@ -111,9 +245,7 @@ def test_create_nodes_using_types_different_values(graph, clear_graph):
     assert result[0]['num'] == 100
 
 
-
 def test_relationship_creation(graph, clear_graph):
-
     class Test(ModelNode):
         test = Label('Test')
         name = MergeKey('name')
@@ -140,14 +272,14 @@ def test_relationship_creation(graph, clear_graph):
     target.create(graph)
     rels.create(graph)
 
-    result = graph.run("MATCH (t:Test)-[r:MAPS]->(target:Target) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
+    result = graph.run(
+        "MATCH (t:Test)-[r:MAPS]->(target:Target) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
     assert result[0]['test_nodes'] == 100
     assert result[0]['rels'] == 100
     assert result[0]['target_nodes'] == 100
 
 
 def test_create_using_types(graph, clear_graph):
-
     class Test(ModelNode):
         test = Label('Test')
         name = MergeKey('name')
@@ -174,14 +306,14 @@ def test_create_using_types(graph, clear_graph):
     target.create(graph)
     rels.create(graph)
 
-    result = graph.run("MATCH (t:Test)-[r:MAPS]->(target:Target) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
+    result = graph.run(
+        "MATCH (t:Test)-[r:MAPS]->(target:Target) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
     assert result[0]['test_nodes'] == 100
     assert result[0]['rels'] == 100
     assert result[0]['target_nodes'] == 100
 
 
 def test_create_using_types_with_different_values(graph, clear_graph):
-
     class Test(ModelNode):
         test = Label('Foo')
         name = MergeKey('bar')
@@ -218,7 +350,8 @@ def test_create_using_types_with_different_values(graph, clear_graph):
 
     assert result[0]['num'] == 100
 
-    result = graph.run("MATCH (t:Foo)-[r:MAPS]->(target:TargetFoo) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
+    result = graph.run(
+        "MATCH (t:Foo)-[r:MAPS]->(target:TargetFoo) RETURN count(distinct t) as test_nodes, count(distinct r) as rels, count(distinct target) as target_nodes").data()
     assert result[0]['test_nodes'] == 100
     assert result[0]['rels'] == 100
     assert result[0]['target_nodes'] == 100
