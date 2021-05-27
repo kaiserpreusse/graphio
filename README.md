@@ -1,6 +1,7 @@
 # GraphIO
 
 [![Tests](https://github.com/kaiserpreusse/graphio/actions/workflows/run_test.yml/badge.svg)](https://github.com/kaiserpreusse/graphio/actions/workflows/run_test.yml)
+[![codecov](https://codecov.io/gh/kaiserpreusse/graphio/branch/master/graph/badge.svg?token=94HOVGB4J3)](https://codecov.io/gh/kaiserpreusse/graphio)
 [![PyPI](https://img.shields.io/pypi/v/graphio)](https://pypi.org/project/graphio)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Neo4j](https://img.shields.io/badge/Neo4j-3.5%20%7C%204.0%20%7C%204.1%20%7C%204.2-blue)](https://neo4j.com)
