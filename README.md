@@ -52,6 +52,6 @@ python -m pytest
 All tests that use the `graph` fixture found in `tests/conftest.py` will run against all databases.
 
 ## Feedback
-Please provide feedback, ideas and bug reports through github issues.
+Please provide feedback, ideas and bug reports through GitHub issues.
 
 
