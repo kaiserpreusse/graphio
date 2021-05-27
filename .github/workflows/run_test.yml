@@ -50,6 +50,12 @@ jobs:
     - name: Test with pytest
       run: |
         coverage run --source=graphio -m pytest
+    - name: Coveralls Parallel
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.github_token }}
+        flag-name: run-${{ matrix.python-container }}
+        parallel: true
   finish:
     needs: test
     runs-on: ubuntu-latest
