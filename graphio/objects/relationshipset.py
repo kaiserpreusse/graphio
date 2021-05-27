@@ -100,12 +100,14 @@ class RelationshipSet:
 
         return (start_node_data, properties, end_node_data)
 
-    def add_relationship(self, start_node_properties, end_node_properties, properties):
+    def add_relationship(self, start_node_properties: dict, end_node_properties: dict, properties: dict = None):
         """
         Add a relationship to this RelationshipSet.
 
         :param properties: Relationship properties.
         """
+        if not properties:
+            properties = {}
         if self.default_props:
             rel_props = {**self.default_props, **properties}
         else:

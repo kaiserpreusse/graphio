@@ -46,6 +46,13 @@ def test_str():
     assert str(ns) == "<NodeSet (['Test', 'Foo']; ['uuid'])>"
 
 
+def test_nodeset_add_unique():
+    ns = NodeSet(['Test', 'Foo'], merge_keys=['name'])
+    for i in range(10):
+        ns.add_unique({'name': 'Peter'})
+    assert len(ns.nodes) == 1
+
+
 class TestDefaultProps:
 
     def test_default_props(self):

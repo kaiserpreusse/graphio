@@ -87,6 +87,14 @@ def test__tuplify_json_list():
     assert t == ((0, 1), {}, (0, 'foo'))
 
 
+def test_relationshipset_unique():
+    rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
+    rs.unique = True
+    for i in range(10):
+        rs.add_relationship({'uid': 1}, {'name': 'peter'}, {'some': 'value', 'user': 'bar'})
+    assert len(rs.relationships) == 1
+
+
 class TestDefaultProps:
 
     def test_default_props(self):
@@ -108,6 +116,22 @@ class TestDefaultProps:
 
 class TestRelationshipSetCreate:
 
+    def test_relationshipset_create_no_properties(self, graph, create_nodes_test):
+
+        rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+
+        for i in range(100):
+            rs.add_relationship({'uuid': i}, {'uuid': i})
+
+        rs.create(graph)
+
+        result = list(
+            graph.run(
+                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
+            )
+        )
+        assert result[0][0] == 100
+
     def test_relationshipset_create_number(self, graph, create_nodes_test, small_relationshipset):
 
         small_relationshipset.create(graph)
@@ -117,8 +141,6 @@ class TestRelationshipSetCreate:
                 "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
             )
         )
-        print(result)
-        print(result[0])
         assert result[0][0] == 100
 
     def test_relationshipset_create_mulitple_node_props(self, graph, create_nodes_test):
@@ -142,6 +164,7 @@ class TestRelationshipSetCreate:
         assert result[0][0] == 100
 
 
+class TestRelationshipSetIndex:
     def test_relationship_create_single_index(self, graph, clear_graph, small_relationshipset):
 
         small_relationshipset.create_index(graph)
@@ -165,7 +188,6 @@ class TestRelationshipSetCreate:
 class TestRelationshipSetMerge:
 
     def test_relationshipset_merge_number(self, graph, create_nodes_test, small_relationshipset):
-
         small_relationshipset.merge(graph)
 
         result = list(
@@ -189,6 +211,7 @@ class TestRelationshipSetMerge:
         print(result[0])
         assert result[0][0] == 100
 
+
 class TestRelationshipSetSerialize:
 
     def test_object_file_name(self, small_relationshipset):
@@ -197,16 +220,17 @@ class TestRelationshipSetSerialize:
         small_relationshipset.uuid = uuid
 
         assert small_relationshipset.object_file_name() == f"relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0"
-        assert small_relationshipset.object_file_name(suffix='.json') == "relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
+        assert small_relationshipset.object_file_name(
+            suffix='.json') == "relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
-
-    def test_serialize(self, small_relationshipset, small_relationshipset_multiple_labels, small_relationshipset_multiple_labels_multiple_merge_keys, tmp_path):
+    def test_serialize(self, small_relationshipset, small_relationshipset_multiple_labels,
+                       small_relationshipset_multiple_labels_multiple_merge_keys, tmp_path):
         """
         Test serialization with different test NodeSets.
         """
 
-        for test_rs in [small_relationshipset, small_relationshipset_multiple_labels, small_relationshipset_multiple_labels_multiple_merge_keys]:
-
+        for test_rs in [small_relationshipset, small_relationshipset_multiple_labels,
+                        small_relationshipset_multiple_labels_multiple_merge_keys]:
             uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
             test_rs.uuid = uuid
 
