@@ -112,6 +112,22 @@ class TestModelNodeInstance:
         result = graph.run("MATCH (t:Test) WHERE t.name = 'Peter' RETURN count(t) as num").data()
         assert result[0]['num'] == 1
 
+    def test_merge_additional_properties(self, graph, clear_graph):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        some_test = TestNode(name='Peter', city='London')
+        some_test.merge(graph)
+
+        result = graph.run("MATCH (t:Test) WHERE t.name = 'Peter' and t.city = 'London' RETURN count(t) as num").data()
+        assert result[0]['num'] == 1
+
+        # try again, should not overwrite
+        some_test.merge(graph)
+        result = graph.run("MATCH (t:Test) WHERE t.name = 'Peter' and t.city = 'London' RETURN count(t) as num").data()
+        assert result[0]['num'] == 1
+
     def test_error_if_not_unique(self, graph, clear_graph):
         # create some nodes
         graph.run("UNWIND [1, 2] AS i CREATE (t:Test) SET t.name = 'Peter'")

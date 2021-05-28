@@ -79,7 +79,7 @@ class ModelNode(metaclass=MetaNode):
         for k, v in kwargs.items():
             self.properties[k] = v
 
-        self._node = Node(*self.__class__.__labels__, **self.merge_props)
+        self._node = Node(*self.__class__.__labels__, **self.merge_props, **self.additional_props)
 
     @classmethod
     def dataset(cls):
@@ -95,6 +95,14 @@ class ModelNode(metaclass=MetaNode):
                 raise TypeError("Trying to merge node where values for merge_keys are not defined.")
         return merge_props
 
+    @property
+    def additional_props(self) -> dict:
+        additional_props = {}
+        for k, v in self.properties.items():
+            if k not in self.__class__.__merge_keys__:
+                additional_props[k] = v
+        return additional_props
+
     def exists(self, graph: Graph) -> Union[bool, Node]:
         """
         Check if node exists in the graph. If yes: return the Node. If no: return false.
@@ -109,7 +117,7 @@ class ModelNode(metaclass=MetaNode):
         node = matcher.match(*self.__class__.__labels__, **self.merge_props)
 
         if len(node) > 1:
-            raise TypeError("Found more than 1 node with properties, not sure what to do.")
+            raise TypeError(f"Found more than 1 node with properties, not sure what to do: {self.__class__.__labels__}, {self.merge_props}")
 
         if node:
             return list(node)[0]
