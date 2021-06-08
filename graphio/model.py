@@ -15,12 +15,18 @@ class NodeDescriptor:
     """
     Unified interface to describe nodes with labels and properties.
 
-    `NodeDescriptor` instances are passed into functions when no `ModelNode` classes are available.
+    `NodeDescriptor` instances are passed into functions when no `ModelNode` classes or instances are available.
 
     Setting `merge_keys` is optional. If they are not set all property keys will be used as merge_keys.
     """
 
     def __init__(self, labels: List[str], properties: dict, merge_keys: List[str] = None):
+        """
+
+        :param labels: Labels for this node.
+        :param properties: Properties for this node.
+        :param merge_keys: Optional.
+        """
         self.labels = labels
         self.properties = properties
 
@@ -57,6 +63,7 @@ class MergeKey(StringContainer):
 class Label(StringContainer):
     def __init__(self, v: str = None):
         super(Label, self).__init__(v)
+
 
 class MetaNode(type):
 
@@ -128,7 +135,7 @@ class ModelNode(metaclass=MetaNode):
             for k in merge_keys:
                 attributes[k] = MergeKey(k)
 
-        FactoryModelNode = type(name, (cls, ), attributes)
+        FactoryModelNode = type(name, (cls,), attributes)
         return FactoryModelNode
 
     @property
@@ -194,7 +201,8 @@ class ModelNode(metaclass=MetaNode):
 
         # create reltype if string is passed
         if isinstance(reltype, str):
-            reltype = type('LocalRelType', (ModelRelationship, ), {'source': self.__class__, 'target': target.__class__, 'type': reltype})
+            reltype = type('LocalRelType', (ModelRelationship,),
+                           {'source': self.__class__, 'target': target.__class__, 'type': reltype})
 
         rel = reltype(self, target, **properties)
         rel.merge(graph)
