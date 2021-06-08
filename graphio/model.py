@@ -148,7 +148,10 @@ class ModelNode(metaclass=MetaNode):
     @property
     def merge_props(self) -> dict:
         """
+        Return the merge properties for this node.
+
         :return: Dictionary with the merge properties for this node.
+        :rtype: dict
         """
         merge_props = {}
         for k in self.__class__.__merge_keys__:
@@ -161,7 +164,10 @@ class ModelNode(metaclass=MetaNode):
     @property
     def additional_props(self) -> dict:
         """
-        :return: All properties except the merge properties.
+        Return all properties except the merge properties.
+
+        :return: Dictionary with all properties except the merge properties.
+        :rtype: dict
         """
         additional_props = {}
         for k, v in self.properties.items():
