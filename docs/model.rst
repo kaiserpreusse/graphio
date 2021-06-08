@@ -105,3 +105,8 @@ ModelRelationship
 
 .. autoclass:: graphio.ModelRelationship
     :members:
+
+Helper Classes
+---------------
+.. autoclass:: graphio.NodeDescriptor
+    :members:

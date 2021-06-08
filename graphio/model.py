@@ -104,6 +104,9 @@ class MetaNode(type):
 
 
 class ModelNode(metaclass=MetaNode):
+    """
+    Baseclass for model objects.
+    """
 
     def __init__(self, *args, **kwargs):
         self.properties = {}
@@ -113,13 +116,17 @@ class ModelNode(metaclass=MetaNode):
         self._node = Node(*self.__class__.__labels__, **self.merge_props, **self.additional_props)
 
     @classmethod
-    def dataset(cls):
+    def dataset(cls) -> NodeSet:
+        """
+        :return: Return a :class:`~graphio.NodeSet` instance for this ModelNode.
+        """
         return NodeSet(cls.__labels__, merge_keys=cls.__merge_keys__)
 
     @classmethod
     def factory(cls, labels: List[str], merge_keys: List[str] = None, name: str = None) -> type:
         """
-        Create a class with given labels and merge_keys.
+        Create a class with given labels and merge_keys. The merge_keys are optional but some functions do not work
+        without them.
 
         :param labels: Labels for this ModelNode class.
         :param merge_keys: MergeKeys for this ModelNode class.
@@ -140,6 +147,9 @@ class ModelNode(metaclass=MetaNode):
 
     @property
     def merge_props(self) -> dict:
+        """
+        :return: Dictionary with the merge properties for this node.
+        """
         merge_props = {}
         for k in self.__class__.__merge_keys__:
             try:
@@ -150,6 +160,9 @@ class ModelNode(metaclass=MetaNode):
 
     @property
     def additional_props(self) -> dict:
+        """
+        :return: All properties except the merge properties.
+        """
         additional_props = {}
         for k, v in self.properties.items():
             if k not in self.__class__.__merge_keys__:
@@ -188,13 +201,28 @@ class ModelNode(metaclass=MetaNode):
         if node_or_false:
             self._node = node_or_false
 
-    def merge(self, graph: Graph):
+    def merge(self, graph: Graph) -> None:
+        """
+        :code:`MERGE` the node in the graph.
+
+        :param graph: A py2neo.Graph instance. 
+        """
         if not self.exists(graph):
             graph.create(self._node)
 
     def link(self, graph: Graph, reltype: Union[Type['ModelRelationship'], str],
-             target: Union['ModelNode', NodeDescriptor], **properties):
+             target: Union['ModelNode', NodeDescriptor], **properties) -> None:
+        """
+        Link the node to another node.
 
+        Input is either a combination of a :class:`~graphio.ModelRelationship` and :class:`~graphio.ModelNode` or a
+        combination of a string for the reltype and a :class:`~graphio.NodeDescriptor` instance to describe the target node.
+
+        :param graph: py2neo.Graph instance.
+        :param reltype: Either a :class:`~graphio.ModelRelationship` instance or a string for the relationship type.
+        :param target: Either a :class:`~graphio.ModelNode` instance or a :class:`~graphio.NodeDescriptor` instance.
+        :param properties: Proeprties for the relationships.
+        """
         # get ModelNode if NodeDescriptor is passed
         if isinstance(target, NodeDescriptor):
             target = target.get_modelnode()
@@ -209,6 +237,24 @@ class ModelNode(metaclass=MetaNode):
 
 
 class ModelRelationship:
+    """
+    Base class for model relationships.
+
+    Knows about the class of source node and target node (instances of :class:`~graphio.ModelNode`) and the
+    relationship type::
+
+      class Person(ModelNode):
+          name = MergeKey()
+
+      class Food(ModelNode):
+          name = MergeKey()
+
+      class PersonLikesToEat(ModelRelationship):
+          source = Person
+          target = Food
+          type = 'LIKES'
+
+    """
     source = None
     target = None
     type = ''
@@ -223,6 +269,12 @@ class ModelRelationship:
         self._relationship = Relationship(self.source_node._node, self.type, self.target_node._node, **self.properties)
 
     def exists(self, graph: Graph) -> bool:
+        """
+        Check if the relationship exists.
+
+        :param graph: A py2neo.Graph instance.
+        :return: True/False
+        """
         # return False if either start or end node do not exist
         if not self.source_node.exists(graph) or not self.target_node.exists(graph):
             return False
@@ -238,10 +290,18 @@ class ModelRelationship:
                 return False
 
     def merge(self, graph: Graph):
+        """
+        :code:`MERGE` the relationship in the graph.
+
+        :param graph: A py2neo.Graph instance.
+        """
         if not self.exists(graph):
             graph.create(self._relationship)
 
     @classmethod
     def dataset(cls) -> RelationshipSet:
+        """
+        :return: Return a :class:`~graphio.RelationshipSet` instance for this ModelRelationship.
+        """
         return RelationshipSet(cls.type, cls.source.__labels__, cls.target.__labels__, cls.source.__merge_keys__,
                                cls.target.__merge_keys__)
