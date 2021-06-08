@@ -1,6 +1,21 @@
 from pytest import raises
 
-from graphio.model import ModelNode, ModelRelationship, Label, MergeKey
+from graphio.model import ModelNode, ModelRelationship, Label, MergeKey, NodeDescriptor
+
+
+class TestNodeDescriptor:
+
+    def test_node_descriptor_constructor(self):
+        nd = NodeDescriptor(labels=['Person'], properties={'name': 'Peter'}, merge_keys=['name'])
+        assert nd.labels == ['Person']
+        assert nd.properties == {'name': 'Peter'}
+        assert nd.merge_keys == ['name']
+
+    def test_node_descriptor_constructor_no_merge_keys(self):
+        nd = NodeDescriptor(labels=['Person'], properties={'name': 'Peter'})
+        assert nd.labels == ['Person']
+        assert nd.properties == {'name': 'Peter'}
+        assert nd.merge_keys == ['name']
 
 
 class TestModelNodeClass:
@@ -48,6 +63,13 @@ class TestModelNodeClass:
         assert Test.Test == 'Test'
         assert 'Test' in Test.__labels__
         assert Test.sid == 'sid'
+
+    def test_model_node_factory(self):
+        SomeNodeClass = ModelNode.factory(['Person'], merge_keys=['name'], name='PersonClass')
+        assert issubclass(SomeNodeClass, ModelNode)
+        assert SomeNodeClass.__name__ == 'PersonClass'
+        assert SomeNodeClass.__labels__ == ['Person']
+        assert SomeNodeClass.__merge_keys__ == ['name']
 
 
 class TestModelNodeInstance:
@@ -141,7 +163,7 @@ class TestModelNodeInstance:
         with raises(TypeError):
             some_test.merge(graph)
 
-    def test_link(self, graph, clear_graph):
+    def test_link_object_instances(self, graph, clear_graph):
         class TestNode(ModelNode):
             test = Label('Test')
             name = MergeKey('name')
@@ -163,6 +185,25 @@ class TestModelNodeInstance:
             "MATCH (:Test {name: 'Peter'})-[r:FRIEND]->(:Test {name: 'Pan'}) RETURN count(r) as num").data()
 
         assert result[0]['num'] > 0
+
+    def test_link_object_decription(self, graph, clear_graph):
+        class TestNode(ModelNode):
+            test = Label('Test')
+            name = MergeKey('name')
+
+        peter = TestNode(name='Peter')
+        pan = TestNode(name='Pan')
+
+        peter.merge(graph)
+        pan.merge(graph)
+
+        peter.link(graph, 'FRIEND', NodeDescriptor(['Test'], {'name': 'Pan'}))
+
+        result = graph.run(
+            "MATCH (:Test {name: 'Peter'})-[r:FRIEND]->(:Test {name: 'Pan'}) RETURN count(r) as num").data()
+
+        assert result[0]['num'] > 0
+
 
 
 class TestModelRelationshipInstance:

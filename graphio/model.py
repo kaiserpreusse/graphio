@@ -2,12 +2,37 @@ from collections import namedtuple
 import logging
 from py2neo import Graph, Node, Relationship
 from py2neo.matching import *
-from typing import Type, Union
+from typing import Type, Union, List, Optional
+from dataclasses import dataclass
 
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet
 
 log = logging.getLogger(__name__)
+
+
+class NodeDescriptor:
+    """
+    Unified interface to describe nodes with labels and properties.
+
+    `NodeDescriptor` instances are passed into functions when no `ModelNode` classes are available.
+
+    Setting `merge_keys` is optional. If they are not set all property keys will be used as merge_keys.
+    """
+
+    def __init__(self, labels: List[str], properties: dict, merge_keys: List[str] = None):
+        self.labels = labels
+        self.properties = properties
+
+        if merge_keys:
+            self.merge_keys = merge_keys
+        else:
+            self.merge_keys = list(self.properties.keys())
+
+    def get_modelnode(self) -> 'ModelNode':
+        NodeClass = ModelNode.factory(self.labels, merge_keys=self.merge_keys)
+        node_instance = NodeClass(**self.properties)
+        return node_instance
 
 
 class StringContainer:
@@ -32,7 +57,6 @@ class MergeKey(StringContainer):
 class Label(StringContainer):
     def __init__(self, v: str = None):
         super(Label, self).__init__(v)
-
 
 class MetaNode(type):
 
@@ -85,6 +109,28 @@ class ModelNode(metaclass=MetaNode):
     def dataset(cls):
         return NodeSet(cls.__labels__, merge_keys=cls.__merge_keys__)
 
+    @classmethod
+    def factory(cls, labels: List[str], merge_keys: List[str] = None, name: str = None) -> type:
+        """
+        Create a class with given labels and merge_keys.
+
+        :param labels: Labels for this ModelNode class.
+        :param merge_keys: MergeKeys for this ModelNode class.
+        :return: The ModelNode class.
+        """
+        if not name:
+            name = 'FactoryModelNode'
+
+        attributes = {}
+        for l in labels:
+            attributes[l] = Label(l)
+        if merge_keys:
+            for k in merge_keys:
+                attributes[k] = MergeKey(k)
+
+        FactoryModelNode = type(name, (cls, ), attributes)
+        return FactoryModelNode
+
     @property
     def merge_props(self) -> dict:
         merge_props = {}
@@ -117,7 +163,8 @@ class ModelNode(metaclass=MetaNode):
         node = matcher.match(*self.__class__.__labels__, **self.merge_props)
 
         if len(node) > 1:
-            raise TypeError(f"Found more than 1 node with properties, not sure what to do: {self.__class__.__labels__}, {self.merge_props}")
+            raise TypeError(
+                f"Found more than 1 node with properties, not sure what to do: {self.__class__.__labels__}, {self.merge_props}")
 
         if node:
             return list(node)[0]
@@ -138,7 +185,17 @@ class ModelNode(metaclass=MetaNode):
         if not self.exists(graph):
             graph.create(self._node)
 
-    def link(self, graph: Graph, reltype: Type['ModelRelationship'], target: 'ModelNode', **properties):
+    def link(self, graph: Graph, reltype: Union[Type['ModelRelationship'], str],
+             target: Union['ModelNode', NodeDescriptor], **properties):
+
+        # get ModelNode if NodeDescriptor is passed
+        if isinstance(target, NodeDescriptor):
+            target = target.get_modelnode()
+
+        # create reltype if string is passed
+        if isinstance(reltype, str):
+            reltype = type('LocalRelType', (ModelRelationship, ), {'source': self.__class__, 'target': target.__class__, 'type': reltype})
+
         rel = reltype(self, target, **properties)
         rel.merge(graph)
 
