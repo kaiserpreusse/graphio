@@ -308,6 +308,7 @@ class TestRelationshipSetSerialize:
 
 
 class TestRelationshipSetToCSV:
+
     def test_to_csv(self, tmp_path):
         rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
 
@@ -394,6 +395,9 @@ SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel
             )
 
         path = rs.to_csv(neo4j_import_dir)
+
+        # note: this is a hack to copy files into a running Docker container from Python
+        # needed to run the tests without too many changes locally and in GitHub Actions
         copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
 
         query = rs.csv_query('CREATE')
@@ -435,6 +439,9 @@ SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel
             )
 
         path = rs.to_csv(neo4j_import_dir)
+
+        # note: this is a hack to copy files into a running Docker container from Python
+        # needed to run the tests without too many changes locally and in GitHub Actions
         copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
 
         query = rs.csv_query('MERGE')

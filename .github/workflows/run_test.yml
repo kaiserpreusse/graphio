@@ -36,8 +36,7 @@ jobs:
 
     strategy:
       matrix:
-        #python-container: ["python:3.7", "python:3.8", "python:3.9"]
-        python-container: ["python:3.8"]
+        python-container: ["python:3.7", "python:3.8", "python:3.9"]
 
     container: ${{ matrix.python-container }}
 

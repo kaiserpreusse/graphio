@@ -426,7 +426,11 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
 
         path = ns.to_csv(neo4j_import_dir)
         query = ns.create_csv_query()
+
+        # note: this is a hack to copy files into a running Docker container from Python
+        # needed to run the tests without too many changes locally and in GitHub Actions
         copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
+
         graph.run(query)
 
         result = graph.run("MATCH (t:Test) RETURN t").data()
@@ -453,7 +457,11 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
         ns = request.getfixturevalue(ns)
 
         path = ns.to_csv(neo4j_import_dir)
+
+        # note: this is a hack to copy files into a running Docker container from Python
+        # needed to run the tests without too many changes locally and in GitHub Actions
         copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
+
         query = ns.merge_csv_query()
 
         # run a few times to test that no additional nodes are created
