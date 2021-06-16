@@ -50,7 +50,7 @@ def neo4j_import_dir(pytestconfig):
 def wait_for_neo4j():
     # check availability for both containers
     connected = False
-    max_retries = 180
+    max_retries = 240
     retries = 0
 
     while not connected:
