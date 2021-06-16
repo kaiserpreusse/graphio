@@ -9,7 +9,6 @@ from graphio.objects.nodeset import NodeSet
 
 
 def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
-
     # prepare file
     os.chdir(os.path.dirname(path))
     srcname = os.path.basename(path)
@@ -20,7 +19,6 @@ def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
         finally:
             tar.close()
 
-
     client = docker.from_env()
 
     for this_container in client.containers.list():  # ['graphio_test_neo4j_35', 'graphio_test_neo4j_41', 'graphio_test_neo4j_42']:
@@ -30,6 +28,7 @@ def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
                 this_container.put_archive(path=target, data=fd)
         except Exception as e:
             print(e)
+
 
 @pytest.fixture
 def root_dir():
