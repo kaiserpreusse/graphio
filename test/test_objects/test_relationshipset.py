@@ -4,9 +4,29 @@
 import os
 import json
 import pytest
+import docker
+import tarfile
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
 
+def copy_to_all_docker_containers(path, target):
+    # copy into current docker container
+    client = docker.from_env()
+
+    for this_container in client.containers.list():  # ['graphio_test_neo4j_35', 'graphio_test_neo4j_41', 'graphio_test_neo4j_42']:
+        # this_container = client.containers.get(c)
+
+        os.chdir(os.path.dirname(path))
+        srcname = os.path.basename(path)
+        print("src " + srcname)
+        with tarfile.open("vpc-example.tar", 'w') as tar:
+            try:
+                tar.add(srcname)
+            finally:
+                tar.close()
+
+        with open('vpc-example.tar', 'rb') as fd:
+            this_container.put_archive(path=target, data=fd)
 
 @pytest.fixture
 def small_relationshipset():
@@ -369,7 +389,8 @@ SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel
                 {'second_value': i, 'other_second_value': 'peter'}
             )
 
-        rs.to_csv(neo4j_import_dir)
+        path = rs.to_csv(neo4j_import_dir)
+        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
 
         query = rs.csv_query('CREATE')
 
@@ -409,7 +430,8 @@ SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel
                 {'second_value': i, 'other_second_value': 'peter'}
             )
 
-        rs.to_csv(neo4j_import_dir)
+        path = rs.to_csv(neo4j_import_dir)
+        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
 
         query = rs.csv_query('MERGE')
 

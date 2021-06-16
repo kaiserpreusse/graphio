@@ -2,6 +2,7 @@ version: '3.8'
 services:
   test_neo4j_35:
     image: neo4j:3.5
+    container_name: graphio_test_neo4j_35
     environment:
       - NEO4J_AUTH=neo4j/test
       - NEO4JLABS_PLUGINS=["apoc"]
@@ -9,10 +10,9 @@ services:
     ports:
       - 8687:7687
       - 8474:7474
-    volumes:
-    - ./files_for_test:/import
   test_neo4j_41:
     image: neo4j:4.1
+    container_name: graphio_test_neo4j_41
     environment:
       - NEO4J_AUTH=neo4j/test
       - NEO4JLABS_PLUGINS=["apoc"]
@@ -20,10 +20,9 @@ services:
     ports:
       - 9687:7687
       - 9474:7474
-    volumes:
-    - ./files_for_test:/import
   test_neo4j_42:
     image: neo4j:4.2
+    container_name: graphio_test_neo4j_42
     environment:
       - NEO4J_AUTH=neo4j/test
       - NEO4JLABS_PLUGINS=["apoc"]
@@ -31,5 +30,3 @@ services:
     ports:
       - 10687:7687
       - 10474:7474
-    volumes:
-    - ./files_for_test:/import

@@ -1,11 +1,31 @@
 import pytest
 import os
 import json
-import csv
+import docker
+import tarfile
 from hypothesis import given, strategies as st
 
 from graphio.objects.nodeset import NodeSet
 
+
+def copy_to_all_docker_containers(path, target):
+    # copy into current docker container
+    client = docker.from_env()
+
+    for this_container in client.containers.list():  # ['graphio_test_neo4j_35', 'graphio_test_neo4j_41', 'graphio_test_neo4j_42']:
+        # this_container = client.containers.get(c)
+
+        os.chdir(os.path.dirname(path))
+        srcname = os.path.basename(path)
+        print("src " + srcname)
+        with tarfile.open("vpc-example.tar", 'w') as tar:
+            try:
+                tar.add(srcname)
+            finally:
+                tar.close()
+
+        with open('vpc-example.tar', 'rb') as fd:
+            this_container.put_archive(path=target, data=fd)
 
 @pytest.fixture
 def root_dir():
@@ -401,9 +421,9 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
     def test_csv_create(self, graph, clear_graph, neo4j_import_dir, ns, request):
         ns = request.getfixturevalue(ns)
 
-        ns.to_csv(neo4j_import_dir)
+        path = ns.to_csv(neo4j_import_dir)
         query = ns.create_csv_query()
-
+        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
         graph.run(query)
 
         result = graph.run("MATCH (t:Test) RETURN t").data()
@@ -429,7 +449,8 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
     def test_csv_merge(self, graph, clear_graph, neo4j_import_dir, ns, request):
         ns = request.getfixturevalue(ns)
 
-        ns.to_csv(neo4j_import_dir)
+        path = ns.to_csv(neo4j_import_dir)
+        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
         query = ns.merge_csv_query()
 
         # run a few times to test that no additional nodes are created
