@@ -43,7 +43,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Start Neo4j Docker containers
+    - name: Install Docker and docker-compose
       run: |
         apt-get update;
         apt-get install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common;
