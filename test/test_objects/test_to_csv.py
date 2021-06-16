@@ -57,6 +57,12 @@ def nodeset_multiple_labels_multiple_merge_keys():
 NODSET_FIXTURE_NAMES = ['small_nodeset', 'nodeset_multiple_labels', 'nodeset_multiple_labels_multiple_merge_keys']
 
 
+@pytest.fixture
+def different_nodesets(small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys):
+    nodesets = [small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys]
+    return nodesets
+
+
 def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
     # prepare file
     os.chdir(os.path.dirname(path))
