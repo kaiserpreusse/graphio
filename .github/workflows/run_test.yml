@@ -44,13 +44,13 @@ jobs:
     - uses: actions/checkout@v2
     - name: Start Neo4j Docker containers
       run: |
-        apt update;
-        apt install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common;
+        apt-get update;
+        apt-get install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common;
         curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -;
         add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable";
-        apt update;
+        apt-get update;
         apt-cache policy docker-ce;
-        apt install docker-ce;
+        apt-get install -y docker-ce;
         docker-compose -f test_neo4j_compose.yml up -d;
     - name: Install dependencies
       run: |
