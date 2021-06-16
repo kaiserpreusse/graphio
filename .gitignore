@@ -148,3 +148,5 @@ local\.conf
 
 .pytest_cache
 .python-version
+.hypothesis
+files_for_test

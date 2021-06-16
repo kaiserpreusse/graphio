@@ -3,13 +3,19 @@ from uuid import uuid4
 from py2neo.bulk import create_nodes, merge_nodes
 import os
 import json
+import csv
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.objects.relationshipset import RelationshipSet
-from graphio.queries import nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, nodes_merge_unwind_preserve_array_props
+from graphio.queries import nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
+    nodes_merge_unwind_preserve_array_props
 
 log = logging.getLogger(__name__)
+
+# dict with python types to casting functions in Cypher
+CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
+                           float: 'toFloat'}
 
 
 class NodeSet:
@@ -89,11 +95,97 @@ class NodeSet:
         """
         Create dictionary defining the nodeset.
         """
-        return {"labels":self.labels, "merge_keys":self.merge_keys, "nodes":self.nodes}
+        return {"labels": self.labels, "merge_keys": self.merge_keys, "nodes": self.nodes}
+
+    def to_csv(self, filepath: str, filename: str = None, quoting: int = None) -> str:
+        """
+        Create a CSV file for this nodeset.
+
+        :param filepath: Path where the file is stored.
+        :param filename: Optional filename. A filename will be autocreated if not passed.
+        :param quoting: Optional quoting setting for csv writer (any of csv.QUOTE_MINIMAL, csv.QUOTE_NONE, csv.QUOTE_ALL etc).
+        """
+        if not filename:
+            filename = f"{self.object_file_name()}.csv"
+        if not quoting:
+            quoting = csv.QUOTE_MINIMAL
+
+        csv_file_path = os.path.join(filepath, filename)
+
+        log.debug(f"Create CSV file {csv_file_path}")
+
+        all_props = self.all_properties_in_nodeset()
+
+        with open(csv_file_path, 'w', newline='') as csvfile:
+            fieldnames = list(all_props)
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=quoting)
+
+            writer.writeheader()
+
+            for n in self.nodes:
+                writer.writerow(dict(n))
+
+        return csv_file_path
+
+    def create_csv_query(self, filename: str = None, periodic_commit=1000):
+
+        # get types
+        property_types = self._estimate_type_of_property_values()
+
+        if not filename:
+            filename = f"{self.object_file_name()}.csv"
+
+        q = "USING PERIODIC COMMIT {}\n".format(periodic_commit)
+        q += "LOAD CSV WITH HEADERS FROM 'file:///{}' AS line\n".format(filename)
+        q += "CREATE (n:{})\n".format(':'.join(self.labels))
+
+        props_list = []
+        for k in sorted(self.all_properties_in_nodeset()):
+            prop_type = property_types[k]
+            if prop_type in CYPHER_TYPE_TO_FUNCTION:
+                props_list.append(f"n.{k} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{k})")
+            else:
+                props_list.append(f"n.{k} = line.{k}")
+
+        q += "SET {}".format(', '.join(props_list))
+
+        return q
+
+    def merge_csv_query(self, filename: str = None, periodic_commit=1000):
+        # get types
+        property_types = self._estimate_type_of_property_values()
+
+        if not filename:
+            filename = f"{self.object_file_name()}.csv"
+
+        merge_csv_query_elements = []
+        for merge_key in self.merge_keys:
+            prop_type = property_types[merge_key]
+            if prop_type in CYPHER_TYPE_TO_FUNCTION:
+                merge_csv_query_elements.append(f"{merge_key}: {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{merge_key})")
+            else:
+                merge_csv_query_elements.append(f"{merge_key}: line.{merge_key}")
+        merge_csv_query_string = ','.join(merge_csv_query_elements)
+
+        q = "USING PERIODIC COMMIT {}\n".format(periodic_commit)
+        q += "LOAD CSV WITH HEADERS FROM 'file:///{}' AS line\n".format(filename)
+        q += f"MERGE (n:{':'.join(self.labels)} {{ {merge_csv_query_string} }})\n"
+
+        props_list = []
+        for k in sorted(self.all_properties_in_nodeset()):
+            prop_type = property_types[k]
+            if prop_type in CYPHER_TYPE_TO_FUNCTION:
+                props_list.append(f"n.{k} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{k})")
+            else:
+                props_list.append(f"n.{k} = line.{k}")
+
+        q += "SET {}".format(', '.join(props_list))
+
+        return q
 
     @classmethod
-    def from_dict(cls,nodeset_dict, batch_size=None):
-        ns = cls(labels=nodeset_dict["labels"],merge_keys=nodeset_dict["merge_keys"])
+    def from_dict(cls, nodeset_dict, batch_size=None):
+        ns = cls(labels=nodeset_dict["labels"], merge_keys=nodeset_dict["merge_keys"])
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
 
@@ -132,7 +224,6 @@ class NodeSet:
 
         i = 1
         for batch in chunks(self.nodes, size=batch_size):
-
             log.debug('Batch {}'.format(i))
 
             create_nodes(graph, batch, labels=self.labels)
@@ -173,13 +264,15 @@ class NodeSet:
                 graph.run(q, props=list(batch), preserve=self.preserve)
 
         elif not self.preserve and self.append_props:
-            q = nodes_merge_unwind_array_props(self.labels, self.merge_keys, self.append_props, property_parameter='props')
+            q = nodes_merge_unwind_array_props(self.labels, self.merge_keys, self.append_props,
+                                               property_parameter='props')
             for batch in chunks(self.node_properties(), size=batch_size):
                 graph.run(q, props=list(batch), append_props=self.append_props)
 
         elif self.preserve and self.append_props:
 
-            q = nodes_merge_unwind_preserve_array_props(self.labels, self.merge_keys, self.append_props, self.preserve, property_parameter='props')
+            q = nodes_merge_unwind_preserve_array_props(self.labels, self.merge_keys, self.append_props, self.preserve,
+                                                        property_parameter='props')
             print(q)
             for batch in chunks(self.node_properties(), size=batch_size):
                 graph.run(q, props=list(batch), append_props=self.append_props, preserve=self.preserve)
@@ -205,6 +298,36 @@ class NodeSet:
                 all_props.add(k)
 
         return all_props
+
+    def _estimate_type_of_property_values(self):
+        """
+        To create data from CSV we need to know the type of all node properties.
+
+        This function tries to find the type and falls back to string if it's not consistent. For performance reasons
+        this function is limited to the first 1000 nodes.
+
+        :return:
+        """
+        property_types = {}
+        for p in self.all_properties_in_nodeset():
+            this_type = None
+            for node in self.nodes[:1000]:
+                try:
+                    value = node[p]
+                    type_of_value = type(value)
+                except KeyError:
+                    type_of_value = None
+
+                if not this_type:
+                    this_type = type_of_value
+                else:
+                    if this_type != type_of_value:
+                        this_type = str
+                        break
+
+            property_types[p] = this_type
+
+        return property_types
 
     def create_index(self, graph):
         """

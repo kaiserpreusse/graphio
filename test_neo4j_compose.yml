@@ -9,6 +9,8 @@ services:
     ports:
       - 8687:7687
       - 8474:7474
+    volumes:
+    - ./files_for_test:/import
   test_neo4j_41:
     image: neo4j:4.1
     environment:
@@ -18,6 +20,8 @@ services:
     ports:
       - 9687:7687
       - 9474:7474
+    volumes:
+    - ./files_for_test:/import
   test_neo4j_42:
     image: neo4j:4.2
     environment:
@@ -27,3 +31,5 @@ services:
     ports:
       - 10687:7687
       - 10474:7474
+    volumes:
+    - ./files_for_test:/import

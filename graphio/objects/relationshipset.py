@@ -2,12 +2,18 @@ from uuid import uuid4
 import logging
 import json
 import os
+import csv
 from py2neo.bulk import create_relationships, merge_relationships
+from typing import Set
 
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index
 
 log = logging.getLogger(__name__)
+
+# dict with python types to casting functions in Cypher
+CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
+                           float: 'toFloat'}
 
 
 def tuplify_json_list(list_object: list) -> tuple:
@@ -124,6 +130,87 @@ class RelationshipSet:
         else:
             self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, rel_props))
 
+    def all_property_keys(self) -> Set[str]:
+        """
+        Return a set of all property keys in this RelationshipSet
+
+        :return: A set of unique property keys of a NodeSet
+        """
+        all_props = set()
+
+        # collect properties
+        for r in self.relationships:
+            all_props.update(r[1].keys())
+
+        return all_props
+
+    def _estimate_type_of_property_values(self):
+        """
+        To create data from CSV we need to know the type of start/end node properties as well as relationship properties.
+
+        This function tries to find the type and falls back to string if it's not consistent. For performance reasons
+        this function is limited to the first 100 relationships.
+
+        :return:
+        """
+        start_node_property_types = {}
+        for i, p in enumerate(self.fixed_order_start_node_properties):
+            this_type = None
+            for rel in self.relationships[:100]:
+                if isinstance(rel[0], tuple):
+                    value = rel[0][i]
+                else:
+                    value = rel[0]
+                type_of_value = type(value)
+                if not this_type:
+                    this_type = type_of_value
+                else:
+                    if this_type != type_of_value:
+                        this_type = str
+                        break
+            start_node_property_types[p] = this_type
+
+        end_node_property_types = {}
+        for i, p in enumerate(self.fixed_order_end_node_properties):
+            this_type = None
+            for rel in self.relationships[:100]:
+
+                if isinstance(rel[2], tuple):
+                    value = rel[2][i]
+                else:
+                    value = rel[2]
+
+                type_of_value = type(value)
+                if not this_type:
+                    this_type = type_of_value
+                else:
+                    if this_type != type_of_value:
+                        this_type = str
+                        break
+            end_node_property_types[p] = this_type
+
+        rel_property_types = {}
+
+        for p in self.all_property_keys():
+            this_type = None
+            for rel in self.relationships[:100]:
+                try:
+                    value = rel[1][p]
+                    type_of_value = type(value)
+                except KeyError:
+                    type_of_value = None
+
+                if not this_type:
+                    this_type = type_of_value
+                else:
+                    if this_type != type_of_value:
+                        this_type = str
+                        break
+
+            rel_property_types[p] = this_type
+
+        return start_node_property_types, rel_property_types, end_node_property_types
+
     def to_dict(self):
         return {"rel_type": self.rel_type,
                 "start_node_labels": self.start_node_labels,
@@ -132,6 +219,125 @@ class RelationshipSet:
                 "end_node_properties": self.end_node_properties,
                 "unique": self.unique,
                 "relationships": self.relationships}
+
+    def to_csv(self, filepath: str, filename: str = None, quoting: int = None) -> str:
+        """
+        Note: You can't use arrays as properties for nodes/relationships when creating CSV files.
+
+        LOAD CSV WITH HEADERS FROM xyz AS line
+        MATCH (a:Gene), (b:GeneSymbol)
+        WHERE a.sid = line.a_sid AND b.sid = line.b_sid AND b.taxid = line.b_taxid
+        CREATE (a)-[r:MAPS]->(b)
+        SET r.key1 = line.rel_key1, r.key2 = line.rel_key2
+
+        # CSV file header
+        a_sid, b_sid, b_taxid, rel_key1, rel_key2
+
+        :param filepath: Path to csv file.
+        :param relset: The RelationshipSet
+        :type relset: graphio.RelationshipSet
+        """
+        if not filename:
+            filename = f"{self.object_file_name()}.csv"
+        if not quoting:
+            quoting = csv.QUOTE_MINIMAL
+
+        csv_file_path = os.path.join(filepath, filename)
+
+        header = []
+
+        for prop in self.start_node_properties:
+            header.append("a_{}".format(prop))
+
+        for prop in self.end_node_properties:
+            header.append("b_{}".format(prop))
+
+        for prop in self.all_property_keys():
+            header.append("rel_{}".format(prop))
+
+        with open(csv_file_path, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=header, quoting=quoting)
+
+            writer.writeheader()
+
+            for rel in self.relationships:
+                # create data for row
+                rel_csv_dict = {}
+                for i, k in enumerate(self.fixed_order_start_node_properties):
+
+                    if isinstance(rel[0], tuple):
+                        rel_csv_dict["a_{}".format(k)] = rel[0][i]
+                    else:
+                        rel_csv_dict["a_{}".format(k)] = rel[0]
+
+                for i, k in enumerate(self.fixed_order_end_node_properties):
+                    if isinstance(rel[2], tuple):
+                        rel_csv_dict["b_{}".format(k)] = rel[2][i]
+                    else:
+                        rel_csv_dict["b_{}".format(k)] = rel[2]
+
+                for k, v in rel[1].items():
+                    rel_csv_dict["rel_{}".format(k)] = v
+
+                writer.writerow(rel_csv_dict)
+
+        return csv_file_path
+
+    def csv_query(self, query_type: str, filename: str = None, periodic_commit=1000) -> str:
+        """
+        Generate the CREATE CSV query for this RelationshipSet. The function tries to take care of type conversions.
+
+        Note: You can't use arrays as properties for nodes/relationships when creating CSV files.
+
+        LOAD CSV WITH HEADERS FROM xyz AS line
+        MATCH (a:Gene), (b:Protein)
+        WHERE a.sid = line.a_sid AND b.sid = line.b_sid AND b.taxid = line.b_taxid
+        CREATE (a)-[r:MAPS]->(b)
+        SET r.key1 = line.rel_key1, r.key2 = line.rel_key2
+        """
+        if query_type not in ['CREATE', 'MERGE']:
+            raise ValueError(f"Can only use query_type 'CREATE' or 'MERGE', not {query_type}")
+
+        if not filename:
+            filename = f"{self.object_file_name()}.csv"
+
+        # get types
+        start_node_property_types, rel_property_types, end_node_property_types = self._estimate_type_of_property_values()
+
+        q = "USING PERIODIC COMMIT {} \n".format(periodic_commit)
+        q += "LOAD CSV WITH HEADERS FROM 'file:///{}' AS line \n".format(filename)
+        q += "MATCH (a:{0}), (b:{1}) \n".format(':'.join(self.start_node_labels), ':'.join(self.end_node_labels))
+
+        where_clauses = []
+        for prop in self.fixed_order_start_node_properties:
+            prop_type = start_node_property_types[prop]
+            if prop_type in CYPHER_TYPE_TO_FUNCTION:
+                where_clauses.append(f"a.{prop} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.a_{prop})")
+            else:
+                where_clauses.append("a.{0} = line.a_{0}".format(prop))
+
+        for prop in self.fixed_order_end_node_properties:
+            prop_type = end_node_property_types[prop]
+            if prop_type in CYPHER_TYPE_TO_FUNCTION:
+                where_clauses.append(f"b.{prop} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.b_{prop})")
+            else:
+                where_clauses.append("b.{0} = line.b_{0}".format(prop))
+
+        q += "WHERE {} \n".format(" AND ".join(where_clauses))
+
+        q += f"{query_type} (a)-[r:{self.rel_type}]->(b) \n"
+
+        rel_prop_list = []
+        for prop in sorted(self.all_property_keys()):
+            prop_type = rel_property_types[prop]
+            if prop_type in CYPHER_TYPE_TO_FUNCTION:
+                rel_prop_list.append(f"r.{prop} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.rel_{prop})")
+            else:
+                rel_prop_list.append("r.{0} = line.rel_{0}".format(prop))
+
+        q += "SET {}".format(", ".join(rel_prop_list))
+
+        return q
 
     @classmethod
     def from_dict(cls, relationship_dict, batch_size=None):

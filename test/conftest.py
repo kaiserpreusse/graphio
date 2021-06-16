@@ -1,6 +1,7 @@
 import pytest
 import logging
 import os
+import shutil
 from py2neo import Graph
 from py2neo.wiring import WireError
 from py2neo.client import ConnectionUnavailable
@@ -30,8 +31,17 @@ else:
 
 
 @pytest.fixture(scope='session')
-def wait_for_neo4j():
+def neo4j_import_dir(pytestconfig):
+    directory = os.path.join(pytestconfig.rootdir, 'files_for_test')
+    if not os.path.exists(directory):
+        os.mkdir(directory)
 
+    yield directory
+    shutil.rmtree(directory)
+
+
+@pytest.fixture(scope='session')
+def wait_for_neo4j():
     # check availability for both containers
     connected = False
     max_retries = 180
@@ -57,7 +67,8 @@ def wait_for_neo4j():
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request, wait_for_neo4j):
-    yield Graph(host=request.param['host'], password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt', secure=False)
+    yield Graph(host=request.param['host'], password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt',
+                secure=False)
 
 
 @pytest.fixture

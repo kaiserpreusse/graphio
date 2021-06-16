@@ -95,6 +95,38 @@ def test_relationshipset_unique():
     assert len(rs.relationships) == 1
 
 
+def test_relationshipset_all_property_keys():
+    rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
+
+    random_keys = ['name', 'city', 'value', 'key']
+
+    for val in random_keys:
+        for i in range(20):
+            rel_props = {}
+            rel_props[val] = 'peter'
+
+            rs.add_relationship({'uid': 1}, {'name': 'peter'}, rel_props)
+
+    assert rs.all_property_keys() == set(random_keys)
+
+
+def test_relationshipset_estiamte_types():
+    rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name', 'height', 'age'])
+
+    for i in range(20):
+        rs.add_relationship({'uid': 1}, {'name': 'peter', 'height': 20.5, 'age': 50},
+                            {'country': 'germany', 'weight': 70.4, 'number': 20})
+
+    start_node_property_types, rel_property_types, end_node_property_types = rs._estimate_type_of_property_values()
+    assert start_node_property_types['uid'] == int
+    assert end_node_property_types['name'] == str
+    assert end_node_property_types['height'] == float
+    assert end_node_property_types['age'] == int
+    assert rel_property_types['country'] == str
+    assert rel_property_types['weight'] == float
+    assert rel_property_types['number'] == int
+
+
 class TestDefaultProps:
 
     def test_default_props(self):
@@ -249,3 +281,142 @@ class TestRelationshipSetSerialize:
                 assert reloaded_relset.end_node_properties == test_rs.end_node_properties
                 assert reloaded_relset.relationships == test_rs.relationships
                 assert len(reloaded_relset.relationships) == len(test_rs.relationships)
+
+
+class TestRelationshipSetToCSV:
+    def test_to_csv(self, tmp_path):
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        csv_file = rs.to_csv(tmp_path)
+        print(csv_file)
+
+        expected_num_of_fields = len(rs.all_property_keys()) + len(rs.fixed_order_start_node_properties) + len(
+            rs.fixed_order_end_node_properties)
+
+        with open(csv_file) as f:
+            lines = f.readlines()
+            assert len(lines) - 1 == len(rs.relationships)
+
+            for l in lines:
+                l = l.strip()
+                assert len(l.split(',')) == expected_num_of_fields
+
+    def test_create_csv_query(self):
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+        rs.uuid = 'peter'
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        query = rs.csv_query('CREATE')
+        print(query)
+        assert query == """USING PERIODIC COMMIT 1000 
+LOAD CSV WITH HEADERS FROM 'file:///relationshipset_Test_Other_TEST_Foo_SomeLabel_peter.csv' AS line 
+MATCH (a:Test:Other), (b:Foo:SomeLabel) 
+WHERE a.uuid = toInteger(line.a_uuid) AND a.numerical = toInteger(line.a_numerical) AND b.uuid = toInteger(line.b_uuid) AND b.value = line.b_value 
+CREATE (a)-[r:TEST]->(b) 
+SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel_other_value, r.second_value = toInteger(line.rel_second_value), r.value = line.rel_value"""
+
+    def test_relationshipset_csv_create(self, graph, clear_graph, neo4j_import_dir):
+
+        # create the nodes required here
+        ns1 = NodeSet(['Test', 'Other'], merge_keys=['uuid', 'numerical'])
+        ns2 = NodeSet(['Foo', 'SomeLabel'], merge_keys=['uuid', 'value'])
+
+        for i in range(20):
+            ns1.add_node({'uuid': i, 'numerical': 1})
+            ns2.add_node({'uuid': i, 'value': 'foo'})
+
+        ns1.create_index(graph)
+        ns1.create(graph)
+        ns2.create_index(graph)
+        ns2.create(graph)
+
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+        rs.uuid = 'peter'
+        rs.create_index(graph)
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        rs.to_csv(neo4j_import_dir)
+
+        query = rs.csv_query('CREATE')
+
+        graph.run(query)
+
+        result = graph.run("MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r").data()
+        assert len(result) == len(rs.relationships)
+
+    def test_relationshipset_csv_merge(self, graph, clear_graph, neo4j_import_dir):
+
+        # create the nodes required here
+        ns1 = NodeSet(['Test', 'Other'], merge_keys=['uuid', 'numerical'])
+        ns2 = NodeSet(['Foo', 'SomeLabel'], merge_keys=['uuid', 'value'])
+
+        for i in range(20):
+            ns1.add_node({'uuid': i, 'numerical': 1})
+            ns2.add_node({'uuid': i, 'value': 'foo'})
+
+        ns1.create_index(graph)
+        ns1.create(graph)
+        ns2.create_index(graph)
+        ns2.create(graph)
+
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+        rs.uuid = 'peter'
+        rs.create_index(graph)
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        rs.to_csv(neo4j_import_dir)
+
+        query = rs.csv_query('MERGE')
+
+        # run query a few times to check for duplications
+        graph.run(query)
+        graph.run(query)
+        graph.run(query)
+
+        result = graph.run("MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r").data()
+        assert len(result) == len(rs.relationships)
