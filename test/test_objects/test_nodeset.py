@@ -1,38 +1,9 @@
 import pytest
 import os
 import json
-import docker
-import tarfile
 from hypothesis import given, strategies as st
 
 from graphio.objects.nodeset import NodeSet
-
-
-def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
-    # prepare file
-    os.chdir(os.path.dirname(path))
-    srcname = os.path.basename(path)
-    print("src " + srcname)
-    with tarfile.open("example.tar", 'w') as tar:
-        try:
-            tar.add(srcname)
-        finally:
-            tar.close()
-
-    client = docker.from_env()
-
-    for this_container in client.containers.list():  # ['graphio_test_neo4j_35', 'graphio_test_neo4j_41', 'graphio_test_neo4j_42']:
-        # this_container = client.containers.get(c)
-        try:
-            with open('example.tar', 'rb') as fd:
-                this_container.put_archive(path=target, data=fd)
-        except Exception as e:
-            print(e)
-
-
-@pytest.fixture
-def root_dir():
-    return pytest.config.rootdir
 
 
 @pytest.fixture(scope="session")
@@ -388,89 +359,3 @@ class TestNodeSetSerialize:
                 assert reloaded_nodeset.merge_keys == test_ns.merge_keys
                 assert reloaded_nodeset.nodes == test_ns.nodes
                 assert len(reloaded_nodeset.nodes) == len(test_ns.nodes)
-
-
-class TestNodeSetToCSV:
-
-    def test_create_csv_file(self, different_nodesets, tmp_path):
-        for ns in different_nodesets:
-
-            num_of_props = len(ns.all_properties_in_nodeset())
-
-            csv_file = ns.to_csv(tmp_path)
-
-            with open(csv_file) as f:
-                lines = f.readlines()
-                # note that csv has header
-                assert len(lines) - 1 == len(ns.nodes)
-
-                for l in lines:
-                    l = l.strip()
-                    assert len(l.split(',')) == num_of_props
-
-    def test_create_csv_query(self, small_nodeset):
-        # override uuid which is used in file name
-        small_nodeset.uuid = 'peter'
-        query = small_nodeset.create_csv_query()
-        print(query)
-        assert query == """USING PERIODIC COMMIT 1000
-LOAD CSV WITH HEADERS FROM 'file:///nodeset_Test_uuid_peter.csv' AS line
-CREATE (n:Test)
-SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
-
-    # note the workaround to parameterize with fixtures
-    # see https://miguendes.me/how-to-use-fixtures-as-arguments-in-pytestmarkparametrize
-    @pytest.mark.parametrize('ns', NODSET_FIXTURE_NAMES)
-    def test_csv_create(self, graph, clear_graph, neo4j_import_dir, ns, request):
-        ns = request.getfixturevalue(ns)
-
-        path = ns.to_csv(neo4j_import_dir)
-        query = ns.create_csv_query()
-
-        # note: this is a hack to copy files into a running Docker container from Python
-        # needed to run the tests without too many changes locally and in GitHub Actions
-        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
-
-        graph.run(query)
-
-        result = graph.run("MATCH (t:Test) RETURN t").data()
-        assert len(result) == len(ns.nodes)
-        for row in result:
-            print(row)
-            for k in ns.all_properties_in_nodeset():
-                assert row['t'][k] is not None
-
-    def test_merge_csv_query(self, small_nodeset):
-        # override uuid
-        small_nodeset.uuid = 'peter'
-        query = small_nodeset.merge_csv_query()
-
-        assert query == """USING PERIODIC COMMIT 1000
-LOAD CSV WITH HEADERS FROM 'file:///nodeset_Test_uuid_peter.csv' AS line
-MERGE (n:Test { uuid: toInteger(line.uuid) })
-SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
-
-    # note the workaround to parameterize with fixtures
-    # see https://miguendes.me/how-to-use-fixtures-as-arguments-in-pytestmarkparametrize
-    @pytest.mark.parametrize('ns', NODSET_FIXTURE_NAMES)
-    def test_csv_merge(self, graph, clear_graph, neo4j_import_dir, ns, request):
-        ns = request.getfixturevalue(ns)
-
-        path = ns.to_csv(neo4j_import_dir)
-
-        # note: this is a hack to copy files into a running Docker container from Python
-        # needed to run the tests without too many changes locally and in GitHub Actions
-        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
-
-        query = ns.merge_csv_query()
-
-        # run a few times to test that no additional nodes are created
-        graph.run(query)
-        graph.run(query)
-        graph.run(query)
-
-        result = graph.run("MATCH (t:Test) RETURN t").data()
-        assert len(result) == len(ns.nodes)
-        for row in result:
-            for k in ns.all_properties_in_nodeset():
-                assert row['t'][k] is not None
