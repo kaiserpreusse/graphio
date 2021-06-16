@@ -39,18 +39,6 @@ def nodeset_multiple_labels_multiple_merge_keys():
     return ns
 
 
-# workaround to parameterize a test function with a set of fixtures
-# for now the use of external packages that extend pytest is avoided (check https://smarie.github.io/python-pytest-cases/ though)
-# see https://miguendes.me/how-to-use-fixtures-as-arguments-in-pytestmarkparametrize
-NODSET_FIXTURE_NAMES = ['small_nodeset', 'nodeset_multiple_labels', 'nodeset_multiple_labels_multiple_merge_keys']
-
-
-@pytest.fixture
-def different_nodesets(small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys):
-    nodesets = [small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys]
-    return nodesets
-
-
 def test_node_set_from_dict():
     people = NodeSet(["Person"], merge_keys=["name"])
     people.add_node({"name": "Tom"})
