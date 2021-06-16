@@ -63,7 +63,7 @@ jobs:
     - name: Test with pytest
       run: |
         docker-compose -f test_neo4j_compose.yml up -d;
-        coverage run --source=graphio -m pytest
+        coverage run --source=graphio -m pytest;
     - name: "Upload coverage to Codecov"
       uses: codecov/codecov-action@v1
       with:
