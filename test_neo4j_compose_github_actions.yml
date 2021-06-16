@@ -1,7 +1,6 @@
 version: '3.8'
 services:
   test_neo4j_35:
-    network_mode: "host"
     image: neo4j:3.5
     environment:
       - NEO4J_AUTH=neo4j/test
@@ -14,7 +13,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./files_for_test:/import
   test_neo4j_41:
-    network_mode: "host"
     image: neo4j:4.1
     environment:
       - NEO4J_AUTH=neo4j/test
@@ -27,7 +25,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./files_for_test:/import
   test_neo4j_42:
-    network_mode: "host"
     image: neo4j:4.2
     environment:
       - NEO4J_AUTH=neo4j/test
