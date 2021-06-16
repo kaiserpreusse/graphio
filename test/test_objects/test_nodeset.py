@@ -8,24 +8,28 @@ from hypothesis import given, strategies as st
 from graphio.objects.nodeset import NodeSet
 
 
-def copy_to_all_docker_containers(path, target):
-    # copy into current docker container
+def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
+
+    # prepare file
+    os.chdir(os.path.dirname(path))
+    srcname = os.path.basename(path)
+    print("src " + srcname)
+    with tarfile.open("example.tar", 'w') as tar:
+        try:
+            tar.add(srcname)
+        finally:
+            tar.close()
+
+
     client = docker.from_env()
 
     for this_container in client.containers.list():  # ['graphio_test_neo4j_35', 'graphio_test_neo4j_41', 'graphio_test_neo4j_42']:
         # this_container = client.containers.get(c)
-
-        os.chdir(os.path.dirname(path))
-        srcname = os.path.basename(path)
-        print("src " + srcname)
-        with tarfile.open("vpc-example.tar", 'w') as tar:
-            try:
-                tar.add(srcname)
-            finally:
-                tar.close()
-
-        with open('vpc-example.tar', 'rb') as fd:
-            this_container.put_archive(path=target, data=fd)
+        try:
+            with open('example.tar', 'rb') as fd:
+                this_container.put_archive(path=target, data=fd)
+        except Exception as e:
+            print(e)
 
 @pytest.fixture
 def root_dir():
