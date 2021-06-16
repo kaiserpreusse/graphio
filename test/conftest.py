@@ -17,10 +17,16 @@ NEO4J_PASSWORD = 'test'
 RUN_ENVIRONMENT = os.getenv('RUN_ENVIRONMENT', None)
 
 if RUN_ENVIRONMENT == 'github_actions':
+    # changed from service containers to running within the test container
+    # NEO4J_VERSIONS = [
+    #     {'host': 'neo4j35', 'version': '3.5', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'},
+    #     {'host': 'neo4j41', 'version': '4.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'},
+    #     {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'}
+    # ]
     NEO4J_VERSIONS = [
-        {'host': 'neo4j35', 'version': '3.5', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'},
-        {'host': 'neo4j41', 'version': '4.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'},
-        {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt'}
+        {'host': 'localhost', 'version': '3.5', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt'},
+        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt'},
+        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt'}
     ]
 else:
     NEO4J_VERSIONS = [
