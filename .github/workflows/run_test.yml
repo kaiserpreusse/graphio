@@ -33,6 +33,12 @@ jobs:
           NEO4J_AUTH: neo4j/test
           NEO4JLABS_PLUGINS: '["apoc"]'
           NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
+      neo4j43:
+        image: neo4j:4.3
+        env:
+          NEO4J_AUTH: neo4j/test
+          NEO4JLABS_PLUGINS: '["apoc"]'
+          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
 
     strategy:
       matrix:
