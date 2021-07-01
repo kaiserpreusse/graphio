@@ -26,3 +26,4 @@ jobs:
     - name: build documentation
       run: |
         sphinx-build -b html docs output
+        sshpass -p ${{ secrets.DOCS_SSH_PASSWORD }} scp -r output/* ${{ secrets.DOCS_SSH_PATH }}
