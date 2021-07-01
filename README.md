@@ -11,9 +11,8 @@
 A Python library to bulk load data to Neo4j. Built by [Kaiser & Preusse](https://kaiser-preusse.com).
 
 ## Documentation
-[![Documentation Status](https://readthedocs.org/projects/graphio/badge/?version=latest)](https://graphio.readthedocs.io/en/latest/?badge=latest)
 
-Docs available at: https://graphio.readthedocs.io/
+Docs available at: hhttp://docs.py2neo.org/graphio/
 
 Tutorial with real data: https://graphdb-bio.com/graphio-tutorial-idmapping
 
