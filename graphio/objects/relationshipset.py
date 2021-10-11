@@ -220,6 +220,60 @@ class RelationshipSet:
                 "unique": self.unique,
                 "relationships": self.relationships}
 
+    @classmethod
+    def from_csv_with_header(cls, path):
+
+        header = {}
+        # get header
+        with open(path, 'rt') as f:
+            for l in f:
+                if l.startswith('#'):
+                    l = l.replace('#', '').strip()
+                    k, v = l.split(',')
+                    if '|' in v:
+                        v = v.split('|')
+                    else:
+                        v = [v]
+                    header[k] = v
+                else:
+                    break
+        print(header)
+
+        header['type'] = header['type'][0]
+
+        rs = cls(header['type'], header['start_node_labels'], header['end_node_labels'], header['start_node_keys'], header['end_node_keys'])
+
+        start_key_to_header = {}
+        for k in rs.start_node_properties:
+            start_key_to_header[k] = f"start_{k}"
+
+        end_key_to_header = {}
+        for k in rs.end_node_properties:
+            end_key_to_header[k] = f"end_{k}"
+
+        with open(path, newline='') as csvfile:
+
+            rdr = csv.DictReader(row for row in csvfile if not row.startswith('#'))
+
+            for row in rdr:
+                start_dict = {}
+                for k in rs.start_node_properties:
+                    start_dict[k] = row[start_key_to_header[k]]
+                end_dict = {}
+                for k in rs.end_node_properties:
+                    end_dict[k] = row[end_key_to_header[k]]
+                # get properties
+                properties = {}
+                for k, v in row.items():
+                    if k.startswith('rel_'):
+                        k = k.replace('rel_', '')
+                        properties[k] = v
+
+
+                rs.add_relationship(start_dict, end_dict, properties)
+
+        return rs
+
     def to_csv(self, filepath: str, filename: str = None, quoting: int = None) -> str:
         """
         Note: You can't use arrays as properties for nodes/relationships when creating CSV files.

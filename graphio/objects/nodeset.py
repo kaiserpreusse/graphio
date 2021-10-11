@@ -189,6 +189,37 @@ class NodeSet:
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
 
+    @classmethod
+    def from_csv_with_header(cls, path):
+
+        header = {}
+        # get header
+        log.debug(f"Read file {path} into NodeSet.")
+
+        with open(path, 'rt') as f:
+            log.debug(f)
+            for l in f:
+                if l.startswith('#'):
+                    l = l.replace('#', '').strip()
+                    k, v = l.split(',')
+                    if '|' in v:
+                        v = v.split('|')
+                    else:
+                        v = [v]
+                    header[k] = v
+                else:
+                    break
+
+        nodeset = cls(labels=header['labels'], merge_keys=header['merge_keys'])
+
+        with open(path, newline='') as csvfile:
+
+            rdr = csv.DictReader(row for row in csvfile if not row.startswith('#'))
+            for node in rdr:
+                nodeset.add_node(node)
+
+        return nodeset
+
     def object_file_name(self, suffix: str = None) -> str:
         """
         Create a unique name for this NodeSet that indicates content. Pass an optional suffix.
