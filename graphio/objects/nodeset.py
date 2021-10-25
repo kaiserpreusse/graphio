@@ -253,13 +253,8 @@ class NodeSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        i = 1
         for batch in chunks(self.nodes, size=batch_size):
-            log.debug('Batch {}'.format(i))
-
             create_nodes(graph, batch, labels=self.labels)
-
-            i += 1
 
     def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None):
         """

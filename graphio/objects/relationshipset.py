@@ -442,11 +442,8 @@ class RelationshipSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
-
-            log.debug('Batch {}'.format(i))
 
             create_relationships(graph.auto(),
                                  batch,
@@ -454,7 +451,6 @@ class RelationshipSet:
                                  start_node_key=(tuple(self.start_node_labels), *self.fixed_order_start_node_properties),
                                  end_node_key=(tuple(self.end_node_labels), *self.fixed_order_end_node_properties))
 
-            i += 1
 
     def merge(self, graph, batch_size=None):
         """
@@ -465,7 +461,6 @@ class RelationshipSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
 
@@ -476,7 +471,6 @@ class RelationshipSet:
                                 end_node_key=(tuple(self.end_node_labels), *self.fixed_order_end_node_properties)
                                 )
 
-            i += 1
 
     def create_index(self, graph):
         """
