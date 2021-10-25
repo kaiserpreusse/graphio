@@ -468,7 +468,6 @@ class RelationshipSet:
         i = 1
         # iterate over chunks of rels
         for batch in chunks(self.relationships, size=batch_size):
-            log.debug('Batch {}'.format(i))
 
             merge_relationships(graph.auto(),
                                 batch,
