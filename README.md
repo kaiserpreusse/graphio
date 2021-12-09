@@ -8,7 +8,7 @@
 [![Neo4j](https://img.shields.io/badge/Python-3.7%20%7C%203.8%20%7C%203.9-green)](https://python.com)
 [![Downloads](https://pepy.tech/badge/graphio)](https://pepy.tech/project/graphio)
 
-A Python library to bulk load data to Neo4j. Built by [Kaiser & Preusse](https://kaiser-preusse.com).
+A Python library to bulk load data to Neo4j.
 
 ## Documentation
 
