@@ -4,7 +4,8 @@ import json
 import os
 import csv
 from py2neo.bulk import create_relationships, merge_relationships
-from typing import Set
+from typing import Set, List
+import gzip
 
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index
@@ -221,56 +222,15 @@ class RelationshipSet:
                 "relationships": self.relationships}
 
     @classmethod
-    def from_csv_with_header(cls, path):
-
-        header = {}
-        # get header
-        with open(path, 'rt') as f:
-            for l in f:
-                if l.startswith('#'):
-                    l = l.replace('#', '').strip()
-                    k, v = l.split(',')
-                    if '|' in v:
-                        v = v.split('|')
-                    else:
-                        v = [v]
-                    header[k] = v
-                else:
-                    break
-        print(header)
-
-        header['type'] = header['type'][0]
-
-        rs = cls(header['type'], header['start_node_labels'], header['end_node_labels'], header['start_node_keys'], header['end_node_keys'])
-
-        start_key_to_header = {}
-        for k in rs.start_node_properties:
-            start_key_to_header[k] = f"start_{k}"
-
-        end_key_to_header = {}
-        for k in rs.end_node_properties:
-            end_key_to_header[k] = f"end_{k}"
-
-        with open(path, newline='') as csvfile:
-
-            rdr = csv.DictReader(row for row in csvfile if not row.startswith('#'))
-
-            for row in rdr:
-                start_dict = {}
-                for k in rs.start_node_properties:
-                    start_dict[k] = row[start_key_to_header[k]]
-                end_dict = {}
-                for k in rs.end_node_properties:
-                    end_dict[k] = row[end_key_to_header[k]]
-                # get properties
-                properties = {}
-                for k, v in row.items():
-                    if k.startswith('rel_'):
-                        k = k.replace('rel_', '')
-                        properties[k] = v
-
-
-                rs.add_relationship(start_dict, end_dict, properties)
+    def from_dict(cls, relationship_dict, batch_size=None):
+        rs = cls(rel_type=relationship_dict["rel_type"],
+                 start_node_labels=relationship_dict["start_node_labels"],
+                 end_node_labels=relationship_dict["end_node_labels"],
+                 start_node_properties=relationship_dict["start_node_properties"],
+                 end_node_properties=relationship_dict["end_node_properties"],
+                 batch_size=batch_size)
+        rs.unique = relationship_dict["unique"]
+        rs.relationships = [tuplify_json_list(r) for r in relationship_dict["relationships"]]
 
         return rs
 
@@ -337,6 +297,105 @@ class RelationshipSet:
 
         return csv_file_path
 
+    @classmethod
+    def __from_csv_with_header(cls, path):
+        """
+        Untested, deprecated.
+        """
+
+        header = {}
+        # get header
+        with open(path, 'rt') as f:
+            for l in f:
+                if l.startswith('#'):
+                    l = l.replace('#', '').strip()
+                    k, v = l.split(',')
+                    if '|' in v:
+                        v = v.split('|')
+                    else:
+                        v = [v]
+                    header[k] = v
+                else:
+                    break
+        print(header)
+
+        header['type'] = header['type'][0]
+
+        rs = cls(header['type'], header['start_node_labels'], header['end_node_labels'], header['start_node_keys'], header['end_node_keys'])
+
+        start_key_to_header = {}
+        for k in rs.start_node_properties:
+            start_key_to_header[k] = f"start_{k}"
+
+        end_key_to_header = {}
+        for k in rs.end_node_properties:
+            end_key_to_header[k] = f"end_{k}"
+
+        with open(path, newline='') as csvfile:
+
+            rdr = csv.DictReader(row for row in csvfile if not row.startswith('#'))
+
+            for row in rdr:
+                start_dict = {}
+                for k in rs.start_node_properties:
+                    start_dict[k] = row[start_key_to_header[k]]
+                end_dict = {}
+                for k in rs.end_node_properties:
+                    end_dict[k] = row[end_key_to_header[k]]
+                # get properties
+                properties = {}
+                for k, v in row.items():
+                    if k.startswith('rel_'):
+                        k = k.replace('rel_', '')
+                        properties[k] = v
+
+
+                rs.add_relationship(start_dict, end_dict, properties)
+
+        return rs
+
+    @classmethod
+    def from_csv_json_set(cls, csv_file_path, json_file_path):
+        """
+        Read the default CSV/JSON file combination.
+
+        Needs paths to CSV and JSON file.
+
+        :param csv_file_path: Path to the CSV file.
+        :param json_file_path: Path to the JSON file.
+        :return: The RelationshipSet.
+        """
+        with open(json_file_path) as f:
+            metadata = json.load(f)
+
+        # map properties
+        property_map = None
+        if 'property_map' in metadata:
+            # replace start_node/end_node keys if necessary
+            property_map = metadata['property_map']
+            metadata['start_node_keys'] = [property_map[x] if x in property_map else x for x in metadata['start_node_keys']]
+            metadata['end_node_keys'] = [property_map[x] if x in property_map else x for x in metadata['end_node_keys']]
+
+        # NodeSet instance
+        rs = cls(metadata['reltype'],
+                             metadata['start_node_labels'],
+                             metadata['end_node_labels'],
+                             remove_prefix_from_keys(metadata['start_node_keys']),
+                             remove_prefix_from_keys(metadata['end_node_keys']))
+
+        start_key_to_header = {}
+        for k in rs.start_node_properties:
+            start_key_to_header[k] = f"start_{k}"
+
+        end_key_to_header = {}
+        for k in rs.end_node_properties:
+            end_key_to_header[k] = f"end_{k}"
+
+        rs.relationships = _yield_rels(csv_file_path, rs.start_node_properties, rs.end_node_properties,
+                                       start_key_to_header, end_key_to_header, property_map)
+
+        return rs
+
     def csv_query(self, query_type: str, filename: str = None, periodic_commit=1000) -> str:
         """
         Generate the CREATE CSV query for this RelationshipSet. The function tries to take care of type conversions.
@@ -393,19 +452,6 @@ class RelationshipSet:
 
         return q
 
-    @classmethod
-    def from_dict(cls, relationship_dict, batch_size=None):
-        rs = cls(rel_type=relationship_dict["rel_type"],
-                 start_node_labels=relationship_dict["start_node_labels"],
-                 end_node_labels=relationship_dict["end_node_labels"],
-                 start_node_properties=relationship_dict["start_node_properties"],
-                 end_node_properties=relationship_dict["end_node_properties"],
-                 batch_size=batch_size)
-        rs.unique = relationship_dict["unique"]
-        rs.relationships = [tuplify_json_list(r) for r in relationship_dict["relationships"]]
-
-        return rs
-
     def object_file_name(self, suffix: str = None) -> str:
         """
         Create a unique name for this RelationshipSet that indicates content. Pass an optional suffix.
@@ -425,6 +471,9 @@ class RelationshipSet:
     def serialize(self, target_dir: str):
         """
         Serialize NodeSet to a JSON file in a target directory.
+
+        This function is meant for dumping/reloading and not to create a general transport
+        format. The function will likely be optimized for disk space or compressed in future.
         """
         path = os.path.join(target_dir, self.object_file_name(suffix='.json'))
         with open(path, 'wt') as f:
@@ -500,3 +549,87 @@ class RelationshipSet:
             # composite indexes
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties)
+
+
+def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header, property_map):
+    """
+    Instead of recreating the entire RelationShip set in memory this function yields
+    one relationship at a time.
+
+    Note that there is some data conversion going on to return relationships in the
+    format introduced when graphio base functions were merged into py2neo.
+
+    :param csv_filepath:
+    :param start_node_properties:
+    :param end_node_properties:
+    :param start_key_to_header:
+    :param end_key_to_header:
+    :param property_map:
+    :return:
+    """
+
+    if csv_filepath.endswith('.gz'):
+        csvfile = gzip.open(csv_filepath, 'rt')
+    else:
+        csvfile = open(csv_filepath, newline='')
+
+    # get header line
+    # get header line
+    header = None
+    while not header:
+        line = csvfile.readline()
+        if not line.startswith('#'):
+            header = line.strip().split(',')
+            header = [x.replace('"', '') for x in header]
+    log.debug(f"Header: {header}")
+
+    if property_map:
+        log.debug(f"Replace header {header}")
+        header = [property_map[x] if x in property_map else x for x in header]
+        log.debug(f"With header {header}")
+
+    rdr = csv.DictReader([row for row in csvfile if not row.startswith('#')], fieldnames=header)
+
+    for row in rdr:
+
+        start_node_data = tuple(row[start_key_to_header[x]] for x in start_node_properties)
+        if len(start_node_data) == 1:
+            start_node_data = start_node_data[0]
+
+        end_node_data = tuple(row[end_key_to_header[x]] for x in end_node_properties)
+        if len(end_node_data) == 1:
+            end_node_data = end_node_data[0]
+
+        # get properties
+        properties = {}
+        for k, v in row.items():
+            if k.startswith('rel_'):
+                k = k.replace('rel_', '')
+                properties[k] = v
+
+        yield (start_node_data, properties, end_node_data)
+
+    csvfile.close()
+
+
+def remove_prefix_from_keys(keys: list) -> List[str]:
+    """
+    In some JSON files the start/end node keys contain `start_` or `end_`.
+
+    This is only required in the CSV file to properly distinguish columns, not in
+    the RelationshipSet or JSON file where we have a dedicated place to store start/end node keys.
+
+    This function simply removes the prefix but does not fail if they do not exist.
+
+    :param keys: The list of keys.
+    :return: Cleaned list of keys without prefix.
+    """
+    output = []
+    for k in keys:
+        if k.startswith('start_'):
+            output.append(k.split('_', 1)[1])
+        elif k.startswith('end_'):
+            output.append(k.split('_', 1)[1])
+        else:
+            output.append(k)
+    return output

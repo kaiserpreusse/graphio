@@ -4,10 +4,10 @@ from py2neo.bulk import create_nodes, merge_nodes
 import os
 import json
 import csv
+import gzip
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
-from graphio.objects.relationshipset import RelationshipSet
 from graphio.queries import nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
     nodes_merge_unwind_preserve_array_props
 
@@ -97,6 +97,12 @@ class NodeSet:
         """
         return {"labels": self.labels, "merge_keys": self.merge_keys, "nodes": self.nodes}
 
+    @classmethod
+    def from_dict(cls, nodeset_dict, batch_size=None):
+        ns = cls(labels=nodeset_dict["labels"], merge_keys=nodeset_dict["merge_keys"])
+        ns.add_nodes(nodeset_dict["nodes"])
+        return ns
+
     def to_csv(self, filepath: str, filename: str = None, quoting: int = None) -> str:
         """
         Create a CSV file for this nodeset.
@@ -184,13 +190,10 @@ class NodeSet:
         return q
 
     @classmethod
-    def from_dict(cls, nodeset_dict, batch_size=None):
-        ns = cls(labels=nodeset_dict["labels"], merge_keys=nodeset_dict["merge_keys"])
-        ns.add_nodes(nodeset_dict["nodes"])
-        return ns
-
-    @classmethod
-    def from_csv_with_header(cls, path):
+    def __from_csv_with_header(cls, path):
+        """
+        Untested, deprecated.
+        """
 
         header = {}
         # get header
@@ -220,6 +223,42 @@ class NodeSet:
 
         return nodeset
 
+    @classmethod
+    def from_csv_json_set(cls, csv_file_path, json_file_path):
+        """
+        Read the default CSV/JSON file combination.
+
+        Needs paths to CSV and JSON file.
+
+        :param csv_file_path: Path to the CSV file.
+        :param json_file_path: Path to the JSON file.
+        :return: The NodeSet.
+        """
+        with open(json_file_path) as f:
+            metadata = json.load(f)
+
+        # Some legacy files use 'merge_keys' instead of 'mergekeys' (like the property of the
+        # NodeSet constructor), check if that is true and use 'merge_keys' later.
+        # Do not parameterize this in future, just safe guard against common type.
+        mergekeys_json_key = 'mergekeys'
+        if 'merge_keys' in metadata:
+            mergekeys_json_key = 'merge_keys'
+
+        # map properties
+        property_map = None
+        if 'property_map' in metadata:
+            # replace mergekeys if necessary
+            property_map = metadata['property_map']
+            metadata[mergekeys_json_key] = [property_map[x] if x in property_map else x for x in metadata[mergekeys_json_key]]
+
+        # NodeSet instance
+        nodeset = cls(metadata['labels'], merge_keys=metadata[mergekeys_json_key])
+
+        nodeset.nodes = _yield_node(csv_file_path, property_map)
+
+        return nodeset
+
+
     def object_file_name(self, suffix: str = None) -> str:
         """
         Create a unique name for this NodeSet that indicates content. Pass an optional suffix.
@@ -239,6 +278,9 @@ class NodeSet:
     def serialize(self, target_dir: str):
         """
         Serialize NodeSet to a JSON file in a target directory.
+
+        This function is meant for dumping/reloading and not to create a general transport
+        format. The function will likely be optimized for disk space or compressed in future.
         """
         path = os.path.join(target_dir, self.object_file_name(suffix='.json'))
         with open(path, 'wt') as f:
@@ -373,3 +415,38 @@ class NodeSet:
                 # composite indexes
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys)
+
+
+def _yield_node(csv_filepath, property_map):
+    """
+    Instead of recreating the entire RelationShip set in memory this function yields
+    one relationship at a time.
+
+    :param csv_filepath: Path to the CSV file.
+    :param property_map: Property map to rename properties.
+    :return: One node property dict per iteration.
+    """
+
+    if csv_filepath.endswith('.gz'):
+        csvfile = gzip.open(csv_filepath, 'rt')
+    else:
+        csvfile = open(csv_filepath, newline='')
+
+    # get header line
+    header = None
+    while not header:
+        line = csvfile.readline()
+        if not line.startswith('#'):
+            header = line.strip().split(',')
+            header = [x.replace('"', '') for x in header]
+    log.debug(f"Header: {header}")
+
+    if property_map:
+        log.debug(f"Replace header {header}")
+        header = [property_map[x] if x in property_map else x for x in header]
+        log.debug(f"With header {header}")
+
+    rdr = csv.DictReader([row for row in csvfile if not row.startswith('#')], fieldnames=header)
+    for node in rdr:
+        yield node
+    csvfile.close()

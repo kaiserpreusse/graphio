@@ -1,0 +1,7 @@
+{
+  "start_node_labels": ["Test"],
+  "end_node_labels": ["Test"],
+  "start_node_keys": ["test_id"],
+  "end_node_keys": ["test_id"],
+  "reltype": "RELATIONSHIP"
+}

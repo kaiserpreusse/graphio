@@ -1,0 +1,4 @@
+{
+  "labels":  ["Test"],
+  "mergekeys":  ["test_id"]
+}

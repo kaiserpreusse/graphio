@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   test_neo4j_35:
-    image: neo4j:3.5.29
+    image: neo4j/neo4j-arm64-experimental:4.3.5-arm64
     container_name: graphio_test_neo4j_35
     environment:
       - NEO4J_AUTH=neo4j/test
@@ -11,7 +11,7 @@ services:
       - 8687:7687
       - 8474:7474
   test_neo4j_41:
-    image: neo4j:4.1
+    image: neo4j/neo4j-arm64-experimental:4.1.11-arm64
     container_name: graphio_test_neo4j_41
     environment:
       - NEO4J_AUTH=neo4j/test
@@ -21,7 +21,7 @@ services:
       - 9687:7687
       - 9474:7474
   test_neo4j_42:
-    image: neo4j:4.2
+    image: neo4j/neo4j-arm64-experimental:4.2.11-arm64
     container_name: graphio_test_neo4j_42
     environment:
       - NEO4J_AUTH=neo4j/test
@@ -31,7 +31,7 @@ services:
       - 10687:7687
       - 10474:7474
   test_neo4j_43:
-    image: neo4j:4.3.5
+    image: neo4j/neo4j-arm64-experimental:4.3.7-arm64
     container_name: graphio_test_neo4j_43
     environment:
       - NEO4J_AUTH=neo4j/test
@@ -40,3 +40,13 @@ services:
     ports:
       - 11687:7687
       - 11474:7474
+  test_neo4j_44:
+    image: neo4j/neo4j-arm64-experimental:4.4.0
+    container_name: graphio_test_neo4j_44
+    environment:
+      - NEO4J_AUTH=neo4j/test
+      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
+    ports:
+      - 12687:7687
+      - 12474:7474

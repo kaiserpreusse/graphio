@@ -347,3 +347,25 @@ class TestNodeSetSerialize:
                 assert reloaded_nodeset.merge_keys == test_ns.merge_keys
                 assert reloaded_nodeset.nodes == test_ns.nodes
                 assert len(reloaded_nodeset.nodes) == len(test_ns.nodes)
+
+
+class TestNodeSetCSVandJSON:
+    """
+    Test functionality around creating/reading CSV files and associated JSON metadata files.
+    """
+    def test_read_from_files(self, root_dir, clear_graph, graph):
+
+        files_path = os.path.join(root_dir, "test", "files")
+
+        json_file_path = os.path.join(files_path, 'nodes_csv_json.json')
+        csv_file_path = os.path.join(files_path, 'nodes_csv_json.csv')
+
+        assert os.path.exists(json_file_path)
+        assert os.path.exists(csv_file_path)
+
+        ns = NodeSet.from_csv_json_set(csv_file_path, json_file_path)
+        assert ns.labels == ['Test']
+        assert ns.merge_keys == ['test_id']
+
+        ns.merge(graph)
+        assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2
