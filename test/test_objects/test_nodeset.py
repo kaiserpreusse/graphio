@@ -74,6 +74,14 @@ def test_nodeset__estimate_type_of_property_values():
     assert types['changing'] == str
 
 
+def test_nodeset_merge_key_id():
+
+    ns = NodeSet(['Test'], ['name', 'foo'])
+
+    merge_key_id = ns._merge_key_id({'name': 'Peter', 'foo': 'bar'})
+    assert merge_key_id == ('Peter', 'bar')
+
+
 class TestNodeSetInstances:
 
     @given(labels=st.lists(st.text(), max_size=10),
@@ -85,6 +93,21 @@ class TestNodeSetInstances:
         ns = NodeSet(labels, merge_keys)
         for i in data:
             ns.add_node(i)
+
+
+class TestIndexOnNodeSet:
+
+    def test_index_creation(self):
+        ns = NodeSet(['Test'], ['name', 'id'], indexed=True)
+        for i in range(1, 101):
+            # add node twice to index
+            ns.add_node({'name': str(i), 'id': i})
+            ns.add_node({'name': str(i), 'id': i})
+        # assert that the positions match as expected
+        for i in range(1, 101):
+            index = (str(i), i)
+            assert index in ns.node_index
+            assert ns.node_index[index] == [(i-1)*2, ((i-1)*2)+1]
 
 
 class TestDefaultProps:

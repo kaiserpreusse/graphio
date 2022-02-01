@@ -5,6 +5,7 @@ import os
 import json
 import csv
 import gzip
+from collections import defaultdict
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
@@ -23,7 +24,7 @@ class NodeSet:
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None):
+    def __init__(self, labels, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False):
         """
 
         :param labels: The labels for the nodes in this NodeSet.
@@ -38,6 +39,7 @@ class NodeSet:
         self.default_props = default_props
         self.preserve = preserve
         self.append_props = append_props
+        self.indexed = indexed
 
         self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
         self.uuid = str(uuid4())
@@ -48,9 +50,21 @@ class NodeSet:
             self.batch_size = defaults.BATCHSIZE
 
         self.nodes = []
+        # a node index with merge_key_id -> [positions in nodes list]
+        # this works for both unique and non-unique settings
+        self.node_index = defaultdict(list)
 
     def __str__(self):
         return f"<NodeSet ({self.labels}; {self.merge_keys})>"
+
+    def _merge_key_id(self, node_dict: dict) -> tuple:
+        """
+        Create a FrozenSet from an ordered list of the merge_key properties for a node.
+
+        :param node_dict: A node dict.
+        :return:
+        """
+        return tuple([node_dict[key] for key in self.merge_keys])
 
     def add_node(self, properties):
         """
@@ -65,6 +79,9 @@ class NodeSet:
             node_props = properties
 
         self.nodes.append(node_props)
+
+        if self.indexed:
+            self.node_index[self._merge_key_id(properties)].append(len(self.nodes) - 1)
 
     def add_nodes(self, list_of_properties):
         for properties in list_of_properties:
