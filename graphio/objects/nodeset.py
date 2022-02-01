@@ -87,6 +87,26 @@ class NodeSet:
         for properties in list_of_properties:
             self.add_node(properties)
 
+    def update_node(self, properties: dict):
+        """
+        Update an existing node by overwriting all properties.
+
+        Note that this requires `NodeSet(..., indexed=True)` which is not the default!
+
+        :param properties: Node property dictionary.
+        """
+        if not self.indexed:
+            raise TypeError("Update only works on an indexed NodeSet.")
+
+        node_merge_key_id = self._merge_key_id(properties)
+        if node_merge_key_id in self.node_index:
+            # this function should work for single and multiple nodes
+            for node_list_index in self.node_index[node_merge_key_id]:
+                self.nodes[node_list_index].update(properties)
+        # if the node does not exist it is created
+        else:
+            self.add_node(properties)
+
     def add_unique(self, properties):
         """
         Add a node to this NodeSet only if a node with the same `merge_keys` does not exist yet.
