@@ -14,8 +14,6 @@ A Python library to bulk load data to Neo4j.
 
 Docs available at: http://docs.py2neo.org/graphio/
 
-Tutorial with real data: https://graphdb-bio.com/graphio-tutorial-idmapping
-
 ## Install
 Install graphio from PyPI:
 
