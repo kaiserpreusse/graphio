@@ -12,7 +12,7 @@ A Python library to bulk load data to Neo4j.
 
 ## Documentation
 
-Docs available at: http://docs.py2neo.org/graphio/
+Docs available at: https://graphio.readthedocs.io
 
 ## Install
 Install graphio from PyPI:
