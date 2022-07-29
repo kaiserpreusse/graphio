@@ -126,7 +126,7 @@ class RelationshipSet:
 
         # collect properties
         for r in self.relationships:
-            all_props.update(r[1].keys())
+            all_props.update(r[2].keys())
 
         return all_props
 
