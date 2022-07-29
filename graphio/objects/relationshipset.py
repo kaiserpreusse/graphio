@@ -256,20 +256,13 @@ class RelationshipSet:
             for rel in self.relationships:
                 # create data for row
                 rel_csv_dict = {}
-                for i, k in enumerate(self.fixed_order_start_node_properties):
+                for k in self.start_node_properties:
+                    rel_csv_dict["a_{}".format(k)] = rel[0][k]
 
-                    if isinstance(rel[0], tuple):
-                        rel_csv_dict["a_{}".format(k)] = rel[0][i]
-                    else:
-                        rel_csv_dict["a_{}".format(k)] = rel[0]
+                for k in self.end_node_properties:
+                    rel_csv_dict["b_{}".format(k)] = rel[1][k]
 
-                for i, k in enumerate(self.fixed_order_end_node_properties):
-                    if isinstance(rel[2], tuple):
-                        rel_csv_dict["b_{}".format(k)] = rel[2][i]
-                    else:
-                        rel_csv_dict["b_{}".format(k)] = rel[2]
-
-                for k, v in rel[1].items():
+                for k, v in rel[2].items():
                     rel_csv_dict["rel_{}".format(k)] = v
 
                 writer.writerow(rel_csv_dict)
