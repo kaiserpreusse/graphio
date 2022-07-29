@@ -327,7 +327,7 @@ class RelationshipSet:
         return rs
 
     @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path):
+    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False):
         """
         Read the default CSV/JSON file combination.
 
@@ -335,6 +335,7 @@ class RelationshipSet:
 
         :param csv_file_path: Path to the CSV file.
         :param json_file_path: Path to the JSON file.
+        :param load_items: Yield items from file (False, default) or load them to memory (True).
         :return: The RelationshipSet.
         """
         with open(json_file_path) as f:
@@ -363,7 +364,11 @@ class RelationshipSet:
         for k in rs.end_node_properties:
             end_key_to_header[k] = f"end_{k}"
 
-        rs.relationships = _yield_rels(csv_file_path, rs.start_node_properties, rs.end_node_properties,
+        if load_items:
+            rs.relationships = _read_rels(csv_file_path, rs.start_node_properties, rs.end_node_properties,
+                                       start_key_to_header, end_key_to_header, property_map)
+        else:
+            rs.relationships = _yield_rels(csv_file_path, rs.start_node_properties, rs.end_node_properties,
                                        start_key_to_header, end_key_to_header, property_map)
 
         return rs
@@ -515,6 +520,46 @@ class RelationshipSet:
             # composite indexes
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties)
+
+
+def _read_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header, property_map):
+    if csv_filepath.endswith('.gz'):
+        csvfile = gzip.open(csv_filepath, 'rt')
+    else:
+        csvfile = open(csv_filepath, newline='')
+
+    lines = csvfile.readlines()
+    csvfile.close()
+
+    header = lines[0].strip().split(',')
+    header = [x.replace('"', '') for x in header]
+
+    log.debug(f"Header: {header}")
+
+    if property_map:
+        log.debug(f"Replace header {header}")
+        header = [property_map[x] if x in property_map else x for x in header]
+        log.debug(f"With header {header}")
+
+    rdr = csv.DictReader(lines[1:], fieldnames=header)
+
+    relationships = []
+
+    for row in rdr:
+
+        start_node_data = dict(zip(start_node_properties, [row[start_key_to_header[x]] for x in start_node_properties]))
+
+        end_node_data = dict(zip(end_node_properties, [row[end_key_to_header[x]] for x in end_node_properties]))
+
+        # get properties
+        properties = {}
+        for k, v in row.items():
+            if k.startswith('rel_'):
+                k = k.replace('rel_', '')
+                properties[k] = v
+        relationships.append((start_node_data, end_node_data, properties))
+
+    return relationships
 
 
 def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header, property_map):

@@ -409,3 +409,20 @@ class TestNodeSetCSVandJSON:
 
         ns.merge(graph)
         assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2
+
+    def test_read_from_files_load_items_to_memory(self, root_dir, clear_graph, graph):
+
+        files_path = os.path.join(root_dir, "test", "files")
+
+        json_file_path = os.path.join(files_path, 'nodes_csv_json.json')
+        csv_file_path = os.path.join(files_path, 'nodes_csv_json.csv')
+
+        assert os.path.exists(json_file_path)
+        assert os.path.exists(csv_file_path)
+
+        ns = NodeSet.from_csv_json_set(csv_file_path, json_file_path, load_items=True)
+        assert ns.labels == ['Test']
+        assert ns.merge_keys == ['test_id']
+
+        ns.merge(graph)
+        assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2

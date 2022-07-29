@@ -259,7 +259,7 @@ class NodeSet:
         return nodeset
 
     @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path):
+    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items:bool = False):
         """
         Read the default CSV/JSON file combination.
 
@@ -267,6 +267,7 @@ class NodeSet:
 
         :param csv_file_path: Path to the CSV file.
         :param json_file_path: Path to the JSON file.
+        :param load_items: Yield items from file (False, default) or load them to memory (True).
         :return: The NodeSet.
         """
         with open(json_file_path) as f:
@@ -289,7 +290,10 @@ class NodeSet:
         # NodeSet instance
         nodeset = cls(metadata['labels'], merge_keys=metadata[mergekeys_json_key])
 
-        nodeset.nodes = _yield_node(csv_file_path, property_map)
+        if load_items:
+            nodeset.nodes = _read_nodes(csv_file_path, property_map)
+        else:
+            nodeset.nodes = _yield_node(csv_file_path, property_map)
 
         return nodeset
 
@@ -453,6 +457,42 @@ class NodeSet:
                 # composite indexes
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys)
+
+
+def _read_nodes(csv_filepath, property_map):
+    """
+    Instead of recreating the entire RelationShip set in memory this function yields
+    one relationship at a time.
+
+    :param csv_filepath: Path to the CSV file.
+    :param property_map: Property map to rename properties.
+    :return: One node property dict per iteration.
+    """
+
+    if csv_filepath.endswith('.gz'):
+        csvfile = gzip.open(csv_filepath, 'rt')
+    else:
+        csvfile = open(csv_filepath, newline='')
+    lines = csvfile.readlines()
+    csvfile.close()
+
+    # get header line
+    header = lines[0].strip().split(',')
+    header = [x.replace('"', '') for x in header]
+
+    log.debug(f"Header: {header}")
+
+    if property_map:
+        log.debug(f"Replace header {header}")
+        header = [property_map[x] if x in property_map else x for x in header]
+        log.debug(f"With header {header}")
+
+    nodes = []
+    rdr = csv.DictReader(lines[1:], fieldnames=header)
+    for node in rdr:
+        nodes.append(node)
+
+    return nodes
 
 
 def _yield_node(csv_filepath, property_map):
