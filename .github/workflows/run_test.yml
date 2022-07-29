@@ -71,6 +71,6 @@ jobs:
     - name: Test with pytest
       run: coverage run --source=graphio -m pytest;
     - name: "Upload coverage to Codecov"
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v3
       with:
         fail_ci_if_error: true
