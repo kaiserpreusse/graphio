@@ -135,7 +135,7 @@ class TestDefaultProps:
         rs.add_relationship({'uid': 2}, {'name': 'tim'}, {'some': 'value'})
 
         for n in rs.relationships:
-            assert n[1]['user'] == 'foo'
+            assert n[2]['user'] == 'foo'
 
     def test_default_props_overwrite_from_node(self):
         rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'], default_props={'user': 'foo'})
@@ -143,7 +143,7 @@ class TestDefaultProps:
         rs.add_relationship({'uid': 2}, {'name': 'tim'}, {'some': 'value', 'user': 'bar'})
 
         for r in rs.relationships:
-            assert r[1]['user'] == 'bar'
+            assert r[2]['user'] == 'bar'
 
 
 class TestRelationshipSetCreate:
