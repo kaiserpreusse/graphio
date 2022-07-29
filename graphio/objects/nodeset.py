@@ -1,6 +1,5 @@
 import logging
 from uuid import uuid4
-from py2neo.bulk import create_nodes, merge_nodes
 import os
 import json
 import csv
@@ -9,9 +8,8 @@ from collections import defaultdict
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
-from graphio.queries import nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
+from graphio.queries import nodes_create_unwind, nodes_merge_unwind, nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
     nodes_merge_unwind_preserve_array_props
-
 log = logging.getLogger(__name__)
 
 # dict with python types to casting functions in Cypher
@@ -332,8 +330,10 @@ class NodeSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
+        q = nodes_create_unwind(self.labels)
+
         for batch in chunks(self.nodes, size=batch_size):
-            create_nodes(graph, batch, labels=self.labels)
+            graph.run(q, props=list(batch))
 
     def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None):
         """
@@ -360,8 +360,9 @@ class NodeSet:
 
         # use py2neo base functions if no properties are preserved
         if not self.preserve and not self.append_props:
+            q = nodes_merge_unwind(self.labels, self.merge_keys)
             for batch in chunks(self.node_properties(), size=batch_size):
-                merge_nodes(graph, batch, (tuple(self.labels), *merge_properties))
+                graph.run(q, props=list(batch))
 
         elif self.preserve and not self.append_props:
             q = nodes_merge_unwind_preserve(self.labels, self.merge_keys, property_parameter='props')
