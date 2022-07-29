@@ -140,13 +140,10 @@ class RelationshipSet:
         :return:
         """
         start_node_property_types = {}
-        for i, p in enumerate(self.fixed_order_start_node_properties):
+        for p in self.start_node_properties:
             this_type = None
             for rel in self.relationships[:100]:
-                if isinstance(rel[0], tuple):
-                    value = rel[0][i]
-                else:
-                    value = rel[0]
+                value = rel[0][p]
                 type_of_value = type(value)
                 if not this_type:
                     this_type = type_of_value
@@ -157,14 +154,11 @@ class RelationshipSet:
             start_node_property_types[p] = this_type
 
         end_node_property_types = {}
-        for i, p in enumerate(self.fixed_order_end_node_properties):
+        for p in self.end_node_properties:
             this_type = None
             for rel in self.relationships[:100]:
 
-                if isinstance(rel[2], tuple):
-                    value = rel[2][i]
-                else:
-                    value = rel[2]
+                value = rel[1][p]
 
                 type_of_value = type(value)
                 if not this_type:
@@ -181,7 +175,7 @@ class RelationshipSet:
             this_type = None
             for rel in self.relationships[:100]:
                 try:
-                    value = rel[1][p]
+                    value = rel[2][p]
                     type_of_value = type(value)
                 except KeyError:
                     type_of_value = None
