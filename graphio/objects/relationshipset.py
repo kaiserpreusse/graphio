@@ -565,13 +565,9 @@ def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_
 
     for row in rdr:
 
-        start_node_data = tuple(row[start_key_to_header[x]] for x in start_node_properties)
-        if len(start_node_data) == 1:
-            start_node_data = start_node_data[0]
+        start_node_data = dict(zip(start_node_properties, [row[start_key_to_header[x]] for x in start_node_properties]))
 
-        end_node_data = tuple(row[end_key_to_header[x]] for x in end_node_properties)
-        if len(end_node_data) == 1:
-            end_node_data = end_node_data[0]
+        end_node_data = dict(zip(end_node_properties, [row[end_key_to_header[x]] for x in end_node_properties]))
 
         # get properties
         properties = {}
@@ -579,8 +575,7 @@ def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_
             if k.startswith('rel_'):
                 k = k.replace('rel_', '')
                 properties[k] = v
-
-        yield (start_node_data, properties, end_node_data)
+        yield (start_node_data, end_node_data, properties)
 
     csvfile.close()
 
