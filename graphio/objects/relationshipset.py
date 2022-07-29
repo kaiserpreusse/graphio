@@ -3,12 +3,12 @@ import logging
 import json
 import os
 import csv
-from py2neo.bulk import create_relationships, merge_relationships
 from typing import Set, List
 import gzip
 
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index
+from graphio.queries import rels_create_unwind, rels_merge_unwind, rels_params_from_objects
 
 log = logging.getLogger(__name__)
 
@@ -492,13 +492,10 @@ class RelationshipSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
+        q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties, self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
-
-            create_relationships(graph.auto(),
-                                 batch,
-                                 self.rel_type,
-                                 start_node_key=(tuple(self.start_node_labels), *self.fixed_order_start_node_properties),
-                                 end_node_key=(tuple(self.end_node_labels), *self.fixed_order_end_node_properties))
+            query_parameters = rels_params_from_objects(batch)
+            graph.run(q, **query_parameters)
 
 
     def merge(self, graph, batch_size=None):
@@ -511,14 +508,11 @@ class RelationshipSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
+        q = rels_merge_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
+                               self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
-
-            merge_relationships(graph.auto(),
-                                batch,
-                                self.rel_type,
-                                start_node_key=(tuple(self.start_node_labels), *self.fixed_order_start_node_properties),
-                                end_node_key=(tuple(self.end_node_labels), *self.fixed_order_end_node_properties)
-                                )
+            query_parameters = rels_params_from_objects(batch)
+            graph.run(q, **query_parameters)
 
 
     def create_index(self, graph):
