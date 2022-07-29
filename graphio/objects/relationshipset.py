@@ -92,21 +92,6 @@ class RelationshipSet:
     def __str__(self):
         return f"<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>"
 
-    def __relationship_from_dictionary(self, start_node_properties, end_node_properties, properties):
-        """
-        Transform the input dictionary into the relationship data type used for py2neo.
-
-        :return: Relationship data.
-        """
-        start_node_data = tuple(start_node_properties[x] for x in self.fixed_order_start_node_properties)
-        if len(start_node_data) == 1:
-            start_node_data = start_node_data[0]
-        end_node_data = tuple(end_node_properties[x] for x in self.fixed_order_end_node_properties)
-        if len(end_node_data) == 1:
-            end_node_data = end_node_data[0]
-
-        return (start_node_data, properties, end_node_data)
-
     def add_relationship(self, start_node_properties: dict, end_node_properties: dict, properties: dict = None):
         """
         Add a relationship to this RelationshipSet.
@@ -126,10 +111,10 @@ class RelationshipSet:
                 list(start_node_properties.values()) + list(end_node_properties.values()) + list(rel_props.values()))
 
             if check_set not in self.unique_rels:
-                self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, rel_props))
+                self.relationships.append((start_node_properties, end_node_properties, rel_props))
                 self.unique_rels.add(check_set)
         else:
-            self.relationships.append(self.__relationship_from_dictionary(start_node_properties, end_node_properties, rel_props))
+            self.relationships.append((start_node_properties, end_node_properties, rel_props))
 
     def all_property_keys(self) -> Set[str]:
         """
