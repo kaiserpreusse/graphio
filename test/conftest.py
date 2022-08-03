@@ -5,6 +5,7 @@ import shutil
 from py2neo import Graph
 from py2neo.wiring import WireError
 from py2neo.client import ConnectionUnavailable
+from neo4j import GraphDatabase, Driver
 
 from time import sleep
 
@@ -37,11 +38,16 @@ elif RUN_ENVIRONMENT == 'apple_silicon':
 
 else:
     NEO4J_VERSIONS = [
-        {'host': 'localhost', 'version': '3.5', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt'},
-        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt'},
-        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt'},
-        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt'},
-        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt'}
+        {'host': 'localhost', 'version': '3.5', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '3.5', 'ports': (8474, 8473, 8687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'neodriver'}
     ]
 
 
@@ -82,33 +88,42 @@ def wait_for_neo4j():
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request, wait_for_neo4j):
-    yield Graph(host=request.param['host'], password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt',
-                secure=False)
+    if request.param['lib'] == 'py2neo':
+        yield Graph(host=request.param['host'], password=NEO4J_PASSWORD, port=request.param['ports'][2], scheme='bolt',
+                    secure=False)
+    elif request.param['lib'] == 'neodriver':
+        uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
+        yield GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
 
 
 @pytest.fixture
 def clear_graph(graph):
-    graph.run("MATCH (n) DETACH DELETE n")
+    if isinstance(graph, Graph):
+        graph.run("MATCH (n) DETACH DELETE n")
 
-    # remove indexes
-    result = list(
-        graph.run("CALL db.indexes()")
-    )
+        # remove indexes
+        result = list(
+            graph.run("CALL db.indexes()")
+        )
 
-    for row in result:
-        # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
-        # this should also be synced with differences in py2neo versions
-        labels = []
-        if 'tokenNames' in row:
-            labels = row['tokenNames']
-        elif 'labelsOrTypes' in row:
-            labels = row['labelsOrTypes']
+        for row in result:
+            # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
+            # this should also be synced with differences in py2neo versions
+            labels = []
+            if 'tokenNames' in row:
+                labels = row['tokenNames']
+            elif 'labelsOrTypes' in row:
+                labels = row['labelsOrTypes']
 
-        properties = row['properties']
+            properties = row['properties']
 
-        # multiple labels possible?
-        for label in labels:
-            q = "DROP INDEX ON :{}({})".format(label, ', '.join(properties))
+            # multiple labels possible?
+            for label in labels:
+                q = "DROP INDEX ON :{}({})".format(label, ', '.join(properties))
+
+    elif isinstance(graph, Driver):
+        with graph.session() as s:
+            s.run("MATCH (n) DETACH DELETE n")
 
 
 @pytest.fixture
