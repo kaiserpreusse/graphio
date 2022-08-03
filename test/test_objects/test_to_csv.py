@@ -11,7 +11,7 @@ import pytest
 
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet
-
+from graphio.graph import run_query_return_results
 
 @pytest.fixture
 def root_dir():
@@ -125,9 +125,9 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
         # needed to run the tests without too many changes locally and in GitHub Actions
         copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
 
-        graph.run(query)
+        run_query_return_results(graph, query)
 
-        result = graph.run("MATCH (t:Test) RETURN t").data()
+        result = run_query_return_results(graph, "MATCH (t:Test) RETURN t")
         assert len(result) == len(ns.nodes)
         for row in result:
             print(row)
@@ -159,11 +159,11 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
         query = ns.merge_csv_query()
 
         # run a few times to test that no additional nodes are created
-        graph.run(query)
-        graph.run(query)
-        graph.run(query)
+        run_query_return_results(graph, query)
+        run_query_return_results(graph, query)
+        run_query_return_results(graph, query)
 
-        result = graph.run("MATCH (t:Test) RETURN t").data()
+        result = run_query_return_results(graph, "MATCH (t:Test) RETURN t")
         assert len(result) == len(ns.nodes)
         for row in result:
             for k in ns.all_properties_in_nodeset():
@@ -265,9 +265,9 @@ SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel
 
         query = rs.csv_query('CREATE')
 
-        graph.run(query)
+        run_query_return_results(graph, query)
 
-        result = graph.run("MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r").data()
+        result = run_query_return_results(graph, "MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r")
         assert len(result) == len(rs.relationships)
 
     def test_relationshipset_csv_merge(self, graph, clear_graph, neo4j_import_dir):
@@ -310,9 +310,9 @@ SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel
         query = rs.csv_query('MERGE')
 
         # run query a few times to check for duplications
-        graph.run(query)
-        graph.run(query)
-        graph.run(query)
+        run_query_return_results(graph, query)
+        run_query_return_results(graph, query)
+        run_query_return_results(graph, query)
 
-        result = graph.run("MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r").data()
+        result = run_query_return_results(graph, "MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r")
         assert len(result) == len(rs.relationships)
