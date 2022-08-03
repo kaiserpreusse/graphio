@@ -1,7 +1,5 @@
 from collections import namedtuple
 import logging
-from py2neo import Graph, Node, Relationship
-from py2neo.matching import *
 from typing import Type, Union, List, Optional
 from dataclasses import dataclass
 
@@ -113,8 +111,6 @@ class ModelNode(metaclass=MetaNode):
         for k, v in kwargs.items():
             self.properties[k] = v
 
-        self._node = Node(*self.__class__.__labels__, **self.merge_props, **self.additional_props)
-
     @classmethod
     def dataset(cls) -> NodeSet:
         """
@@ -175,72 +171,6 @@ class ModelNode(metaclass=MetaNode):
                 additional_props[k] = v
         return additional_props
 
-    def exists(self, graph: Graph) -> Union[bool, Node]:
-        """
-        Check if node exists in the graph. If yes: return the Node. If no: return false.
-
-        Raise a TypeError if there is more than one Node found with these properties. Node definition
-        only makes sense if working with unique nodes.
-
-        :param graph: py2neo.Graph instance
-        :return: The node or False.
-        """
-        matcher = NodeMatcher(graph)
-        node = matcher.match(*self.__class__.__labels__, **self.merge_props)
-
-        if len(node) > 1:
-            raise TypeError(
-                f"Found more than 1 node with properties, not sure what to do: {self.__class__.__labels__}, {self.merge_props}")
-
-        if node:
-            return list(node)[0]
-        else:
-            return False
-
-    def bind(self, graph):
-        """
-        Make sure the node is bound to the graph.
-
-        :param graph: py2neo.Graph
-        """
-        node_or_false = self.exists(graph)
-        if node_or_false:
-            self._node = node_or_false
-
-    def merge(self, graph: Graph) -> None:
-        """
-        :code:`MERGE` the node in the graph.
-
-        :param graph: A py2neo.Graph instance. 
-        """
-        if not self.exists(graph):
-            graph.create(self._node)
-
-    def link(self, graph: Graph, reltype: Union[Type['ModelRelationship'], str],
-             target: Union['ModelNode', NodeDescriptor], **properties) -> None:
-        """
-        Link the node to another node.
-
-        Input is either a combination of a :class:`~graphio.ModelRelationship` and :class:`~graphio.ModelNode` or a
-        combination of a string for the reltype and a :class:`~graphio.NodeDescriptor` instance to describe the target node.
-
-        :param graph: py2neo.Graph instance.
-        :param reltype: Either a :class:`~graphio.ModelRelationship` instance or a string for the relationship type.
-        :param target: Either a :class:`~graphio.ModelNode` instance or a :class:`~graphio.NodeDescriptor` instance.
-        :param properties: Proeprties for the relationships.
-        """
-        # get ModelNode if NodeDescriptor is passed
-        if isinstance(target, NodeDescriptor):
-            target = target.get_modelnode()
-
-        # create reltype if string is passed
-        if isinstance(reltype, str):
-            reltype = type('LocalRelType', (ModelRelationship,),
-                           {'source': self.__class__, 'target': target.__class__, 'type': reltype})
-
-        rel = reltype(self, target, **properties)
-        rel.merge(graph)
-
 
 class ModelRelationship:
     """
@@ -272,37 +202,6 @@ class ModelRelationship:
         for k, v in kwargs.items():
             self.properties[k] = v
 
-        self._relationship = Relationship(self.source_node._node, self.type, self.target_node._node, **self.properties)
-
-    def exists(self, graph: Graph) -> bool:
-        """
-        Check if the relationship exists.
-
-        :param graph: A py2neo.Graph instance.
-        :return: True/False
-        """
-        # return False if either start or end node do not exist
-        if not self.source_node.exists(graph) or not self.target_node.exists(graph):
-            return False
-        else:
-            self.source_node.bind(graph)
-            self.target_node.bind(graph)
-
-            relmatcher = RelationshipMatcher(graph).match(nodes=(self.source_node._node, self.target_node._node),
-                                                          r_type=self.type)
-            if len(relmatcher) > 0:
-                return True
-            else:
-                return False
-
-    def merge(self, graph: Graph):
-        """
-        :code:`MERGE` the relationship in the graph.
-
-        :param graph: A py2neo.Graph instance.
-        """
-        if not self.exists(graph):
-            graph.create(self._relationship)
 
     @classmethod
     def dataset(cls) -> RelationshipSet:
