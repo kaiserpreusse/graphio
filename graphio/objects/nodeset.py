@@ -10,6 +10,8 @@ from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind, nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
     nodes_merge_unwind_preserve_array_props
+from graphio.graph import run_query_return_results
+
 log = logging.getLogger(__name__)
 
 # dict with python types to casting functions in Cypher
@@ -325,7 +327,7 @@ class NodeSet:
         with open(path, 'wt') as f:
             json.dump(self.to_dict(), f, indent=4)
 
-    def create(self, graph, batch_size=None):
+    def create(self, graph, database:str = None, batch_size=None):
         """
         Create all nodes from NodeSet.
         """
@@ -337,9 +339,9 @@ class NodeSet:
         q = nodes_create_unwind(self.labels)
 
         for batch in chunks(self.nodes, size=batch_size):
-            graph.run(q, props=list(batch))
+            run_query_return_results(graph, q, database=database, props=list(batch))
 
-    def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None):
+    def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None, database=None):
         """
         Merge nodes from NodeSet on merge properties.
 
@@ -366,26 +368,25 @@ class NodeSet:
         if not self.preserve and not self.append_props:
             q = nodes_merge_unwind(self.labels, self.merge_keys)
             for batch in chunks(self.node_properties(), size=batch_size):
-                graph.run(q, props=list(batch))
+                run_query_return_results(graph, q, database=database, props=list(batch))
 
         elif self.preserve and not self.append_props:
             q = nodes_merge_unwind_preserve(self.labels, self.merge_keys, property_parameter='props')
             for batch in chunks(self.node_properties(), size=batch_size):
-                graph.run(q, props=list(batch), preserve=self.preserve)
+                run_query_return_results(graph, q, database=database, props=list(batch), preserve=self.preserve)
 
         elif not self.preserve and self.append_props:
             q = nodes_merge_unwind_array_props(self.labels, self.merge_keys, self.append_props,
                                                property_parameter='props')
             for batch in chunks(self.node_properties(), size=batch_size):
-                graph.run(q, props=list(batch), append_props=self.append_props)
+                run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props)
 
         elif self.preserve and self.append_props:
 
             q = nodes_merge_unwind_preserve_array_props(self.labels, self.merge_keys, self.append_props, self.preserve,
                                                         property_parameter='props')
-            print(q)
             for batch in chunks(self.node_properties(), size=batch_size):
-                graph.run(q, props=list(batch), append_props=self.append_props, preserve=self.preserve)
+                run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props, preserve=self.preserve)
 
     def node_properties(self):
         """
@@ -439,7 +440,7 @@ class NodeSet:
 
         return property_types
 
-    def create_index(self, graph):
+    def create_index(self, graph, database=None):
         """
         Create indices for all label/merge ky combinations as well as a composite index if multiple merge keys exist.
 
@@ -452,11 +453,11 @@ class NodeSet:
             for label in self.labels:
                 # create individual indexes
                 for prop in self.merge_keys:
-                    create_single_index(graph, label, prop)
+                    create_single_index(graph, label, prop, database)
 
                 # composite indexes
                 if len(self.merge_keys) > 1:
-                    create_composite_index(graph, label, self.merge_keys)
+                    create_composite_index(graph, label, self.merge_keys, database)
 
 
 def _read_nodes(csv_filepath, property_map):

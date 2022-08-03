@@ -4,6 +4,7 @@ import json
 from hypothesis import given, strategies as st
 
 from graphio.objects.nodeset import NodeSet
+from graphio.graph import run_query_return_results
 
 
 @pytest.fixture(scope="session")
@@ -151,34 +152,22 @@ class TestNodeSetCreate:
     def test_nodeset_create_number(self, small_nodeset, graph, clear_graph):
         small_nodeset.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
-            )
-        )
-        print(result)
+        result = run_query_return_results(graph, "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
+
         assert result[0][0] == 100
 
     def test_nodeset_create_twice_number(self, small_nodeset, graph, clear_graph):
         small_nodeset.create(graph)
         small_nodeset.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels))
-            )
-        )
+        result = run_query_return_results(graph, "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
         print(result)
         assert result[0][0] == 200
 
     def test_nodeset_create_properties(self, small_nodeset, graph, clear_graph):
         small_nodeset.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (n:{}) RETURN n".format(':'.join(small_nodeset.labels))
-            )
-        )
+        result = run_query_return_results(graph, "MATCH (n:{}) RETURN n".format(':'.join(small_nodeset.labels)))
 
         for row in result:
             node = row[0]
@@ -187,11 +176,7 @@ class TestNodeSetCreate:
     def test_create_nodeset_multiple_labels(self, nodeset_multiple_labels, graph, clear_graph):
         nodeset_multiple_labels.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.labels))
-            )
-        )
+        result = run_query_return_results(graph, "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.labels)))
 
         assert result[0][0] == 100
 
@@ -205,9 +190,7 @@ class TestNodeSetIndex:
 
         ns.create_index(graph)
 
-        result = list(
-            graph.run("CALL db.indexes()")
-        )
+        result = run_query_return_results(graph, "CALL db.indexes()")
 
         for row in result:
             # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
@@ -227,9 +210,7 @@ class TestNodeSetIndex:
 
         ns.create_index(graph)
 
-        result = list(
-            graph.run("CALL db.indexes()")
-        )
+        result = run_query_return_results(graph, "CALL db.indexes()")
 
         for row in result:
             # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
@@ -274,8 +255,8 @@ class TestNodeSetMerge:
 
         do_not_overwrite_ns.merge(graph)
 
-        assert list(graph.run("MATCH (n:Test) where n.key = 'value' RETURN count(n)"))[0][0] == 100
-        assert list(graph.run("MATCH (n:Test) where n.key = 'other_value' RETURN count(n)"))[0][0] == 0
+        assert run_query_return_results(graph, "MATCH (n:Test) where n.key = 'value' RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) where n.key = 'other_value' RETURN count(n)")[0][0] == 0
 
     def test_nodeset_merge_append_props(self, graph, clear_graph):
         """
@@ -292,7 +273,7 @@ class TestNodeSetMerge:
             append_ns.add_node({'uuid': i, 'key': 'other_value'})
 
         append_ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)"))[0][
+        assert run_query_return_results(graph, "MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)")[0][
                    0] == 100
 
     def test_nodeset_merge_preserve_and_append_props(self, graph, clear_graph):
@@ -304,8 +285,8 @@ class TestNodeSetMerge:
             ns.add_node({'uuid': i, 'key': 'value', 'other_key': 'bar'})
 
         ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) where 'value' IN n.key RETURN count(n)"))[0][0] == 100
-        assert list(graph.run("MATCH (n:Test) where n.other_key = 'bar' RETURN count(n)"))[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) where 'value' IN n.key RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) where n.other_key = 'bar' RETURN count(n)")[0][0] == 100
 
         append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['other_key'])
         for i in range(100):
@@ -313,10 +294,10 @@ class TestNodeSetMerge:
 
         append_ns.merge(graph)
 
-        assert list(graph.run("MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)"))[0][
+        assert run_query_return_results(graph, "MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)")[0][
                    0] == 100
-        assert list(graph.run("MATCH (n:Test) where n.other_key = 'bar' RETURN count(n)"))[0][0] == 100
-        assert list(graph.run("MATCH (n:Test) where n.other_key = 'foo' RETURN count(n)"))[0][0] == 0
+        assert run_query_return_results(graph, "MATCH (n:Test) where n.other_key = 'bar' RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) where n.other_key = 'foo' RETURN count(n)")[0][0] == 0
 
     def test_nodeset_merge_preserve_keeps_append_props(self, graph, clear_graph):
         """
@@ -327,7 +308,7 @@ class TestNodeSetMerge:
             ns.add_node({'uuid': i, 'key': 'value'})
 
         ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) where 'value' IN n.key RETURN count(n)"))[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) where 'value' IN n.key RETURN count(n)")[0][0] == 100
 
         append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['key'])
         for i in range(100):
@@ -335,8 +316,8 @@ class TestNodeSetMerge:
 
         append_ns.merge(graph)
 
-        assert list(graph.run("MATCH (n:Test) where 'value' IN n.key RETURN count(n)"))[0][0] == 100
-        assert list(graph.run("MATCH (n:Test) where 'other_value' IN n.key RETURN count(n)"))[0][0] == 0
+        assert run_query_return_results(graph, "MATCH (n:Test) where 'value' IN n.key RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) where 'other_value' IN n.key RETURN count(n)")[0][0] == 0
 
     def test_nodeset_merge_number(self, small_nodeset, graph, clear_graph):
         """
@@ -346,9 +327,7 @@ class TestNodeSetMerge:
         small_nodeset.merge(graph)
         small_nodeset.merge(graph)
 
-        result = list(
-            graph.run("MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
-        )
+        result = run_query_return_results(graph, "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
 
         print(result)
         assert result[0][0] == 100
@@ -408,7 +387,7 @@ class TestNodeSetCSVandJSON:
         assert ns.merge_keys == ['test_id']
 
         ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
 
     def test_read_from_files_load_items_to_memory(self, root_dir, clear_graph, graph):
 
@@ -425,4 +404,4 @@ class TestNodeSetCSVandJSON:
         assert ns.merge_keys == ['test_id']
 
         ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
