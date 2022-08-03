@@ -1,5 +1,5 @@
 from graphio.helper import create_single_index, create_composite_index
-
+from graphio.graph import run_query_return_results
 
 def test_create_single_index(graph, clear_graph):
     test_label = 'Foo'
@@ -7,9 +7,7 @@ def test_create_single_index(graph, clear_graph):
 
     create_single_index(graph, test_label, test_prop)
 
-    result = list(
-        graph.run("CALL db.indexes()")
-    )
+    result = run_query_return_results(graph, "CALL db.indexes()")
     row = result[0]
 
     # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
@@ -29,9 +27,7 @@ def test_create_composite_index(graph, clear_graph):
 
     create_composite_index(graph, test_label, test_properties)
 
-    result = list(
-        graph.run("CALL db.indexes()")
-    )
+    result = run_query_return_results(graph, "CALL db.indexes()")
 
     row = result[0]
 
