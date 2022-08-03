@@ -15,12 +15,6 @@ jobs:
       RUN_ENVIRONMENT: 'github_actions'
 
     services:
-      neo4j35:
-        image: neo4j:3.5
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
       neo4j41:
         image: neo4j:4.1
         env:
