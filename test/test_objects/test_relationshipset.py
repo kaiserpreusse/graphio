@@ -6,6 +6,7 @@ import json
 import pytest
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
+from graphio.graph import run_query_return_results
 
 
 @pytest.fixture
@@ -157,22 +158,16 @@ class TestRelationshipSetCreate:
 
         rs.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
-            )
-        )
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
         assert result[0][0] == 100
 
     def test_relationshipset_create_number(self, graph, create_nodes_test, small_relationshipset):
 
         small_relationshipset.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
-            )
-        )
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
         assert result[0][0] == 100
 
     def test_relationshipset_create_mulitple_node_props(self, graph, create_nodes_test):
@@ -186,13 +181,8 @@ class TestRelationshipSetCreate:
 
         rs.create(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (:Test)-[r:TEST]->(:Bar) RETURN count(r)"
-            )
-        )
-        print(result)
-        print(result[0])
+        result = run_query_return_results(graph, "MATCH (:Test)-[r:TEST]->(:Bar) RETURN count(r)")
+
         assert result[0][0] == 100
 
 
@@ -201,9 +191,7 @@ class TestRelationshipSetIndex:
 
         small_relationshipset.create_index(graph)
 
-        result = list(
-            graph.run("CALL db.indexes()")
-        )
+        result = run_query_return_results(graph, "CALL db.indexes()")
 
         for row in result:
             # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
@@ -222,25 +210,15 @@ class TestRelationshipSetMerge:
     def test_relationshipset_merge_number(self, graph, create_nodes_test, small_relationshipset):
         small_relationshipset.merge(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
-            )
-        )
-        print(result)
-        print(result[0])
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
         assert result[0][0] == 100
 
         # merge again to check that number stays the same
         small_relationshipset.merge(graph)
 
-        result = list(
-            graph.run(
-                "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)"
-            )
-        )
-        print(result)
-        print(result[0])
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
         assert result[0][0] == 100
 
 
@@ -297,7 +275,7 @@ class TestRelationshipSetCSVandJSON:
 
         ns = NodeSet.from_csv_json_set(nodes_csv_file_path, nodes_json_file_path)
         ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
 
         # create relset and load relationships
         json_file_path = os.path.join(files_path, 'rels_csv_json.json')
@@ -316,7 +294,7 @@ class TestRelationshipSetCSVandJSON:
 
         rs.merge(graph)
 
-        assert list(graph.run("MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)"))[0][0] == 1
+        assert run_query_return_results(graph, "MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)")[0][0] == 1
 
     def test_read_from_files_load_items_to_memory(self, root_dir, clear_graph, graph):
 
@@ -328,7 +306,7 @@ class TestRelationshipSetCSVandJSON:
 
         ns = NodeSet.from_csv_json_set(nodes_csv_file_path, nodes_json_file_path, load_items=True)
         ns.merge(graph)
-        assert list(graph.run("MATCH (n:Test) RETURN count(n)"))[0][0] == 2
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
 
         # create relset and load relationships
         json_file_path = os.path.join(files_path, 'rels_csv_json.json')
@@ -347,4 +325,4 @@ class TestRelationshipSetCSVandJSON:
 
         rs.merge(graph)
 
-        assert list(graph.run("MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)"))[0][0] == 1
+        assert run_query_return_results(graph, "MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)")[0][0] == 1

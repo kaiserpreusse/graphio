@@ -9,6 +9,8 @@ import gzip
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio.queries import rels_create_unwind, rels_merge_unwind, rels_params_from_objects
+from graphio.graph import run_query_return_results
+
 
 log = logging.getLogger(__name__)
 
@@ -456,7 +458,7 @@ class RelationshipSet:
         with open(path, 'wt') as f:
             json.dump(self.to_dict(), f, indent=4)
 
-    def create(self, graph, batch_size=None):
+    def create(self, graph, database=None, batch_size=None):
         """
         Create relationships in this RelationshipSet
 
@@ -472,10 +474,10 @@ class RelationshipSet:
         q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties, self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
-            graph.run(q, **query_parameters)
+            run_query_return_results(graph, q, database=database, **query_parameters)
 
 
-    def merge(self, graph, batch_size=None):
+    def merge(self, graph, database=None, batch_size=None):
         """
         Create relationships in this RelationshipSet
         """
@@ -489,7 +491,7 @@ class RelationshipSet:
                                self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
-            graph.run(q, **query_parameters)
+            run_query_return_results(graph, q, database=database, **query_parameters)
 
 
     def create_index(self, graph):
