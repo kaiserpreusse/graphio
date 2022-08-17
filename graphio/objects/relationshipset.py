@@ -494,7 +494,7 @@ class RelationshipSet:
             run_query_return_results(graph, q, database=database, **query_parameters)
 
 
-    def create_index(self, graph):
+    def create_index(self, graph, database=None):
         """
         Create indices for start node and end node definition of this relationshipset. If more than one start or end
         node property is defined, all single property indices as well as the composite index are created.
@@ -509,19 +509,19 @@ class RelationshipSet:
         for label in self.start_node_labels:
             # create individual indexes
             for prop in self.start_node_properties:
-                create_single_index(graph, label, prop)
+                create_single_index(graph, label, prop, database=database)
 
             # composite indexes
             if len(self.start_node_properties) > 1:
-                create_composite_index(graph, label, self.start_node_properties)
+                create_composite_index(graph, label, self.start_node_properties, database=database)
 
         for label in self.end_node_labels:
             for prop in self.end_node_properties:
-                create_single_index(graph, label, prop)
+                create_single_index(graph, label, prop, database=database)
 
             # composite indexes
             if len(self.end_node_properties) > 1:
-                create_composite_index(graph, label, self.end_node_properties)
+                create_composite_index(graph, label, self.end_node_properties, database=database)
 
 
 def _read_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header, property_map):
