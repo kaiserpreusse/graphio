@@ -50,17 +50,11 @@ class RelationshipSet:
         """
 
         :param rel_type: Realtionship type.
-        :type rel_type: str
         :param start_node_labels: Labels of the start node.
-        :type start_node_labels: list[str]
         :param end_node_labels: Labels of the end node.
-        :type end_node_labels: list[str]
         :param start_node_properties: Property keys to identify the start node.
-        :type start_node_properties: list[str]
         :param end_node_properties: Properties to identify the end node.
-        :type end_node_properties: list[str]
         :param batch_size: Batch size for Neo4j operations.
-        :type batch_size: int
         """
 
         self.rel_type = rel_type
@@ -77,8 +71,8 @@ class RelationshipSet:
         self.combined = '{0}_{1}_{2}_{3}_{4}'.format(self.rel_type,
                                                      '_'.join(sorted(self.start_node_labels)),
                                                      '_'.join(sorted(self.end_node_labels)),
-                                                     '_'.join(sorted(self.start_node_properties)),
-                                                     '_'.join(sorted(self.end_node_properties))
+                                                     '_'.join(sorted([str(x) for x in self.start_node_properties])),
+                                                     '_'.join(sorted([str(x) for x in self.end_node_properties]))
                                                      )
 
         if batch_size:
@@ -472,6 +466,7 @@ class RelationshipSet:
 
         # iterate over chunks of rels
         q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties, self.end_node_properties, self.rel_type)
+        print(q)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, **query_parameters)
@@ -489,6 +484,7 @@ class RelationshipSet:
         # iterate over chunks of rels
         q = rels_merge_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
                                self.end_node_properties, self.rel_type)
+        print(q)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, **query_parameters)

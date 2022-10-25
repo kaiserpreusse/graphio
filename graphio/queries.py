@@ -1,5 +1,5 @@
 from typing import List
-
+from graphio.objects.properties import ArrayProperty
 
 class CypherQuery:
 
@@ -287,9 +287,15 @@ def rels_create_unwind(start_node_labels, end_node_labels, start_node_properties
     # collect WHERE clauses
     where_clauses = []
     for property in start_node_properties:
-        where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.start_{property} IN a.{property}')
+        else:
+            where_clauses.append('a.{0} = rel.start_{0}'.format(property))
     for property in end_node_properties:
-        where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.end_{property} IN b.{property}')
+        else:
+            where_clauses.append('b.{0} = rel.end_{0}'.format(property))
 
     q.append("WHERE " + ' AND '.join(where_clauses))
 
@@ -336,9 +342,15 @@ def rels_merge_unwind(start_node_labels, end_node_labels, start_node_properties,
     # collect WHERE clauses
     where_clauses = []
     for property in start_node_properties:
-        where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.start_{property} IN a.{property}')
+        else:
+            where_clauses.append('a.{0} = rel.start_{0}'.format(property))
     for property in end_node_properties:
-        where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.end_{property} IN b.{property}')
+        else:
+            where_clauses.append('b.{0} = rel.end_{0}'.format(property))
 
     q.append("WHERE " + ' AND '.join(where_clauses))
 

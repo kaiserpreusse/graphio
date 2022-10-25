@@ -6,6 +6,7 @@ import json
 import pytest
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
+from graphio.objects.properties import ArrayProperty
 from graphio.graph import run_query_return_results
 
 
@@ -52,9 +53,9 @@ def create_nodes_test(graph, clear_graph):
     ns3 = NodeSet(['Bar'], merge_keys=['uuid', 'key'])
 
     for i in range(100):
-        ns1.add_node({'uuid': i})
-        ns2.add_node({'uuid': i})
-        ns3.add_node({'uuid': i, 'key': i})
+        ns1.add_node({'uuid': i, 'array_key': [i, 9999, 99999]})
+        ns2.add_node({'uuid': i, 'array_key': [i, 7777, 77777]})
+        ns3.add_node({'uuid': i, 'key': i, 'array_key': [i, 6666, 66666]})
 
     ns1.create(graph)
     ns2.create(graph)
@@ -185,6 +186,32 @@ class TestRelationshipSetCreate:
 
         assert result[0][0] == 100
 
+    def test_relationshipset_create_array_props(self, graph, create_nodes_test):
+
+        rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
+
+        for i in range(100):
+            rs.add_relationship({'array_key': i}, {'array_key': i})
+
+        rs.create(graph)
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST_ARRAY]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+    def test_relationshipset_create_string_and_array_props(self, graph, create_nodes_test):
+
+        rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
+
+        for i in range(100):
+            rs.add_relationship({'uuid': i, 'array_key': i}, {'uuid': i, 'array_key': i})
+
+        rs.create(graph)
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST_ARRAY]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
 
 class TestRelationshipSetIndex:
     def test_relationship_create_single_index(self, graph, clear_graph, small_relationshipset):
@@ -221,6 +248,45 @@ class TestRelationshipSetMerge:
 
         assert result[0][0] == 100
 
+    def test_relationshipset_merge_array_props(self, graph, create_nodes_test):
+
+        rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
+
+        for i in range(100):
+            rs.add_relationship({'array_key': i}, {'array_key': i})
+
+        rs.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST_ARRAY]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+        # merge again
+        rs.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST_ARRAY]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+    def test_relationshipset_merge_string_and_array_props(self, graph, create_nodes_test):
+
+        rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
+
+        for i in range(100):
+            rs.add_relationship({'uuid': i, 'array_key': i}, {'uuid': i, 'array_key': i})
+
+        rs.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST_ARRAY]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+        # run again
+        rs.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST_ARRAY]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
 
 class TestRelationshipSetSerialize:
 
