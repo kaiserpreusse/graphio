@@ -266,63 +266,6 @@ class RelationshipSet:
         return csv_file_path
 
     @classmethod
-    def __from_csv_with_header(cls, path):
-        """
-        Untested, deprecated.
-        """
-
-        header = {}
-        # get header
-        with open(path, 'rt') as f:
-            for l in f:
-                if l.startswith('#'):
-                    l = l.replace('#', '').strip()
-                    k, v = l.split(',')
-                    if '|' in v:
-                        v = v.split('|')
-                    else:
-                        v = [v]
-                    header[k] = v
-                else:
-                    break
-        print(header)
-
-        header['type'] = header['type'][0]
-
-        rs = cls(header['type'], header['start_node_labels'], header['end_node_labels'], header['start_node_keys'], header['end_node_keys'])
-
-        start_key_to_header = {}
-        for k in rs.start_node_properties:
-            start_key_to_header[k] = f"start_{k}"
-
-        end_key_to_header = {}
-        for k in rs.end_node_properties:
-            end_key_to_header[k] = f"end_{k}"
-
-        with open(path, newline='') as csvfile:
-
-            rdr = csv.DictReader(row for row in csvfile if not row.startswith('#'))
-
-            for row in rdr:
-                start_dict = {}
-                for k in rs.start_node_properties:
-                    start_dict[k] = row[start_key_to_header[k]]
-                end_dict = {}
-                for k in rs.end_node_properties:
-                    end_dict[k] = row[end_key_to_header[k]]
-                # get properties
-                properties = {}
-                for k, v in row.items():
-                    if k.startswith('rel_'):
-                        k = k.replace('rel_', '')
-                        properties[k] = v
-
-
-                rs.add_relationship(start_dict, end_dict, properties)
-
-        return rs
-
-    @classmethod
     def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False):
         """
         Read the default CSV/JSON file combination.

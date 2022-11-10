@@ -226,39 +226,6 @@ class NodeSet:
 
         return q
 
-    @classmethod
-    def __from_csv_with_header(cls, path):
-        """
-        Untested, deprecated.
-        """
-
-        header = {}
-        # get header
-        log.debug(f"Read file {path} into NodeSet.")
-
-        with open(path, 'rt') as f:
-            log.debug(f)
-            for l in f:
-                if l.startswith('#'):
-                    l = l.replace('#', '').strip()
-                    k, v = l.split(',')
-                    if '|' in v:
-                        v = v.split('|')
-                    else:
-                        v = [v]
-                    header[k] = v
-                else:
-                    break
-
-        nodeset = cls(labels=header['labels'], merge_keys=header['merge_keys'])
-
-        with open(path, newline='') as csvfile:
-
-            rdr = csv.DictReader(row for row in csvfile if not row.startswith('#'))
-            for node in rdr:
-                nodeset.add_node(node)
-
-        return nodeset
 
     @classmethod
     def from_csv_json_set(cls, csv_file_path, json_file_path, load_items:bool = False):
