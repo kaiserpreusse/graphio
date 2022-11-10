@@ -30,25 +30,15 @@ if RUN_ENVIRONMENT == 'github_actions':
 
 else:
     NEO4J_VERSIONS = [
-        # {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        # {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        # {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
         {'host': 'localhost', 'version': '5.1', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        # {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        # {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        # {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
         {'host': 'localhost', 'version': '5.1', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
     ]
-
-
-@pytest.fixture(scope='session')
-def neo4j_import_dir(pytestconfig):
-    directory = os.path.join(pytestconfig.rootdir, 'files_for_test')
-    if not os.path.exists(directory):
-        os.mkdir(directory)
-
-    yield directory
-    shutil.rmtree(directory)
 
 
 @pytest.fixture(scope='session')
