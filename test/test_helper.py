@@ -7,7 +7,7 @@ def test_create_single_index(graph, clear_graph):
 
     create_single_index(graph, test_label, test_prop)
 
-    result = run_query_return_results(graph, "CALL db.indexes()")
+    result = run_query_return_results(graph, "SHOW INDEXES YIELD *")
     row = result[0]
 
     # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
@@ -27,7 +27,7 @@ def test_create_composite_index(graph, clear_graph):
 
     create_composite_index(graph, test_label, test_properties)
 
-    result = run_query_return_results(graph, "CALL db.indexes()")
+    result = run_query_return_results(graph, "SHOW INDEXES YIELD *")
 
     row = result[0]
 

@@ -20,11 +20,9 @@ RUN_ENVIRONMENT = os.getenv('RUN_ENVIRONMENT', None)
 if RUN_ENVIRONMENT == 'github_actions':
 
     NEO4J_VERSIONS = [
-        {'host': 'neo4j41', 'version': '4.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
         {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
         {'host': 'neo4j43', 'version': '4.3', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
         {'host': 'neo4j43', 'version': '4.4', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        {'host': 'neo4j41', 'version': '4.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
         {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
         {'host': 'neo4j43', 'version': '4.3', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
         {'host': 'neo4j43', 'version': '4.4', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'}
@@ -32,14 +30,14 @@ if RUN_ENVIRONMENT == 'github_actions':
 
 else:
     NEO4J_VERSIONS = [
-        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        {'host': 'localhost', 'version': '4.1', 'ports': (9474, 9473, 9687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'neodriver'}
+        # {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        # {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        # {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        {'host': 'localhost', 'version': '5.1', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+        # {'host': 'localhost', 'version': '4.2', 'ports': (10474, 10473, 10687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        # {'host': 'localhost', 'version': '4.3', 'ports': (11474, 11473, 11687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        # {'host': 'localhost', 'version': '4.4', 'ports': (12474, 12473, 12687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '5.1', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
     ]
 
 

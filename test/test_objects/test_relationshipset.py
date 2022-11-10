@@ -218,7 +218,7 @@ class TestRelationshipSetIndex:
 
         small_relationshipset.create_index(graph)
 
-        result = run_query_return_results(graph, "CALL db.indexes()")
+        result = run_query_return_results(graph, "SHOW INDEXES YIELD *")
 
         for row in result:
             # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
