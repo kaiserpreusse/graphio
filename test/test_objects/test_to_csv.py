@@ -1,7 +1,5 @@
 import os
 import tarfile
-
-import docker
 import pytest
 
 from graphio.objects.nodeset import NodeSet
