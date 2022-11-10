@@ -15,12 +15,6 @@ jobs:
       RUN_ENVIRONMENT: 'github_actions'
 
     services:
-      neo4j41:
-        image: neo4j:4.1
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
       neo4j42:
         image: neo4j:4.2
         env:
@@ -39,7 +33,12 @@ jobs:
           NEO4J_AUTH: neo4j/test
           NEO4JLABS_PLUGINS: '["apoc"]'
           NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-
+      neo4j51:
+        image: neo4j:5.1
+        env:
+          NEO4J_AUTH: neo4j/test
+          NEO4J_PLUGINS: '["apoc"]'
+          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
     strategy:
       matrix:
         python-container: ["python:3.7", "python:3.8", "python:3.9", "python:3.10"]
