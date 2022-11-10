@@ -112,28 +112,6 @@ LOAD CSV WITH HEADERS FROM 'file:///nodeset_Test_uuid_peter.csv' AS line
 CREATE (n:Test)
 SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
 
-    # note the workaround to parameterize with fixtures
-    # see https://miguendes.me/how-to-use-fixtures-as-arguments-in-pytestmarkparametrize
-    @pytest.mark.parametrize('ns', NODSET_FIXTURE_NAMES)
-    def test_csv_create(self, graph, clear_graph, neo4j_import_dir, ns, request):
-        ns = request.getfixturevalue(ns)
-
-        path = ns.to_csv(neo4j_import_dir)
-        query = ns.create_csv_query()
-
-        # note: this is a hack to copy files into a running Docker container from Python
-        # needed to run the tests without too many changes locally and in GitHub Actions
-        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
-
-        run_query_return_results(graph, query)
-
-        result = run_query_return_results(graph, "MATCH (t:Test) RETURN t")
-        assert len(result) == len(ns.nodes)
-        for row in result:
-            print(row)
-            for k in ns.all_properties_in_nodeset():
-                assert row['t'][k] is not None
-
     def test_merge_csv_query(self, small_nodeset):
         # override uuid
         small_nodeset.uuid = 'peter'
@@ -143,31 +121,6 @@ SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
 LOAD CSV WITH HEADERS FROM 'file:///nodeset_Test_uuid_peter.csv' AS line
 MERGE (n:Test { uuid: toInteger(line.uuid) })
 SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
-
-    # note the workaround to parameterize with fixtures
-    # see https://miguendes.me/how-to-use-fixtures-as-arguments-in-pytestmarkparametrize
-    @pytest.mark.parametrize('ns', NODSET_FIXTURE_NAMES)
-    def test_csv_merge(self, graph, clear_graph, neo4j_import_dir, ns, request):
-        ns = request.getfixturevalue(ns)
-
-        path = ns.to_csv(neo4j_import_dir)
-
-        # note: this is a hack to copy files into a running Docker container from Python
-        # needed to run the tests without too many changes locally and in GitHub Actions
-        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
-
-        query = ns.merge_csv_query()
-
-        # run a few times to test that no additional nodes are created
-        run_query_return_results(graph, query)
-        run_query_return_results(graph, query)
-        run_query_return_results(graph, query)
-
-        result = run_query_return_results(graph, "MATCH (t:Test) RETURN t")
-        assert len(result) == len(ns.nodes)
-        for row in result:
-            for k in ns.all_properties_in_nodeset():
-                assert row['t'][k] is not None
 
 
 class TestRelationshipSetToCSV:
@@ -225,94 +178,3 @@ MATCH (a:Test:Other), (b:Foo:SomeLabel)
 WHERE a.uuid = toInteger(line.a_uuid) AND a.numerical = toInteger(line.a_numerical) AND b.uuid = toInteger(line.b_uuid) AND b.value = line.b_value 
 CREATE (a)-[r:TEST]->(b) 
 SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel_other_value, r.second_value = toInteger(line.rel_second_value), r.value = line.rel_value"""
-
-    def test_relationshipset_csv_create(self, graph, clear_graph, neo4j_import_dir):
-
-        # create the nodes required here
-        ns1 = NodeSet(['Test', 'Other'], merge_keys=['uuid', 'numerical'])
-        ns2 = NodeSet(['Foo', 'SomeLabel'], merge_keys=['uuid', 'value'])
-
-        for i in range(20):
-            ns1.add_node({'uuid': i, 'numerical': 1})
-            ns2.add_node({'uuid': i, 'value': 'foo'})
-
-        ns1.create_index(graph)
-        ns1.create(graph)
-        ns2.create_index(graph)
-        ns2.create(graph)
-
-        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
-        rs.uuid = 'peter'
-        rs.create_index(graph)
-
-        for i in range(10):
-            rs.add_relationship(
-                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
-            )
-
-        # add a few relationships with different props
-        for i in range(10, 20):
-            rs.add_relationship(
-                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
-                {'second_value': i, 'other_second_value': 'peter'}
-            )
-
-        path = rs.to_csv(neo4j_import_dir)
-
-        # note: this is a hack to copy files into a running Docker container from Python
-        # needed to run the tests without too many changes locally and in GitHub Actions
-        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
-
-        query = rs.csv_query('CREATE')
-
-        run_query_return_results(graph, query)
-
-        result = run_query_return_results(graph, "MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r")
-        assert len(result) == len(rs.relationships)
-
-    def test_relationshipset_csv_merge(self, graph, clear_graph, neo4j_import_dir):
-
-        # create the nodes required here
-        ns1 = NodeSet(['Test', 'Other'], merge_keys=['uuid', 'numerical'])
-        ns2 = NodeSet(['Foo', 'SomeLabel'], merge_keys=['uuid', 'value'])
-
-        for i in range(20):
-            ns1.add_node({'uuid': i, 'numerical': 1})
-            ns2.add_node({'uuid': i, 'value': 'foo'})
-
-        ns1.create_index(graph)
-        ns1.create(graph)
-        ns2.create_index(graph)
-        ns2.create(graph)
-
-        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
-        rs.uuid = 'peter'
-        rs.create_index(graph)
-
-        for i in range(10):
-            rs.add_relationship(
-                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
-            )
-
-        # add a few relationships with different props
-        for i in range(10, 20):
-            rs.add_relationship(
-                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
-                {'second_value': i, 'other_second_value': 'peter'}
-            )
-
-        path = rs.to_csv(neo4j_import_dir)
-
-        # note: this is a hack to copy files into a running Docker container from Python
-        # needed to run the tests without too many changes locally and in GitHub Actions
-        copy_to_all_docker_containers(path, '/var/lib/neo4j/import')
-
-        query = rs.csv_query('MERGE')
-
-        # run query a few times to check for duplications
-        run_query_return_results(graph, query)
-        run_query_return_results(graph, query)
-        run_query_return_results(graph, query)
-
-        result = run_query_return_results(graph, "MATCH (source:Test:Other)-[r:TEST]->(target:Foo:SomeLabel) RETURN r")
-        assert len(result) == len(rs.relationships)
