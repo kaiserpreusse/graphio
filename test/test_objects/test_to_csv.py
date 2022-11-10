@@ -1,8 +1,3 @@
-# Note: Integration tests of the CSV functions rely on a somewhat hacky way to copy the CSV files into running
-# Docker containers. Mounting volumes is difficult to transfer from local to GitHub Actions (or other CI).
-# So far this is the best way to get the files into the import directory of Neo4j running in Docker.
-# Downside is that we need docker-py as dependency and have to install Docker in the CI container.
-
 import os
 import tarfile
 
@@ -11,7 +6,7 @@ import pytest
 
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet
-from graphio.graph import run_query_return_results
+
 
 @pytest.fixture
 def root_dir():
@@ -49,12 +44,6 @@ def nodeset_multiple_labels_multiple_merge_keys():
         ns.add_node({'uuid': i, 'other': i + 10})
 
     return ns
-
-
-# workaround to parameterize a test function with a set of fixtures
-# for now the use of external packages that extend pytest is avoided (check https://smarie.github.io/python-pytest-cases/ though)
-# see https://miguendes.me/how-to-use-fixtures-as-arguments-in-pytestmarkparametrize
-NODSET_FIXTURE_NAMES = ['small_nodeset', 'nodeset_multiple_labels', 'nodeset_multiple_labels_multiple_merge_keys']
 
 
 @pytest.fixture
