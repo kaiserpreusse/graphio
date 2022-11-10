@@ -218,7 +218,11 @@ class TestRelationshipSetIndex:
 
         small_relationshipset.create_index(graph)
 
-        result = run_query_return_results(graph, "SHOW INDEXES YIELD *")
+        # TODO keep until 4.2 is not supported anymore
+        try:
+            result = run_query_return_results(graph, "SHOW INDEXES YIELD *")
+        except:
+            result = run_query_return_results(graph, "CALL db.indexes()")
 
         for row in result:
             # the result of the db.indexes() procedure is different for Neo4j 3.5 and 4
