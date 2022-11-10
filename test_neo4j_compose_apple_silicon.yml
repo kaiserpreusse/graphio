@@ -35,7 +35,7 @@ services:
     container_name: graphio_test_neo4j_51
     environment:
       - NEO4J_AUTH=neo4j/test
-      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
     ports:
       - 13687:7687
