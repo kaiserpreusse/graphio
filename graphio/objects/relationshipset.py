@@ -409,7 +409,6 @@ class RelationshipSet:
 
         # iterate over chunks of rels
         q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties, self.end_node_properties, self.rel_type)
-        print(q)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, **query_parameters)
@@ -427,7 +426,6 @@ class RelationshipSet:
         # iterate over chunks of rels
         q = rels_merge_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
                                self.end_node_properties, self.rel_type)
-        print(q)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, **query_parameters)
