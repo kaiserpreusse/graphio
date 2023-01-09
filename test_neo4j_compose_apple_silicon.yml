@@ -21,7 +21,7 @@ services:
       - 11687:7687
       - 11474:7474
   test_neo4j_44:
-    image: neo4j:4.4
+    image: neo4j:4.4.15
     container_name: graphio_test_neo4j_44
     environment:
       - NEO4J_AUTH=neo4j/test
