@@ -128,7 +128,6 @@ class TestRelationshipSetToCSV:
             )
 
         csv_file = rs.to_csv(tmp_path)
-        print(csv_file)
 
         expected_num_of_fields = len(rs.all_property_keys()) + len(rs.fixed_order_start_node_properties) + len(
             rs.fixed_order_end_node_properties)
@@ -158,7 +157,7 @@ class TestRelationshipSetToCSV:
             )
 
         query = rs.csv_query('CREATE')
-        print(query)
+
         assert query == """USING PERIODIC COMMIT 1000 
 LOAD CSV WITH HEADERS FROM 'file:///relationshipset_Test_Other_TEST_Foo_SomeLabel_peter.csv' AS line 
 MATCH (a:Test:Other), (b:Foo:SomeLabel) 
