@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  test_neo4j_driver:
     runs-on: ubuntu-latest
 
     env:

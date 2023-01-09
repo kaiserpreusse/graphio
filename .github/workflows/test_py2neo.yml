@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  test_py2neo:
     runs-on: ubuntu-latest
 
     env:
