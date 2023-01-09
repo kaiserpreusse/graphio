@@ -1,11 +1,18 @@
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind, nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
-    nodes_merge_unwind_preserve_array_props, rels_create_unwind, rels_merge_unwind, CypherQuery
+    nodes_merge_unwind_preserve_array_props, rels_create_unwind, rels_merge_unwind, CypherQuery, get_label_string_from_list_of_labels
 
 
 def test_cypher_query():
     c = CypherQuery('a', 'b')
 
     assert c.query() == 'a\nb'
+
+
+def test_get_label_string_from_list_of_labels():
+    assert get_label_string_from_list_of_labels(['a', 'b']) == ':a:b'
+    assert get_label_string_from_list_of_labels(['a']) == ':a'
+    assert get_label_string_from_list_of_labels([]) == ''
+    assert get_label_string_from_list_of_labels(None) == ''
 
 
 class TestNodesCreateUnwind:
