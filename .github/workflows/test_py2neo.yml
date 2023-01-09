@@ -17,19 +17,19 @@ jobs:
 
     services:
       neo4j42:
-        image: neo4j:4.2
+        image: neo4j:4.2.11
         env:
           NEO4J_AUTH: neo4j/test
           NEO4JLABS_PLUGINS: '["apoc"]'
           NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
       neo4j43:
-        image: neo4j:4.3
+        image: neo4j:4.3.7
         env:
           NEO4J_AUTH: neo4j/test
           NEO4JLABS_PLUGINS: '["apoc"]'
           NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
       neo4j44:
-        image: neo4j:4.4
+        image: neo4j:4.4.15
         env:
           NEO4J_AUTH: neo4j/test
           NEO4JLABS_PLUGINS: '["apoc"]'
