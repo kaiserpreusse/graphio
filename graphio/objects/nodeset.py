@@ -24,7 +24,7 @@ class NodeSet:
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False):
+    def __init__(self, labels=None, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False):
         """
 
         :param labels: The labels for the nodes in this NodeSet.
@@ -41,7 +41,10 @@ class NodeSet:
         self.append_props = append_props
         self.indexed = indexed
 
-        self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
+        if self.labels:
+            self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
+        else:
+            self.combined = '_'.join(sorted(self.merge_keys))
         self.uuid = str(uuid4())
 
         if batch_size:
@@ -314,6 +317,8 @@ class NodeSet:
 
         :param merge_properties: The merge properties.
         """
+        if not self.labels:
+            log.warning("MERGing without labels will not use an index and is slow.")
         # overwrite if preserve is passed
         if preserve:
             self.preserve = preserve

@@ -45,8 +45,8 @@ def merge_clause_merge_properties(merge_properties):
 
 
 def merge_clause(labels, merge_properties):
-    label_string = ':'.join(labels)
-    return f"MERGE (n:{label_string} {{ {merge_clause_merge_properties(merge_properties)} }} )"
+    label_string = get_label_string_from_list_of_labels(labels)
+    return f"MERGE (n{label_string} {{ {merge_clause_merge_properties(merge_properties)} }} )"
 
 
 def nodes_create_unwind(labels, property_parameter=None):
@@ -75,10 +75,10 @@ def nodes_create_unwind(labels, property_parameter=None):
     if not property_parameter:
         property_parameter = 'props'
 
-    label_string = ":".join(labels)
+    label_string = get_label_string_from_list_of_labels(labels)
 
     q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    f"CREATE (n:{label_string})",
+                    f"CREATE (n{label_string})",
                     "SET n = properties")
 
     return q.query()
@@ -143,7 +143,7 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
     if not property_parameter:
         property_parameter = 'props'
 
-    label_string = ':'.join(labels)
+    label_string = get_label_string_from_list_of_labels(labels)
 
     merge_strings = []
     for u in merge_properties:
@@ -152,7 +152,7 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
     merge_string = ', '.join(merge_strings)
 
     q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    f"MERGE (n:{label_string} {{ {merge_string} }} )",
+                    f"MERGE (n{label_string} {{ {merge_string} }} )",
                     "ON CREATE SET n = properties",
                     "ON MATCH SET n += properties")
 
@@ -290,12 +290,12 @@ def rels_create_unwind(start_node_labels, end_node_labels, start_node_properties
     if not property_identifier:
         property_identifier = 'rels'
 
-    start_node_label_string = ':'.join(start_node_labels)
-    end_node_label_string = ':'.join(end_node_labels)
+    start_node_label_string = get_label_string_from_list_of_labels(start_node_labels)
+    end_node_label_string = get_label_string_from_list_of_labels(end_node_labels)
 
     q = CypherQuery()
     q.append(f"UNWIND ${property_identifier} AS rel")
-    q.append(f"MATCH (a:{start_node_label_string}), (b:{end_node_label_string})")
+    q.append(f"MATCH (a{start_node_label_string}), (b{end_node_label_string})")
 
     # collect WHERE clauses
     where_clauses = []
@@ -345,12 +345,12 @@ def rels_merge_unwind(start_node_labels, end_node_labels, start_node_properties,
     if not property_identifier:
         property_identifier = 'rels'
 
-    start_node_label_string = ':'.join(start_node_labels)
-    end_node_label_string = ':'.join(end_node_labels)
+    start_node_label_string = get_label_string_from_list_of_labels(start_node_labels)
+    end_node_label_string = get_label_string_from_list_of_labels(end_node_labels)
 
     q = CypherQuery()
     q.append(f"UNWIND ${property_identifier} AS rel")
-    q.append(f"MATCH (a:{start_node_label_string}), (b:{end_node_label_string})")
+    q.append(f"MATCH (a{start_node_label_string}), (b{end_node_label_string})")
 
     # collect WHERE clauses
     where_clauses = []

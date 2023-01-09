@@ -23,6 +23,15 @@ def small_nodeset() -> NodeSet:
 
 
 @pytest.fixture
+def nodeset_no_label() -> NodeSet:
+    ns = NodeSet(merge_keys=['uuid'])
+    for i in range(100):
+        ns.add_node({'uuid': i, 'key': 'value'})
+
+    return ns
+
+
+@pytest.fixture
 def nodeset_multiple_labels():
     ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'])
     for i in range(100):
@@ -177,6 +186,13 @@ class TestNodeSetCreate:
         nodeset_multiple_labels.create(graph)
 
         result = run_query_return_results(graph, "MATCH (n:{}) RETURN count(n)".format(':'.join(nodeset_multiple_labels.labels)))
+
+        assert result[0][0] == 100
+
+    def test_nodeset_create_no_label(self, nodeset_no_label, graph, clear_graph):
+        nodeset_no_label.create(graph)
+
+        result = run_query_return_results(graph, "MATCH (n) RETURN count(n)")
 
         assert result[0][0] == 100
 
@@ -337,7 +353,14 @@ class TestNodeSetMerge:
 
         result = run_query_return_results(graph, "MATCH (n:{}) RETURN count(n)".format(':'.join(small_nodeset.labels)))
 
-        print(result)
+        assert result[0][0] == 100
+
+    def test_nodeset_merge_no_label(self, nodeset_no_label, graph, clear_graph):
+        nodeset_no_label.merge(graph)
+        nodeset_no_label.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (n) RETURN count(n)")
+
         assert result[0][0] == 100
 
 
