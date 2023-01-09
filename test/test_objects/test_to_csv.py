@@ -50,27 +50,6 @@ def different_nodesets(small_nodeset, nodeset_multiple_labels, nodeset_multiple_
     return nodesets
 
 
-def copy_to_all_docker_containers(path, target='/var/lib/neo4j/import'):
-    # prepare file
-    os.chdir(os.path.dirname(path))
-    srcname = os.path.basename(path)
-    print("src " + srcname)
-    with tarfile.open("example.tar", 'w') as tar:
-        try:
-            tar.add(srcname)
-        finally:
-            tar.close()
-
-    client = docker.from_env()
-
-    for this_container in client.containers.list():
-        try:
-            with open('example.tar', 'rb') as fd:
-                this_container.put_archive(path=target, data=fd)
-        except Exception as e:
-            print(e)
-
-
 class TestNodeSetToCSV:
 
     def test_create_csv_file(self, different_nodesets, tmp_path):
