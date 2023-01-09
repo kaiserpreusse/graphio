@@ -60,6 +60,10 @@ class RelationshipSet:
         self.rel_type = rel_type
         self.start_node_labels = start_node_labels
         self.end_node_labels = end_node_labels
+        if not self.start_node_labels:
+            log.warning("Creating or merging relationships without start node labels is slow because no index is used.")
+        if not self.end_node_labels:
+            log.warning("Creating or merging relationships without end node labels is slow because no index is used.")
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
         self.default_props = default_props

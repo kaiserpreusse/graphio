@@ -23,6 +23,18 @@ def small_relationshipset():
 
 
 @pytest.fixture
+def small_relationshipset_no_labels():
+    rs = RelationshipSet('TEST', [], [], ['uuid'], ['uuid'])
+
+    for i in range(100):
+        rs.add_relationship(
+            {'uuid': i}, {'uuid': i}, {}
+        )
+
+    return rs
+
+
+@pytest.fixture
 def small_relationshipset_multiple_labels():
     rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid'], ['uuid'])
 
@@ -150,6 +162,20 @@ class TestDefaultProps:
 
 class TestRelationshipSetCreate:
 
+    def test_relationshipset_create_no_labels(self, graph, create_nodes_test, small_relationshipset_no_labels):
+
+        small_relationshipset_no_labels.create(graph)
+
+        # check if 100 relationships are created for two labels
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+        # Test that 900 (3*3*100) relationships are created in total
+        result = run_query_return_results(graph, "MATCH (t)-[r:TEST]->(f) RETURN count(r)")
+
+        assert result[0][0] == 900
+
     def test_relationshipset_create_no_properties(self, graph, create_nodes_test):
 
         rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
@@ -251,6 +277,34 @@ class TestRelationshipSetMerge:
         result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
 
         assert result[0][0] == 100
+
+    def test_relationshipset_merge_no_labels(self, graph, create_nodes_test, small_relationshipset_no_labels):
+
+        small_relationshipset_no_labels.merge(graph)
+
+        # check if 100 relationships are created for two labels
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+        # Test that 900 (3*3*100) relationships are created in total
+        result = run_query_return_results(graph, "MATCH (t)-[r:TEST]->(f) RETURN count(r)")
+
+        assert result[0][0] == 900
+
+        # merge again to check that number stays the same
+        small_relationshipset_no_labels.merge(graph)
+
+        # check if 100 relationships are created for two labels
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
+        assert result[0][0] == 100
+
+        # Test that 900 (3*3*100) relationships are created in total
+        result = run_query_return_results(graph, "MATCH (t)-[r:TEST]->(f) RETURN count(r)")
+
+        assert result[0][0] == 900
+
 
     def test_relationshipset_merge_array_props(self, graph, create_nodes_test):
 
