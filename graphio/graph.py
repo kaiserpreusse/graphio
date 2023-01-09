@@ -10,8 +10,11 @@ def run_query_return_results(connection:Union[Graph, Driver], query: str, databa
         return result
 
     elif isinstance(connection, Driver):
+
         if not database:
             database = DEFAULT_DATABASE
         with connection.session(database=database) as s:
-            result = s.run(query, **params)
-            return list(result)
+            result = list(s.run(query, **params))
+
+        return result
+

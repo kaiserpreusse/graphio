@@ -13,6 +13,7 @@ jobs:
 
     env:
       RUN_ENVIRONMENT: 'github_actions'
+      DRIVER: 'py2neo'
 
     services:
       neo4j42:

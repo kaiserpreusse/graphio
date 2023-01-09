@@ -16,19 +16,24 @@ log = logging.getLogger(__name__)
 NEO4J_PASSWORD = 'test'
 
 RUN_ENVIRONMENT = os.getenv('RUN_ENVIRONMENT', None)
+DRIVER = os.getenv('DRIVER', None)
 
 if RUN_ENVIRONMENT == 'github_actions':
+    if DRIVER == 'py2neo':
+        NEO4J_VERSIONS = [
+            {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+            {'host': 'neo4j43', 'version': '4.3', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+            {'host': 'neo4j43', 'version': '4.4', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
+            {'host': 'neo4j51', 'version': '5.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'}
+        ]
 
-    NEO4J_VERSIONS = [
-        # {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        # {'host': 'neo4j43', 'version': '4.3', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        # {'host': 'neo4j43', 'version': '4.4', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        # {'host': 'neo4j51', 'version': '5.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'py2neo'},
-        {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        {'host': 'neo4j43', 'version': '4.3', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        {'host': 'neo4j43', 'version': '4.4', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-        {'host': 'neo4j51', 'version': '5.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
-    ]
+    elif DRIVER == 'neo4j':
+        NEO4J_VERSIONS = [
+            {'host': 'neo4j42', 'version': '4.2', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+            {'host': 'neo4j43', 'version': '4.3', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+            {'host': 'neo4j43', 'version': '4.4', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+            {'host': 'neo4j51', 'version': '5.1', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'lib': 'neodriver'},
+        ]
 
 else:
     NEO4J_VERSIONS = [
