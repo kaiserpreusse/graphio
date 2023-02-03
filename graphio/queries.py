@@ -44,7 +44,7 @@ def match_properties_as_string(merge_properties, prop_name):
     return merge_string
 
 
-def merge_clause_with_properties(labels: list[str], merge_properties: list[str], prop_name=None, node_variable=None):
+def merge_clause_with_properties(labels: List[str], merge_properties: List[str], prop_name=None, node_variable=None):
     """
     MERGE (n:Node {properties.sid: '1234'})
 
@@ -63,7 +63,7 @@ def merge_clause_with_properties(labels: list[str], merge_properties: list[str],
     return f"MERGE ({node_variable}{label_string} {{ {match_properties_as_string(merge_properties, prop_name)} }} )"
 
 
-def match_clause_with_properties(labels: list[str], merge_properties: list[str], prop_name=None, node_variable=None):
+def match_clause_with_properties(labels: List[str], merge_properties: List[str], prop_name=None, node_variable=None):
     """
     MATCH (n:Node {properties.sid: '1234'})
 
