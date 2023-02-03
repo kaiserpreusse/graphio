@@ -30,23 +30,56 @@ class CypherQuery:
         self._statements.append(value)
 
 
-def merge_clause_merge_properties(merge_properties):
+def match_properties_as_string(merge_properties, prop_name):
     """
-    {sid: properties.sid}
+    sid: properties.sid
 
     :param merge_properties: The merge properties
     :return:
     """
     merge_strings = []
     for u in merge_properties:
-        merge_strings.append("{0}: properties.{0}".format(u))
+        merge_strings.append(f"{u}: {prop_name}.{u}")
     merge_string = ', '.join(merge_strings)
     return merge_string
 
 
-def merge_clause(labels, merge_properties):
+def merge_clause_with_properties(labels: list[str], merge_properties: list[str], prop_name=None, node_variable=None):
+    """
+    MERGE (n:Node {properties.sid: '1234'})
+
+    :param labels: Labels for the match query.
+    :param merge_properties: The merge properties
+    :param prop_name: Optional name of the parameter used in the query. Default is 'properties'.
+    :param node_variable: Optional name of the node variable. Default is 'n'.
+    :return: Query
+    """
+    if not prop_name:
+        prop_name = 'properties'
+    if not node_variable:
+        node_variable = 'n'
+
     label_string = get_label_string_from_list_of_labels(labels)
-    return f"MERGE (n{label_string} {{ {merge_clause_merge_properties(merge_properties)} }} )"
+    return f"MERGE ({node_variable}{label_string} {{ {match_properties_as_string(merge_properties, prop_name)} }} )"
+
+
+def match_clause_with_properties(labels: list[str], merge_properties: list[str], prop_name=None, node_variable=None):
+    """
+    MATCH (n:Node {properties.sid: '1234'})
+
+    :param labels: Labels for the match query.
+    :param merge_properties: The merge properties
+    :param prop_name: Optional name of the parameter used in the query. Default is 'properties'.
+    :param node_variable: Optional name of the node variable. Default is 'n'.
+    :return: Query
+    """
+    if not prop_name:
+        prop_name = 'properties'
+    if not node_variable:
+        node_variable = 'n'
+
+    label_string = get_label_string_from_list_of_labels(labels)
+    return f"MATCH ({node_variable}{label_string} {{ {match_properties_as_string(merge_properties, prop_name)} }} )"
 
 
 def nodes_create_unwind(labels, property_parameter=None):
@@ -99,7 +132,7 @@ def nodes_merge_unwind_preserve(labels, merge_properties, property_parameter=Non
         property_parameter = 'props'
 
     q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    merge_clause(labels, merge_properties),
+                    merge_clause_with_properties(labels, merge_properties),
                     "ON CREATE SET n = properties",
                     "ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)")
 
@@ -184,7 +217,7 @@ def nodes_merge_unwind_array_props(labels, merge_properties, array_props, proper
     on_match_array_props_string = ', '.join(on_match_array_props_list)
 
     q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    merge_clause(labels, merge_properties),
+                    merge_clause_with_properties(labels, merge_properties),
                     "ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)",
                     f"ON CREATE SET {on_create_array_props_string}",
                     "ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)",
@@ -219,7 +252,7 @@ def nodes_merge_unwind_preserve_array_props(labels, merge_properties, array_prop
     on_match_array_props_string = ', '.join(on_match_array_props_list)
 
     q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    merge_clause(labels, merge_properties),
+                    merge_clause_with_properties(labels, merge_properties),
                     "ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)",
                     f"ON CREATE SET {on_create_array_props_string}",
                     "ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)")

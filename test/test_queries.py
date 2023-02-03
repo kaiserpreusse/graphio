@@ -1,5 +1,23 @@
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind, nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
-    nodes_merge_unwind_preserve_array_props, rels_create_unwind, rels_merge_unwind, CypherQuery, get_label_string_from_list_of_labels
+    nodes_merge_unwind_preserve_array_props, rels_create_unwind, rels_merge_unwind, CypherQuery, get_label_string_from_list_of_labels, \
+    match_clause_with_properties, merge_clause_with_properties, match_properties_as_string
+
+
+def test_match_clause_with_properties():
+    assert match_clause_with_properties(['Person', 'Foo'], ['name'], node_variable='n') == 'MATCH (n:Person:Foo { name: properties.name } )'
+    assert match_clause_with_properties(['Person', 'Foo'], ['name'], node_variable='m') == 'MATCH (m:Person:Foo { name: properties.name } )'
+    assert match_clause_with_properties(['Person', 'Foo'], ['name'], prop_name='$props', node_variable='n') == 'MATCH (n:Person:Foo { name: $props.name } )'
+
+
+def test_merge_clause_with_properties():
+    assert merge_clause_with_properties(['Person', 'Foo'], ['name'], node_variable='n') == 'MERGE (n:Person:Foo { name: properties.name } )'
+    assert merge_clause_with_properties(['Person', 'Foo'], ['name'], node_variable='m') == 'MERGE (m:Person:Foo { name: properties.name } )'
+    assert merge_clause_with_properties(['Person', 'Foo'], ['name'], prop_name='$props', node_variable='n') == 'MERGE (n:Person:Foo { name: $props.name } )'
+
+
+def test_match_properties_as_string():
+    assert match_properties_as_string(['name', 'age'], 'properties') == 'name: properties.name, age: properties.age'
+    assert match_properties_as_string(['name', 'age'], '$props') == 'name: $props.name, age: $props.age'
 
 
 def test_cypher_query():
