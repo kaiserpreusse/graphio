@@ -1,4 +1,5 @@
 {
   "labels":  ["Test"],
-  "mergekeys":  ["test_id"]
+  "merge_keys":  ["test_id"],
+  "type_conversion": {"test_id": "int"}
 }

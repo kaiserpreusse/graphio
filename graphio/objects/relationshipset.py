@@ -11,12 +11,14 @@ from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio.queries import rels_create_unwind, rels_merge_unwind, rels_params_from_objects
 from graphio.graph import run_query_return_results
 
-
 log = logging.getLogger(__name__)
 
 # dict with python types to casting functions in Cypher
 CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
                            float: 'toFloat'}
+
+TYPE_CONVERSION = {'int': int,
+                   'float': float}
 
 
 def tuplify_json_list(list_object: list) -> tuple:
@@ -34,9 +36,9 @@ def tuplify_json_list(list_object: list) -> tuple:
     output = tuple()
     for element in list_object:
         if isinstance(element, list):
-            output = output + (tuple(element), )
+            output = output + (tuple(element),)
         else:
-            output = output + (element, )
+            output = output + (element,)
     return output
 
 
@@ -191,6 +193,14 @@ class RelationshipSet:
 
         return start_node_property_types, rel_property_types, end_node_property_types
 
+    @property
+    def metadata_dict(self):
+        return {"rel_type": self.rel_type,
+                "start_node_labels": self.start_node_labels,
+                "end_node_labels": self.end_node_labels,
+                "start_node_properties": self.start_node_properties,
+                "end_node_properties": self.end_node_properties}
+
     def to_dict(self):
         return {"rel_type": self.rel_type,
                 "start_node_labels": self.start_node_labels,
@@ -213,61 +223,19 @@ class RelationshipSet:
 
         return rs
 
-    def to_csv(self, filepath: str, filename: str = None, quoting: int = None) -> str:
+    def to_csv_json_set(self, csv_file_path, json_file_path, write_mode: str = 'w'):
         """
-        Note: You can't use arrays as properties for nodes/relationships when creating CSV files.
+        Write the default CSV/JSON file combination.
 
-        LOAD CSV WITH HEADERS FROM xyz AS line
-        MATCH (a:Gene), (b:GeneSymbol)
-        WHERE a.sid = line.a_sid AND b.sid = line.b_sid AND b.taxid = line.b_taxid
-        CREATE (a)-[r:MAPS]->(b)
-        SET r.key1 = line.rel_key1, r.key2 = line.rel_key2
+        Needs paths to CSV and JSON file.
 
-        # CSV file header
-        a_sid, b_sid, b_taxid, rel_key1, rel_key2
-
-        :param filepath: Path to csv file.
-        :param relset: The RelationshipSet
-        :type relset: graphio.RelationshipSet
+        :param csv_file_path: Path to the CSV file.
+        :param json_file_path: Path to the JSON file.
+        :param write_mode: Write mode for the CSV file.
         """
-        if not filename:
-            filename = f"{self.object_file_name()}.csv"
-        if not quoting:
-            quoting = csv.QUOTE_MINIMAL
-
-        csv_file_path = os.path.join(filepath, filename)
-
-        header = []
-
-        for prop in self.start_node_properties:
-            header.append("a_{}".format(prop))
-
-        for prop in self.end_node_properties:
-            header.append("b_{}".format(prop))
-
-        for prop in self.all_property_keys():
-            header.append("rel_{}".format(prop))
-
-        with open(csv_file_path, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=header, quoting=quoting)
-
-            writer.writeheader()
-
-            for rel in self.relationships:
-                # create data for row
-                rel_csv_dict = {}
-                for k in self.start_node_properties:
-                    rel_csv_dict["a_{}".format(k)] = rel[0][k]
-
-                for k in self.end_node_properties:
-                    rel_csv_dict["b_{}".format(k)] = rel[1][k]
-
-                for k, v in rel[2].items():
-                    rel_csv_dict["rel_{}".format(k)] = v
-
-                writer.writerow(rel_csv_dict)
-
-        return csv_file_path
+        self.to_csv(csv_file_path)
+        with open(json_file_path, write_mode) as f:
+            json.dump(self.metadata_dict, f)
 
     @classmethod
     def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False):
@@ -289,15 +257,21 @@ class RelationshipSet:
         if 'property_map' in metadata:
             # replace start_node/end_node keys if necessary
             property_map = metadata['property_map']
-            metadata['start_node_keys'] = [property_map[x] if x in property_map else x for x in metadata['start_node_keys']]
-            metadata['end_node_keys'] = [property_map[x] if x in property_map else x for x in metadata['end_node_keys']]
+            metadata['start_node_properties'] = [property_map[x] if x in property_map else x for x in
+                                                 metadata['start_node_properties']]
+            metadata['end_node_properties'] = [property_map[x] if x in property_map else x for x in
+                                               metadata['end_node_properties']]
 
-        # NodeSet instance
-        rs = cls(metadata['reltype'],
-                             metadata['start_node_labels'],
-                             metadata['end_node_labels'],
-                             remove_prefix_from_keys(metadata['start_node_keys']),
-                             remove_prefix_from_keys(metadata['end_node_keys']))
+        # type conversions
+        start_node_type_conversion = metadata.get('start_node_type_conversion', None)
+        end_node_type_conversion = metadata.get('end_node_type_conversion', None)
+
+        # RelationshipSet instance
+        rs = cls(metadata['rel_type'],
+                 metadata['start_node_labels'],
+                 metadata['end_node_labels'],
+                 remove_prefix_from_keys(metadata['start_node_properties']),
+                 remove_prefix_from_keys(metadata['end_node_properties']))
 
         start_key_to_header = {}
         for k in rs.start_node_properties:
@@ -309,12 +283,62 @@ class RelationshipSet:
 
         if load_items:
             rs.relationships = _read_rels(csv_file_path, rs.start_node_properties, rs.end_node_properties,
-                                       start_key_to_header, end_key_to_header, property_map)
+                                          start_key_to_header, end_key_to_header, property_map,
+                                          start_node_type_conversion, end_node_type_conversion)
         else:
             rs.relationships = _yield_rels(csv_file_path, rs.start_node_properties, rs.end_node_properties,
-                                       start_key_to_header, end_key_to_header, property_map)
+                                           start_key_to_header, end_key_to_header, property_map,
+                                           start_node_type_conversion, end_node_type_conversion)
 
         return rs
+
+    def to_csv(self, filepath: str, quoting: int = None) -> str:
+        """
+        Write the RelationshipSet to a CSV file. The CSV file will be written to the given filepath.
+
+        Note: You can't use arrays as properties for nodes/relationships when creating CSV files.
+
+        # CSV file header
+        start_sid, end_sid, end_taxid, rel_key1, rel_key2
+
+        :param filepath: Path to csv file.
+        :param relset: The RelationshipSet
+        :type relset: graphio.RelationshipSet
+        """
+        if not quoting:
+            quoting = csv.QUOTE_MINIMAL
+
+        header = []
+
+        for prop in self.start_node_properties:
+            header.append("start_{}".format(prop))
+
+        for prop in self.end_node_properties:
+            header.append("end_{}".format(prop))
+
+        for prop in self.all_property_keys():
+            header.append("rel_{}".format(prop))
+
+        with open(filepath, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=header, quoting=quoting)
+
+            writer.writeheader()
+
+            for rel in self.relationships:
+                # create data for row
+                rel_csv_dict = {}
+                for k in self.start_node_properties:
+                    rel_csv_dict["start_{}".format(k)] = rel[0][k]
+
+                for k in self.end_node_properties:
+                    rel_csv_dict["end_{}".format(k)] = rel[1][k]
+
+                for k, v in rel[2].items():
+                    rel_csv_dict["rel_{}".format(k)] = v
+
+                writer.writerow(rel_csv_dict)
+
+        return filepath
 
     def csv_query(self, query_type: str, filename: str = None, periodic_commit=1000) -> str:
         """
@@ -388,14 +412,16 @@ class RelationshipSet:
             basename += suffix
         return basename
 
-    def serialize(self, target_dir: str):
+    def to_json(self, target_dir, filename: str = None):
         """
         Serialize NodeSet to a JSON file in a target directory.
 
         This function is meant for dumping/reloading and not to create a general transport
         format. The function will likely be optimized for disk space or compressed in future.
         """
-        path = os.path.join(target_dir, self.object_file_name(suffix='.json'))
+        if not filename:
+            filename = self.object_file_name(suffix='.json')
+        path = os.path.join(target_dir, filename)
         with open(path, 'wt') as f:
             json.dump(self.to_dict(), f, indent=4)
 
@@ -412,11 +438,11 @@ class RelationshipSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
-        q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties, self.end_node_properties, self.rel_type)
+        q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
+                               self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, **query_parameters)
-
 
     def merge(self, graph, database=None, batch_size=None):
         """
@@ -429,11 +455,10 @@ class RelationshipSet:
 
         # iterate over chunks of rels
         q = rels_merge_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                               self.end_node_properties, self.rel_type)
+                              self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, **query_parameters)
-
 
     def create_index(self, graph, database=None):
         """
@@ -465,7 +490,8 @@ class RelationshipSet:
                 create_composite_index(graph, label, self.end_node_properties, database=database)
 
 
-def _read_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header, property_map):
+def _read_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header,
+               property_map, start_node_type_conversion: dict, end_node_type_conversion: dict):
     if csv_filepath.endswith('.gz'):
         csvfile = gzip.open(csv_filepath, 'rt')
     else:
@@ -491,8 +517,16 @@ def _read_rels(csv_filepath, start_node_properties, end_node_properties, start_k
     for row in rdr:
 
         start_node_data = dict(zip(start_node_properties, [row[start_key_to_header[x]] for x in start_node_properties]))
+        if start_node_type_conversion:
+            for k, v in start_node_data.items():
+                if k in start_node_type_conversion:
+                    start_node_data[k] = TYPE_CONVERSION[start_node_type_conversion[k]](v)
 
         end_node_data = dict(zip(end_node_properties, [row[end_key_to_header[x]] for x in end_node_properties]))
+        if end_node_type_conversion:
+            for k, v in end_node_data.items():
+                if k in end_node_type_conversion:
+                    end_node_data[k] = TYPE_CONVERSION[end_node_type_conversion[k]](v)
 
         # get properties
         properties = {}
@@ -505,7 +539,8 @@ def _read_rels(csv_filepath, start_node_properties, end_node_properties, start_k
     return relationships
 
 
-def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header, property_map):
+def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_key_to_header, end_key_to_header,
+                property_map, start_node_type_conversion, end_node_type_conversion):
     """
     Instead of recreating the entire RelationShip set in memory this function yields
     one relationship at a time.
@@ -547,8 +582,16 @@ def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_
     for row in rdr:
 
         start_node_data = dict(zip(start_node_properties, [row[start_key_to_header[x]] for x in start_node_properties]))
+        if start_node_type_conversion:
+            for k, v in start_node_data.items():
+                if k in start_node_type_conversion:
+                    start_node_data[k] = TYPE_CONVERSION[start_node_type_conversion[k]](v)
 
         end_node_data = dict(zip(end_node_properties, [row[end_key_to_header[x]] for x in end_node_properties]))
+        if end_node_type_conversion:
+            for k, v in end_node_data.items():
+                if k in end_node_type_conversion:
+                    end_node_data[k] = TYPE_CONVERSION[end_node_type_conversion[k]](v)
 
         # get properties
         properties = {}

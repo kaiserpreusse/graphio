@@ -49,6 +49,12 @@ def nodeset_multiple_labels_multiple_merge_keys():
     return ns
 
 
+@pytest.fixture
+def different_nodesets(small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys):
+    nodesets = [small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys]
+    return nodesets
+
+
 def test_node_set_from_dict():
     people = NodeSet(["Person"], merge_keys=["name"])
     people.add_node({"name": "Tom"})
@@ -364,7 +370,7 @@ class TestNodeSetMerge:
         assert result[0][0] == 100
 
 
-class TestNodeSetSerialize:
+class TestNodeSetToJSON:
 
     def test_nodeset_file_name(self, small_nodeset):
         # set fixed uuid for small nodeset
@@ -384,7 +390,7 @@ class TestNodeSetSerialize:
             uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
             test_ns.uuid = uuid
 
-            test_ns.serialize(str(tmp_path))
+            test_ns.to_json(str(tmp_path))
 
             target_file_path = os.path.join(tmp_path, test_ns.object_file_name(suffix='.json'))
 
@@ -397,6 +403,58 @@ class TestNodeSetSerialize:
                 assert reloaded_nodeset.merge_keys == test_ns.merge_keys
                 assert reloaded_nodeset.nodes == test_ns.nodes
                 assert len(reloaded_nodeset.nodes) == len(test_ns.nodes)
+
+
+class TestNodeSetToCSV:
+
+    def test_create_csv_file(self, different_nodesets, tmp_path):
+        for ns in different_nodesets:
+            filepath = os.path.join(tmp_path, 'nodeset.csv')
+            num_of_props = len(ns.all_property_keys())
+
+            csv_file = ns.to_csv(filepath)
+
+            with open(csv_file) as f:
+                lines = f.readlines()
+                # note that csv has header
+                assert len(lines) - 1 == len(ns.nodes)
+
+                for l in lines:
+                    l = l.strip()
+                    assert len(l.split(',')) == num_of_props
+
+    def test_create_csv_file_header(self, different_nodesets, tmp_path):
+        for ns in different_nodesets:
+            filepath = os.path.join(tmp_path, 'nodeset.csv')
+            csv_file = ns.to_csv(filepath)
+
+            with open(csv_file) as f:
+                lines = f.readlines()
+                # note that csv has header
+                assert len(lines) - 1 == len(ns.nodes)
+
+                header = lines[0].strip().split(',')
+                assert set(header) == set(ns.all_property_keys())
+
+    def test_create_csv_query(self, small_nodeset):
+        # override uuid which is used in file name
+        small_nodeset.uuid = 'peter'
+        query = small_nodeset.create_csv_query()
+        print(query)
+        assert query == """USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM 'file:///nodeset_Test_uuid_peter.csv' AS line
+CREATE (n:Test)
+SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
+
+    def test_merge_csv_query(self, small_nodeset):
+        # override uuid
+        small_nodeset.uuid = 'peter'
+        query = small_nodeset.merge_csv_query()
+
+        assert query == """USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM 'file:///nodeset_Test_uuid_peter.csv' AS line
+MERGE (n:Test { uuid: toInteger(line.uuid) })
+SET n.key = line.key, n.uuid = toInteger(line.uuid)"""
 
 
 class TestNodeSetCSVandJSON:
@@ -419,6 +477,7 @@ class TestNodeSetCSVandJSON:
 
         ns.merge(graph)
         assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
+        assert isinstance(run_query_return_results(graph, "MATCH (n:Test) RETURN n.test_id")[0][0], int)
 
     def test_read_from_files_load_items_to_memory(self, root_dir, clear_graph, graph):
 
@@ -433,6 +492,30 @@ class TestNodeSetCSVandJSON:
         ns = NodeSet.from_csv_json_set(csv_file_path, json_file_path, load_items=True)
         assert ns.labels == ['Test']
         assert ns.merge_keys == ['test_id']
+        for n in ns.nodes:
+            assert isinstance(n['test_id'], int)
 
         ns.merge(graph)
         assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
+
+    def test_write_files_read_again_load_items_into_memory(self, small_nodeset, tmp_path, clear_graph, graph):
+        """
+        Test writing files, reading them again and loading items from files.
+        """
+        csv_file_path = os.path.join(tmp_path, 'test_nodeset.csv')
+        json_file_path = os.path.join(tmp_path, 'test_nodeset.json')
+
+        small_nodeset.to_csv_json_set(csv_file_path, json_file_path, type_conversion={'uuid': 'int'})
+
+        assert os.path.exists(json_file_path)
+        assert os.path.exists(csv_file_path)
+
+        ns = NodeSet.from_csv_json_set(csv_file_path, json_file_path, load_items=True)
+        assert ns.labels == ['Test']
+        assert ns.merge_keys == ['uuid']
+        assert len(ns.nodes) == len(small_nodeset.nodes)
+        for n in ns.nodes:
+            assert isinstance(n['uuid'], int)
+
+        ns.merge(graph)
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == len(small_nodeset.nodes)

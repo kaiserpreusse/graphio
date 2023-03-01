@@ -5,6 +5,7 @@ import json
 import csv
 import gzip
 from collections import defaultdict
+from typing import Set
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
@@ -18,6 +19,8 @@ log = logging.getLogger(__name__)
 CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
                            float: 'toFloat'}
 
+TYPE_CONVERSION = {'int': int,
+                   'float': float}
 
 class NodeSet:
     """
@@ -131,6 +134,10 @@ class NodeSet:
         # add node if not found
         self.add_node(properties)
 
+    @property
+    def metadata_dict(self):
+        return {"labels": self.labels, "merge_keys": self.merge_keys}
+
     def to_dict(self):
         """
         Create dictionary defining the nodeset.
@@ -143,26 +150,35 @@ class NodeSet:
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
 
-    def to_csv(self, filepath: str, filename: str = None, quoting: int = None) -> str:
+    def to_csv(self, filepath: str, quoting: int = None) -> str:
         """
-        Create a CSV file for this nodeset.
+        Create a CSV file for this nodeset. Header row is created with all properties.
+        Each row contains the properties of a node.
 
-        :param filepath: Path where the file is stored.
-        :param filename: Optional filename. A filename will be autocreated if not passed.
+        Example:
+
+        >>> nodeset = NodeSet(labels=["Person"], merge_keys=["name"])
+        >>> nodeset.add_node({"name": "Alice", "age": 33})
+        >>> nodeset.add_node({"name": "Bob", "age": 44})
+        >>> nodeset.to_csv("/tmp/Person_name.csv")
+        '/tmp/Person_name.csv'
+
+        name,age
+        Alice,33
+        Bob,44
+
+        :param filepath: Full path to the CSV file.
         :param quoting: Optional quoting setting for csv writer (any of csv.QUOTE_MINIMAL, csv.QUOTE_NONE, csv.QUOTE_ALL etc).
         """
-        if not filename:
-            filename = f"{self.object_file_name()}.csv"
+
         if not quoting:
             quoting = csv.QUOTE_MINIMAL
 
-        csv_file_path = os.path.join(filepath, filename)
+        log.debug(f"Create CSV file {filepath} for NodeSet {self.combined}")
 
-        log.debug(f"Create CSV file {csv_file_path}")
+        all_props = self.all_property_keys()
 
-        all_props = self.all_properties_in_nodeset()
-
-        with open(csv_file_path, 'w', newline='') as csvfile:
+        with open(filepath, 'w', newline='') as csvfile:
             fieldnames = list(all_props)
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=quoting)
 
@@ -171,11 +187,17 @@ class NodeSet:
             for n in self.nodes:
                 writer.writerow(dict(n))
 
-        return csv_file_path
+        return filepath
 
     def create_csv_query(self, filename: str = None, periodic_commit=1000):
+        """
+        Create a Cypher query to load a CSV file created with NodeSet.to_csv() into Neo4j (CREATE statement).
 
-        # get types
+        :param filename: Optional filename. A filename will be autocreated if not passed.
+        :param periodic_commit: Number of rows to commit in one transaction.
+        :return: Cypher query.
+        """
+
         property_types = self._estimate_type_of_property_values()
 
         if not filename:
@@ -186,7 +208,7 @@ class NodeSet:
         q += "CREATE (n:{})\n".format(':'.join(self.labels))
 
         props_list = []
-        for k in sorted(self.all_properties_in_nodeset()):
+        for k in sorted(self.all_property_keys()):
             prop_type = property_types[k]
             if prop_type in CYPHER_TYPE_TO_FUNCTION:
                 props_list.append(f"n.{k} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{k})")
@@ -198,7 +220,14 @@ class NodeSet:
         return q
 
     def merge_csv_query(self, filename: str = None, periodic_commit=1000):
-        # get types
+        """
+        Create a Cypher query to load a CSV file created with NodeSet.to_csv() into Neo4j (MERGE statement).
+
+        :param filename: Optional filename. A filename will be autocreated if not passed.
+        :param periodic_commit: Number of rows to commit in one transaction.
+        :return: Cypher query.
+        """
+
         property_types = self._estimate_type_of_property_values()
 
         if not filename:
@@ -218,7 +247,7 @@ class NodeSet:
         q += f"MERGE (n:{':'.join(self.labels)} {{ {merge_csv_query_string} }})\n"
 
         props_list = []
-        for k in sorted(self.all_properties_in_nodeset()):
+        for k in sorted(self.all_property_keys()):
             prop_type = property_types[k]
             if prop_type in CYPHER_TYPE_TO_FUNCTION:
                 props_list.append(f"n.{k} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{k})")
@@ -229,6 +258,22 @@ class NodeSet:
 
         return q
 
+    def to_csv_json_set(self, csv_file_path, json_file_path, type_conversion:dict = None):
+        """
+        Write the default CSV/JSON file combination.
+
+        Needs paths to CSV and JSON file.
+
+        :param csv_file_path: Path to the CSV file.
+        :param json_file_path: Path to the JSON file.
+        :param type_conversion: Optional dictionary to convert types of properties.
+        """
+        self.to_csv(csv_file_path)
+        with open(json_file_path, 'w') as f:
+            json_dict = self.metadata_dict
+            if type_conversion:
+                json_dict['type_conversion'] = type_conversion
+            json.dump(json_dict, f)
 
     @classmethod
     def from_csv_json_set(cls, csv_file_path, json_file_path, load_items:bool = False):
@@ -245,27 +290,23 @@ class NodeSet:
         with open(json_file_path) as f:
             metadata = json.load(f)
 
-        # Some legacy files use 'merge_keys' instead of 'mergekeys' (like the property of the
-        # NodeSet constructor), check if that is true and use 'merge_keys' later.
-        # Do not parameterize this in future, just safe guard against common type.
-        mergekeys_json_key = 'mergekeys'
-        if 'merge_keys' in metadata:
-            mergekeys_json_key = 'merge_keys'
-
         # map properties
         property_map = None
         if 'property_map' in metadata:
             # replace mergekeys if necessary
             property_map = metadata['property_map']
-            metadata[mergekeys_json_key] = [property_map[x] if x in property_map else x for x in metadata[mergekeys_json_key]]
+            metadata['merge_keys'] = [property_map[x] if x in property_map else x for x in metadata['merge_keys']]
+
+        # type conversion
+        type_conversion = metadata.get('type_conversion', None)
 
         # NodeSet instance
-        nodeset = cls(metadata['labels'], merge_keys=metadata[mergekeys_json_key])
+        nodeset = cls(metadata['labels'], merge_keys=metadata['merge_keys'])
 
         if load_items:
-            nodeset.nodes = _read_nodes(csv_file_path, property_map)
+            nodeset.nodes = _read_nodes(csv_file_path, property_map, type_conversion)
         else:
-            nodeset.nodes = _yield_node(csv_file_path, property_map)
+            nodeset.nodes = _yield_node(csv_file_path, property_map, type_conversion)
 
         return nodeset
 
@@ -286,14 +327,16 @@ class NodeSet:
             basename += suffix
         return basename
 
-    def serialize(self, target_dir: str):
+    def to_json(self, target_dir: str, filename: str = None):
         """
         Serialize NodeSet to a JSON file in a target directory.
 
         This function is meant for dumping/reloading and not to create a general transport
         format. The function will likely be optimized for disk space or compressed in future.
         """
-        path = os.path.join(target_dir, self.object_file_name(suffix='.json'))
+        if not filename:
+            filename = self.object_file_name(suffix='.json')
+        path = os.path.join(target_dir, filename)
         with open(path, 'wt') as f:
             json.dump(self.to_dict(), f, indent=4)
 
@@ -367,7 +410,7 @@ class NodeSet:
         for n in self.nodes:
             yield dict(n)
 
-    def all_properties_in_nodeset(self):
+    def all_property_keys(self) -> Set[str]:
         """
         Return a set of all property keys in this NodeSet
 
@@ -392,7 +435,7 @@ class NodeSet:
         :return:
         """
         property_types = {}
-        for p in self.all_properties_in_nodeset():
+        for p in self.all_property_keys():
             this_type = None
             for node in self.nodes[:1000]:
                 try:
@@ -432,7 +475,7 @@ class NodeSet:
                     create_composite_index(graph, label, self.merge_keys, database)
 
 
-def _read_nodes(csv_filepath, property_map):
+def _read_nodes(csv_filepath, property_map, type_conversion=None):
     """
     Instead of recreating the entire RelationShip set in memory this function yields
     one relationship at a time.
@@ -463,12 +506,16 @@ def _read_nodes(csv_filepath, property_map):
     nodes = []
     rdr = csv.DictReader(lines[1:], fieldnames=header)
     for node in rdr:
+        if type_conversion:
+            for node_key, node_value in node.items():
+                if node_key in type_conversion:
+                    node[node_key] = TYPE_CONVERSION[type_conversion[node_key]](node_value)
         nodes.append(node)
 
     return nodes
 
 
-def _yield_node(csv_filepath, property_map):
+def _yield_node(csv_filepath, property_map, type_conversion=None):
     """
     Instead of recreating the entire RelationShip set in memory this function yields
     one relationship at a time.
@@ -499,5 +546,9 @@ def _yield_node(csv_filepath, property_map):
 
     rdr = csv.DictReader([row for row in csvfile if not row.startswith('#')], fieldnames=header)
     for node in rdr:
+        if type_conversion:
+            for k, v in node.items():
+                if k in type_conversion:
+                    node[k] = TYPE_CONVERSION[type_conversion[k]](v)
         yield node
     csvfile.close()

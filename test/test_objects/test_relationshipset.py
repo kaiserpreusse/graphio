@@ -346,7 +346,7 @@ class TestRelationshipSetMerge:
 
         assert result[0][0] == 100
 
-class TestRelationshipSetSerialize:
+class TestRelationshipSetToJSON:
 
     def test_object_file_name(self, small_relationshipset):
         # set fixed uuid for relationshipset
@@ -368,7 +368,7 @@ class TestRelationshipSetSerialize:
             uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
             test_rs.uuid = uuid
 
-            test_rs.serialize(str(tmp_path))
+            test_rs.to_json(str(tmp_path))
 
             target_file_path = os.path.join(tmp_path, test_rs.object_file_name(suffix='.json'))
 
@@ -383,6 +383,91 @@ class TestRelationshipSetSerialize:
                 assert reloaded_relset.end_node_properties == test_rs.end_node_properties
                 assert reloaded_relset.relationships == test_rs.relationships
                 assert len(reloaded_relset.relationships) == len(test_rs.relationships)
+
+
+class TestRelationshipSetToCSV:
+
+    def test_to_csv(self, tmp_path):
+        filepath = os.path.join(tmp_path, 'relationshipset.csv')
+
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        csv_file = rs.to_csv(filepath)
+
+        expected_num_of_fields = len(rs.all_property_keys()) + len(rs.fixed_order_start_node_properties) + len(
+            rs.fixed_order_end_node_properties)
+
+        with open(csv_file) as f:
+            lines = f.readlines()
+            assert len(lines) - 1 == len(rs.relationships)
+
+            for l in lines:
+                l = l.strip()
+                assert len(l.split(',')) == expected_num_of_fields
+
+    def test_create_csv_file_header(self, tmp_path):
+        filepath = os.path.join(tmp_path, 'relationshipset.csv')
+
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        csv_file = rs.to_csv(filepath)
+
+        with open(csv_file) as f:
+            lines = f.readlines()
+            # note that csv has header
+            assert len(lines) - 1 == len(rs.relationships)
+
+            header = lines[0].strip().split(',')
+            assert set(header) == set([f"rel_{x}" for x in rs.all_property_keys()]).union(set([f"start_{x}" for x in rs.fixed_order_start_node_properties])).union(set([f"end_{x}" for x in rs.fixed_order_end_node_properties]))
+
+    def test_create_csv_query(self):
+        rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
+        rs.uuid = 'peter'
+
+        for i in range(10):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {'value': i, 'other_value': 'peter'}
+            )
+
+        # add a few relationships with different props
+        for i in range(10, 20):
+            rs.add_relationship(
+                {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'},
+                {'second_value': i, 'other_second_value': 'peter'}
+            )
+
+        query = rs.csv_query('CREATE')
+
+        assert query == """USING PERIODIC COMMIT 1000 
+LOAD CSV WITH HEADERS FROM 'file:///relationshipset_Test_Other_TEST_Foo_SomeLabel_peter.csv' AS line 
+MATCH (a:Test:Other), (b:Foo:SomeLabel) 
+WHERE a.uuid = toInteger(line.a_uuid) AND a.numerical = toInteger(line.a_numerical) AND b.uuid = toInteger(line.b_uuid) AND b.value = line.b_value 
+CREATE (a)-[r:TEST]->(b) 
+SET r.other_second_value = line.rel_other_second_value, r.other_value = line.rel_other_value, r.second_value = toInteger(line.rel_second_value), r.value = line.rel_value"""
 
 
 class TestRelationshipSetCSVandJSON:
@@ -450,3 +535,27 @@ class TestRelationshipSetCSVandJSON:
         rs.merge(graph)
 
         assert run_query_return_results(graph, "MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)")[0][0] == 1
+
+    def test_write_files_read_again_load_items_into_memory(self, graph, clear_graph, create_nodes_test, tmp_path, small_relationshipset):
+        csv_file_path = os.path.join(tmp_path, 'rels.csv')
+        json_file_path = os.path.join(tmp_path, 'rels.json')
+
+        small_relationshipset.to_csv_json_set(csv_file_path, json_file_path)
+
+        assert os.path.exists(csv_file_path)
+        assert os.path.exists(json_file_path)
+
+        #print(open(csv_file_path).read())
+        #print(open(json_file_path).read())
+
+        rs = RelationshipSet.from_csv_json_set(csv_file_path, json_file_path, load_items=True)
+        assert rs.start_node_labels == small_relationshipset.start_node_labels
+        assert rs.end_node_labels == small_relationshipset.end_node_labels
+        assert rs.start_node_properties == small_relationshipset.start_node_properties
+        assert rs.end_node_properties == small_relationshipset.end_node_properties
+        assert rs.rel_type == small_relationshipset.rel_type
+        assert len(rs.relationships) == 100
+
+        result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
+
+        #assert result[0][0] == 100
