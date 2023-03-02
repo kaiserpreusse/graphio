@@ -10,11 +10,18 @@ Graphio is a Python library for bulk loading data to Neo4j. Graphio collects
 multiple sets of nodes and relationships and loads them to Neo4j. A common example is parsing a set of Excel files
 to create a Neo4j prototype. Graphio only loads data, it is not meant for querying Neo4j and returning data.
 
-Graphio works with :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` classes which are groups of nodes
+Graphio can serialize data to JSON and CSV files. This is useful for debugging and for storing graph ready data sets.
+
+The primary interface are :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` classes which are groups of nodes
 and relationships with similiar properties. Graphio can load these data sets to Neo4j using :code:`CREATE` or :code:`MERGE` operations.
 
-Graphio uses py2neo in several places. Part of the bulk data loading logic developed for graphio was merged into py2neo.
-While py2neo is a comprehensive Neo4j library including object-graph mapping, graphio is made to quickly build a Neo4j database from existing data sets.
+Graphio uses the official `Neo4j Python driver <https://neo4j.com/docs/api/python-driver/current/>`_ to connect to Neo4j.
+
+..  warning:: Graphio was initially built on top of `py2neo <https://py2neo.org/2021.1/>`_ which is not actively maintained
+   anymore. The most recent version of py2neo still works with graphio but this is not supported anymore. Please switch
+   to the official Neo4j Python driver.
+
+
 
 
 Version
@@ -48,10 +55,11 @@ The goal is to create the follwing data in Neo4j:
 
 ::
 
-   # under the hood py2neo is used to connect to Neo4j
-   # you always need a py2neo.Graph instance
-   from py2neo import Graph
-   graph = Graph()
+   # the official Neo4j driver is used to connect to Neo4j
+   # you always need a Driver instance
+   from neo4j import GraphDatabase
+
+   driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
 
    from graphio import NodeSet, RelationshipSet
 
@@ -77,9 +85,9 @@ The goal is to create the follwing data in Neo4j:
 
 
    # create the nodes in NodeSet, needs a py2neo.Graph instance
-   people.create(graph)
-   movies.create(graph)
-   person_likes_movie.create(graph)
+   people.create(driver)
+   movies.create(driver)
+   person_likes_movie.create(driver)
 
 
 The code in the example should be easy to understand:
@@ -103,9 +111,9 @@ Contents
    :maxdepth: 2
 
    basic_workflow
-   model
    serialize
    objects
+   model
 
 
 

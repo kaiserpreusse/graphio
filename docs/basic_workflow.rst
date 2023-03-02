@@ -91,13 +91,13 @@ Both class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` allow you to
 :func:`RelationshipSet.create_index()` creates the indexes required for matching the start node and end node::
 
   from graphio import RelationshipSet
-  from py2neo import Graph
+  from neo4j import GraphDatabase
 
-  graph = Graph()
+  driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
 
   person_likes_food = RelationshipSet('KNOWS', ['Person'], ['Food'], ['name'], ['type'])
 
-  person_likes_food.create_index(graph)
+  person_likes_food.create_index(driver)
 
 This will create single-property indexes for `:Person(name)` and `:Food(type)`.
 
@@ -106,20 +106,20 @@ Load Data
 
 After building :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` you can create or merge everything in Neo4j.
 
-You need a :class:`py2neo.Graph` instance to create data. See: https://py2neo.org/v4/database.html#the-graph
+You need a :class:`neo4j.Driver` instance to create data. See: https://neo4j.com/docs/api/python-driver/current/api.html#api-documentation
 
 ::
 
-    from py2neo import Graph
+    from neo4j import GraphDatabase
 
-    graph = Graph()
+    driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
 
-    people.create(graph)
-    person_likes_food.create(graph)
+    people.create(driver)
+    person_likes_food.create(driver)
 
 .. warning::
     Graphio does not check if the nodes referenced in the :class:`~graphio.RelationshipSet` actually exist. It is meant
-    to quickly build data sets and throw them into Neo4j, not to maintain consistency.
+    to quickly build data sets and load them into Neo4j, not to maintain consistency.
 
 
 Create
@@ -135,7 +135,7 @@ The merge operation for :class:`~graphio.NodeSet` offers more control.
 
 You can pass a list of properties that should not be overwritten on existing nodes::
 
-  NodeSet.merge(graph, preserve=['name', 'currency'])
+  NodeSet.merge(driver, preserve=['name', 'currency'])
 
 This is equivalent to::
 
@@ -145,7 +145,7 @@ This is equivalent to::
 
 Graphio can also append properties to arrays::
 
-  NodeSet.merge(graph, append_props=['source'])
+  NodeSet.merge(driver, append_props=['source'])
 
 This will create a list for the node property :code:`source` and append values :code:`ON MATCH`.
 
@@ -172,5 +172,5 @@ A :class:`~graphio.Container` can be used to group :class:`~graphio.NodeSet` and
 You can iterate the :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` in the :class:`~graphio.Container`::
 
     for nodeset in my_data.nodesets:
-        nodeset.create(graph)
+        nodeset.create(driver)
 
