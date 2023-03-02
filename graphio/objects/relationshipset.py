@@ -340,7 +340,7 @@ class RelationshipSet:
 
         return filepath
 
-    def csv_query(self, query_type: str, filename: str = None, periodic_commit=1000) -> str:
+    def create_csv_query(self, query_type: str, filename: str = None, periodic_commit=1000) -> str:
         """
         Generate the CREATE CSV query for this RelationshipSet. The function tries to take care of type conversions.
 
