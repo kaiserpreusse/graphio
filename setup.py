@@ -12,7 +12,7 @@ setup(name='graphio',
           "relative_to": __file__,
           "local_scheme": "node-and-timestamp"
       },
-      setup_requires=['tomlkit~=0.11.6', 'setuptools~=65.6', 'setuptools_scm'],
+      setup_requires=['setuptools_scm'],
       description='Library to load data sets to Neo4j.',
       long_description=long_description,
       long_description_content_type='text/markdown',
