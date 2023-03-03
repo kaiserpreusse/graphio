@@ -87,8 +87,8 @@ Create Indexes
 ---------------
 
 Both :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` allow you to create indexes to speed up data loading.
-:func:`NodeSet.create_index()` creates indexes for all individual :code:`merge_keys` properties as well as a compound index.
-:func:`RelationshipSet.create_index()` creates the indexes required for matching the start node and end node::
+:func:`~graphio.NodeSet.create_index` creates indexes for all individual :code:`merge_keys` properties as well as a compound index.
+:func:`~graphio.RelationshipSet.create_index` creates the indexes required for matching the start node and end node::
 
   from graphio import RelationshipSet
   from neo4j import GraphDatabase
