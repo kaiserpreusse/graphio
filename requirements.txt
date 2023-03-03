@@ -1,3 +1,2 @@
-tomlkit
 py2neo>=2021.0.0
 neo4j>=5.2
