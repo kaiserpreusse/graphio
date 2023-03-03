@@ -86,7 +86,7 @@ You can set default properties on the :class:`~graphio.RelationshipSet` that are
 Create Indexes
 ---------------
 
-Both class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` allow you to create indexes to speed up data loading.
+Both :class:`~graphio.NodeSet` and :class:`~graphio.RelationshipSet` allow you to create indexes to speed up data loading.
 :func:`NodeSet.create_index()` creates indexes for all individual :code:`merge_keys` properties as well as a compound index.
 :func:`RelationshipSet.create_index()` creates the indexes required for matching the start node and end node::
 
