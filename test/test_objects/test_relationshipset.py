@@ -460,7 +460,7 @@ class TestRelationshipSetToCSV:
                 {'second_value': i, 'other_second_value': 'peter'}
             )
 
-        query = rs.csv_query('CREATE')
+        query = rs.create_csv_query('CREATE')
 
         assert query == """USING PERIODIC COMMIT 1000 
 LOAD CSV WITH HEADERS FROM 'file:///relationshipset_Test_Other_TEST_Foo_SomeLabel_peter.csv' AS line 
