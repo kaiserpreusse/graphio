@@ -26,7 +26,7 @@ class UnstructuredNodeSet(BaseModel):
     @property
     def unique_node_definitions(self):
         """
-        Return a unqiue list of label/merge key combinations.
+        Return a unique list of label/merge key combinations.
         """
         unique_nodes = set()
 
@@ -45,7 +45,8 @@ class UnstructuredNodeSet(BaseModel):
                 if len(merge_keys) > 1:
                     create_composite_index(driver, label, merge_keys, database=database)
 
-    def create_nodes(self, tx, nodes: List[Node]):
+    @staticmethod
+    def create_nodes(tx, nodes: List[Node]):
         for node in nodes:
             q = CypherQuery(
                 f"CREATE (n:{':'.join(node.labels)})",
