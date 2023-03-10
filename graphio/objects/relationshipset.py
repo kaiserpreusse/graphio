@@ -24,7 +24,7 @@ TYPE_CONVERSION = {'int': int,
 def tuplify_json_list(list_object: list) -> tuple:
     """
     JSON.dump() stores tuples as JSON lists. This function receives a list (with sub lists)
-    and creates a tuple of tuples from the list. The tuples are the preferred input type for py2neo.
+    and creates a tuple of tuples from the list.
 
     E.g.
 
@@ -428,9 +428,6 @@ class RelationshipSet:
     def create(self, graph, database=None, batch_size=None):
         """
         Create relationships in this RelationshipSet
-
-        py2neo bulk works with tuples and th order of elements in the tuple. The underlying Relationship used in the
-        RelationshipSet uses a dictionary. Work around this for now, adapt the RelSet.add_relationship() method later.
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
@@ -464,11 +461,6 @@ class RelationshipSet:
         """
         Create indices for start node and end node definition of this relationshipset. If more than one start or end
         node property is defined, all single property indices as well as the composite index are created.
-
-        In Neo4j 3.x recreation of an index did not raise an error. In Neo4j 4 you cannot create an existing index.
-
-        Index creation syntax changed from Neo4j 3.5 to 4. So far the old syntax is still supported. All py2neo
-        functions (v4.4) work on both versions.
         """
 
         # from start nodes
@@ -544,9 +536,6 @@ def _yield_rels(csv_filepath, start_node_properties, end_node_properties, start_
     """
     Instead of recreating the entire RelationShip set in memory this function yields
     one relationship at a time.
-
-    Note that there is some data conversion going on to return relationships in the
-    format introduced when graphio base functions were merged into py2neo.
 
     :param csv_filepath:
     :param start_node_properties:

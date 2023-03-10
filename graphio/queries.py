@@ -88,7 +88,7 @@ def nodes_create_unwind(labels, property_parameter=None):
 
         UNWIND $props AS properties CREATE (n:Gene) SET n = properties
 
-    Pass the node properties as parameter to the query, e.g. with a :py:obj:`py2neo.Graph`::
+    Pass the node properties as parameter to the query:
 
         graph.run(query, props=[{'id': 1}, {'id': 2}, ...])
 
@@ -154,7 +154,7 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
 
         query = nodes_merge_unwind(['Foo', 'Bar'], ['node_id'])
 
-    Pass the node properties as parameter to the query, e.g. with a :py:obj:`py2neo.Graph`::
+    Pass the node properties as parameter to the query:
 
         graph.run(query, props=[{'node_id': 1}, {'node_id': 2}, ...])
 

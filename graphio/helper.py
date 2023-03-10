@@ -1,6 +1,5 @@
 from itertools import chain, islice
 import logging
-from py2neo import ClientError
 
 from graphio.graph import run_query_return_results
 

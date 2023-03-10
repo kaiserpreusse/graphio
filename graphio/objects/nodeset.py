@@ -379,7 +379,6 @@ class NodeSet:
 
         log.debug('Batch Size: {}'.format(batch_size))
 
-        # use py2neo base functions if no properties are preserved
         if not self.preserve and not self.append_props:
             q = nodes_merge_unwind(self.labels, self.merge_keys)
             for batch in chunks(self.node_properties(), size=batch_size):
@@ -458,11 +457,6 @@ class NodeSet:
     def create_index(self, graph, database=None):
         """
         Create indices for all label/merge ky combinations as well as a composite index if multiple merge keys exist.
-
-        In Neo4j 3.x recreation of an index did not raise an error. In Neo4j 4 you cannot create an existing index.
-
-        Index creation syntax changed from Neo4j 3.5 to 4. So far the old syntax is still supported. All py2neo
-        functions (v4.4) work on both versions.
         """
         if self.merge_keys:
             for label in self.labels:
