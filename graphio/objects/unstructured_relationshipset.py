@@ -94,7 +94,6 @@ class UnstructuredRelationshipSet(BaseModel):
     @staticmethod
     def merge_relationships(tx, relationships: List[Relationship]):
         for relationship in relationships:
-            print(relationship)
 
             q = CypherQuery(
                 f"MATCH (a:{':'.join(relationship.start_node.labels)}), (b:{':'.join(relationship.end_node.labels)})"

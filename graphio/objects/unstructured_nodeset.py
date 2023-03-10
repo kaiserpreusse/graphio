@@ -71,7 +71,7 @@ class UnstructuredNodeSet(BaseModel):
                 merge_clause_with_properties(node.labels, node.merge_keys, prop_name="$properties", node_variable="n"),
                 "SET n = $properties"
             )
-            print(q.query())
+
             tx.run(q.query(), properties=node.properties)
 
     def merge(self, driver: Driver, database: str = None, batch_size=None):
