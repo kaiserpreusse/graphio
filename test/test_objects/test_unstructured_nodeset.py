@@ -121,3 +121,18 @@ class TestUnstructuredNodeSetMerge:
             elif 'c' in row['n']:
                 assert row['n']['c'] == 5
                 assert row['labels'] == ['B']
+
+
+class TestUnstructuredNodeSetReturnNodeset:
+    def test_unstructured_nodeset_return_nodeset(self):
+        uns = UnstructuredNodeSet()
+        uns.add_node(Node(labels=["A"], merge_keys=["a"], properties={"a": 1}))
+        uns.add_node(Node(labels=["A"], merge_keys=["b"], properties={"b": 2}))
+        uns.add_node(Node(labels=["B", "C"], merge_keys=["a"], properties={"a": 3}))
+        uns.add_node(Node(labels=["B"], merge_keys=["b", "c"], properties={"b": 4, "c": 5}))
+
+        nodesets = uns.nodesets()
+
+        assert ["A"] in [ns.labels for ns in nodesets]
+        assert ["B"] in [ns.labels for ns in nodesets]
+        assert ["B", "C"] in [ns.labels for ns in nodesets]

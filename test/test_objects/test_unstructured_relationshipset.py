@@ -1,5 +1,7 @@
 from graphio.objects.unstructured_relationshipset import UnstructuredRelationshipSet, Relationship, NodeMatch
 from graphio.objects.unstructured_nodeset import UnstructuredNodeSet, Node
+from graphio.objects.nodeset import NodeSet
+from graphio.objects.relationshipset import RelationshipSet
 from graphio.graph import run_query_return_results
 
 
@@ -131,3 +133,20 @@ class TestUnstructuredRelationshipSetCreate:
             assert result[1]['n']['c'] == 1
             assert result[1]['m']['d'] == 2
             assert result[1]['r']['c'] == 3
+
+
+class TestUnstructuredRelationshipSetReturnRelationshipSet:
+    def test_unstructured_relationshipset_return_relationshipset(self):
+        uns = UnstructuredRelationshipSet()
+        uns.add_relationship(Relationship(start_node=NodeMatch(labels=["A"], properties={"a": 1}),
+                                        end_node=NodeMatch(labels=["B"], properties={"b": 2}), type="REL",
+                                        properties={"c": 3}))
+        uns.add_relationship(Relationship(start_node=NodeMatch(labels=["C"], properties={"c": 1}),
+                                        end_node=NodeMatch(labels=["D"], properties={"d": 2}), type="REL",
+                                        properties={"c": 3}))
+
+        relationshipsets = uns.relationshipsets()
+
+        assert all([isinstance(rs, RelationshipSet) for rs in relationshipsets])
+
+        assert "REL" in [rs.rel_type for rs in relationshipsets]

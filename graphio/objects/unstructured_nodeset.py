@@ -6,6 +6,7 @@ from neo4j import Driver, Transaction
 from graphio.queries import CypherQuery
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio.queries import merge_clause_with_properties
+from graphio.objects.nodeset import NodeSet
 
 
 class Node(BaseModel):
@@ -84,3 +85,22 @@ class UnstructuredNodeSet(BaseModel):
         with driver.session(database=database) as session:
             for chunk in chunks(self.nodes, batch_size):
                 session.execute_write(self.merge_nodes, chunk)
+
+    def nodesets(self):
+        """
+        Return a list of NodeSets created from the unstructured nodeset.
+        """
+
+        notedef_to_nodeset = {}
+
+        # create and collect NodeSets
+        for node_def in self.unique_node_definitions:
+            ns = NodeSet(list(node_def[0]), list(node_def[1]))
+            notedef_to_nodeset[node_def] = ns
+
+        # add nodes to NodeSets
+        for node in self.nodes:
+            node_def = (tuple(node.labels), tuple(node.merge_keys))
+            notedef_to_nodeset[node_def].add_node(node.properties)
+
+        return list(notedef_to_nodeset.values())

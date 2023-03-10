@@ -6,6 +6,7 @@ from neo4j import Driver, Transaction
 from graphio.queries import CypherQuery
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio.queries import merge_clause_with_properties
+from graphio.objects.relationshipset import RelationshipSet
 
 
 class NodeMatch(BaseModel):
@@ -47,6 +48,24 @@ class UnstructuredRelationshipSet(BaseModel):
                 unique_nodes.add(end_node_def)
 
         return unique_nodes
+
+    @property
+    def unique_relationship_definitions(self):
+        """
+        Return a unique list of relationship type/start node/end node combinations.
+        """
+        unique_relationships = set()
+
+        for relationship in self.relationships:
+            relationship_def = (
+                relationship.type, tuple(relationship.start_node.labels), tuple(relationship.end_node.labels),
+                tuple(relationship.start_node.properties.keys()), tuple(relationship.end_node.properties.keys())
+            )
+
+            if relationship_def not in unique_relationships:
+                unique_relationships.add(relationship_def)
+
+        return unique_relationships
 
     def create_index(self, driver: Driver, database: str = None):
         for labels, merge_keys in self.unique_node_definitions:
@@ -125,3 +144,19 @@ class UnstructuredRelationshipSet(BaseModel):
         with driver.session(database=database) as session:
             for chunk in chunks(self.relationships, batch_size):
                 session.execute_write(self.merge_relationships, chunk)
+
+    def relationshipsets(self):
+        """Return a list of RelationshipSet objects, one for each relationship type."""
+        reldef_to_relationships = {}
+        for reldef in self.unique_relationship_definitions:
+            rs = RelationshipSet(reldef[0], reldef[1], reldef[2], reldef[3], reldef[4])
+            reldef_to_relationships[reldef] = rs
+        # add relationships to the correct RelationshipSet
+        for relationship in self.relationships:
+            reldef = (
+                relationship.type, tuple(relationship.start_node.labels), tuple(relationship.end_node.labels),
+                tuple(relationship.start_node.properties.keys()), tuple(relationship.end_node.properties.keys())
+            )
+            reldef_to_relationships[reldef].add_relationship(relationship.start_node.properties, relationship.end_node.properties, relationship.properties)
+
+        return list(reldef_to_relationships.values())
