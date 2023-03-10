@@ -22,7 +22,7 @@ setup(name='graphio',
       license='Apache License 2.0',
       packages=find_packages(),
       install_requires=[
-          'py2neo>=2021.0.0', 'neo4j>=5.2'
+          'neo4j>=5.2', 'pydantic'
       ],
       keywords=['NEO4J'],
       zip_safe=False,

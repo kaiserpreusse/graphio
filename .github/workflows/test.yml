@@ -8,63 +8,11 @@ on:
   pull_request:
 
 jobs:
-  test_py2neo:
+  test:
     runs-on: ubuntu-latest
 
     env:
       RUN_ENVIRONMENT: 'github_actions'
-      DRIVER: 'py2neo'
-
-    services:
-      neo4j42:
-        image: neo4j:4.2.11
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-      neo4j43:
-        image: neo4j:4.3.7
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-      neo4j44:
-        image: neo4j:4.4.15
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-      neo4j51:
-        image: neo4j:5.1
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4J_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-    strategy:
-      matrix:
-        python-container: ["python:3.7", "python:3.8", "python:3.9", "python:3.10"]
-
-    container: ${{ matrix.python-container }}
-
-    steps:
-    - uses: actions/checkout@v3
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f test_requirements.txt ]; then pip install -r test_requirements.txt; fi
-    - name: Test with pytest
-      run: coverage run --source=graphio -m pytest;
-    - name: "Upload coverage to Codecov"
-      uses: codecov/codecov-action@v3
-      with:
-        fail_ci_if_error: true
-  test_neo4j_driver:
-    runs-on: ubuntu-latest
-
-    env:
-      RUN_ENVIRONMENT: 'github_actions'
-      DRIVER: 'neo4j'
 
     services:
       neo4j42:
