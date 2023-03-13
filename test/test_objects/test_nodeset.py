@@ -369,6 +369,21 @@ class TestNodeSetMerge:
 
         assert result[0][0] == 100
 
+    def test_nodeset_merge_additional_labels(self, graph, clear_graph):
+        ns = NodeSet(['Test'], merge_keys=['uuid'], additional_labels=['Foo', 'Bar'])
+        ns.add_node({'uuid': 1})
+        ns2 = NodeSet(['Test'], merge_keys=['uuid'], additional_labels=['Kurt', 'Peter'])
+        ns2.add_node({'uuid': 1})
+
+        ns.merge(graph)
+        ns.merge(graph)
+        ns2.merge(graph)
+        ns2.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")
+
+        assert result[0][0] == 1
+
 
 class TestNodeSetToJSON:
 

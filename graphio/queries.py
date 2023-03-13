@@ -117,7 +117,7 @@ def nodes_create_unwind(labels, property_parameter=None):
     return q.query()
 
 
-def nodes_merge_unwind_preserve(labels, merge_properties, property_parameter=None):
+def nodes_merge_unwind_preserve(labels, merge_properties, property_parameter=None, additional_labels=None):
     """
     Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
 
@@ -136,10 +136,13 @@ def nodes_merge_unwind_preserve(labels, merge_properties, property_parameter=Non
                     "ON CREATE SET n = properties",
                     "ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)")
 
+    if additional_labels:
+        q.append(f"SET n:{':'.join(additional_labels)}")
+
     return q.query()
 
 
-def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
+def nodes_merge_unwind(labels, merge_properties, property_parameter=None, additional_labels=None):
     """
     Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
 
@@ -171,6 +174,7 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
     :type merge_properties: list[str]
     :param property_parameter: Optional name of the parameter used in the query. Default is 'props'.
     :type property_parameter: str
+    :param additional_labels: Optional additional labels to set on the node.
     :return: Query
     """
     if not property_parameter:
@@ -189,10 +193,13 @@ def nodes_merge_unwind(labels, merge_properties, property_parameter=None):
                     "ON CREATE SET n = properties",
                     "ON MATCH SET n += properties")
 
+    if additional_labels:
+        q.append(f"SET n:{':'.join(additional_labels)}")
+
     return q.query()
 
 
-def nodes_merge_unwind_array_props(labels, merge_properties, array_props, property_parameter=None):
+def nodes_merge_unwind_array_props(labels, merge_properties, array_props, property_parameter=None, additional_labels=None):
     """
     Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
 
@@ -223,10 +230,13 @@ def nodes_merge_unwind_array_props(labels, merge_properties, array_props, proper
                     "ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)",
                     f"ON MATCH SET {on_match_array_props_string}")
 
+    if additional_labels:
+        q.append(f"SET n:{':'.join(additional_labels)}")
+
     return q.query()
 
 
-def nodes_merge_unwind_preserve_array_props(labels, merge_properties, array_props, preserve, property_parameter=None):
+def nodes_merge_unwind_preserve_array_props(labels, merge_properties, array_props, preserve, property_parameter=None, additional_labels=None):
     """
     Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
 
@@ -259,6 +269,9 @@ def nodes_merge_unwind_preserve_array_props(labels, merge_properties, array_prop
 
     if on_match_array_props_list:
         q.append(f"ON MATCH SET {on_match_array_props_string}")
+
+    if additional_labels:
+        q.append(f"SET n:{':'.join(additional_labels)}")
 
     return q.query()
 

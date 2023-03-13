@@ -5,7 +5,7 @@ import json
 import csv
 import gzip
 from collections import defaultdict
-from typing import Set
+from typing import Set, List
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
@@ -27,7 +27,8 @@ class NodeSet:
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels=None, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False):
+    def __init__(self, labels=None, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False,
+                 additional_labels: List[str]=None):
         """
 
         :param labels: The labels for the nodes in this NodeSet.
@@ -43,6 +44,7 @@ class NodeSet:
         self.preserve = preserve
         self.append_props = append_props
         self.indexed = indexed
+        self.additional_labels = additional_labels
 
         if self.labels:
             self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
@@ -380,25 +382,25 @@ class NodeSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         if not self.preserve and not self.append_props:
-            q = nodes_merge_unwind(self.labels, self.merge_keys)
+            q = nodes_merge_unwind(self.labels, self.merge_keys, additional_labels=self.additional_labels)
             for batch in chunks(self.node_properties(), size=batch_size):
                 run_query_return_results(graph, q, database=database, props=list(batch))
 
         elif self.preserve and not self.append_props:
-            q = nodes_merge_unwind_preserve(self.labels, self.merge_keys, property_parameter='props')
+            q = nodes_merge_unwind_preserve(self.labels, self.merge_keys, property_parameter='props', additional_labels=self.additional_labels)
             for batch in chunks(self.node_properties(), size=batch_size):
                 run_query_return_results(graph, q, database=database, props=list(batch), preserve=self.preserve)
 
         elif not self.preserve and self.append_props:
             q = nodes_merge_unwind_array_props(self.labels, self.merge_keys, self.append_props,
-                                               property_parameter='props')
+                                               property_parameter='props', additional_labels=self.additional_labels)
             for batch in chunks(self.node_properties(), size=batch_size):
                 run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props)
 
         elif self.preserve and self.append_props:
 
             q = nodes_merge_unwind_preserve_array_props(self.labels, self.merge_keys, self.append_props, self.preserve,
-                                                        property_parameter='props')
+                                                        property_parameter='props', additional_labels=self.additional_labels)
             for batch in chunks(self.node_properties(), size=batch_size):
                 run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props, preserve=self.preserve)
 
