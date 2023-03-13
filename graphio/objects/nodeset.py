@@ -351,7 +351,11 @@ class NodeSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        q = nodes_create_unwind(self.labels)
+        if self.additional_labels:
+            all_labels = self.labels + self.additional_labels
+            q = nodes_create_unwind(all_labels)
+        else:
+            q = nodes_create_unwind(self.labels)
 
         for batch in chunks(self.nodes, size=batch_size):
             run_query_return_results(graph, q, database=database, props=list(batch))

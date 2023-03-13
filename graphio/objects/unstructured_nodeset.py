@@ -13,6 +13,7 @@ class Node(BaseModel):
     labels: List[str]
     merge_keys: List[str]
     properties: dict = {}
+    additional_labels: List[str] = []
 
 
 class UnstructuredNodeSet(BaseModel):
@@ -50,9 +51,10 @@ class UnstructuredNodeSet(BaseModel):
     def create_nodes(tx, nodes: List[Node]):
         for node in nodes:
             q = CypherQuery(
-                f"CREATE (n:{':'.join(node.labels)})",
+                f"CREATE (n:{':'.join(node.labels+node.additional_labels)})",
                 "SET n = $properties"
             )
+
             tx.run(q.query(), properties=node.properties)
 
     def create(self, driver: Driver, database: str = None, batch_size=None):
@@ -72,7 +74,8 @@ class UnstructuredNodeSet(BaseModel):
                 merge_clause_with_properties(node.labels, node.merge_keys, prop_name="$properties", node_variable="n"),
                 "SET n = $properties"
             )
-
+            if node.additional_labels:
+                q.append(f"SET n:{':'.join(node.additional_labels)}")
             tx.run(q.query(), properties=node.properties)
 
     def merge(self, driver: Driver, database: str = None, batch_size=None):

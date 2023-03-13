@@ -203,6 +203,20 @@ class TestNodeSetCreate:
         assert result[0][0] == 100
 
 
+    def test_nodeset_create_additional_labels(self, graph, clear_graph):
+        ns = NodeSet(['Test'], merge_keys=['key'], additional_labels=['Foo', 'Bar'])
+        for i in range(10):
+            ns.add_node({'key': i})
+
+        ns.create(graph)
+        result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar) RETURN count(n)")
+        assert result[0][0] == 10
+
+        ns.create(graph)
+        result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar) RETURN count(n)")
+        assert result[0][0] == 20
+
+
 class TestNodeSetIndex:
 
     def test_nodeset_create_single_index(self, graph, clear_graph):
@@ -381,9 +395,10 @@ class TestNodeSetMerge:
         ns2.merge(graph)
 
         result = run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")
-
         assert result[0][0] == 1
 
+        result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar:Kurt:Peter) RETURN count(n)")
+        assert result[0][0] == 1
 
 class TestNodeSetToJSON:
 

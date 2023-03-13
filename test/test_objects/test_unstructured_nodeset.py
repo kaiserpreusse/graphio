@@ -91,6 +91,16 @@ class TestUnstructuredNodeSetCreate:
                 assert row['n']['c'] == 5
                 assert row['labels'] == ['B']
 
+    def test_unstructured_nodeset_additional_labels_create(self, graph, clear_graph):
+        uns = UnstructuredNodeSet()
+        uns.add_node(Node(labels=["A"], merge_keys=["a"], properties={"a": 1}, additional_labels=["B", "C"]))
+
+        uns.create(graph)
+
+        q = "MATCH (n:A:B:C) RETURN count(n)"
+        result = run_query_return_results(graph, q)
+        assert result[0][0] == 1
+
 
 class TestUnstructuredNodeSetMerge:
     def test_unstructured_nodeset_merge(self, graph, clear_graph):
@@ -122,6 +132,21 @@ class TestUnstructuredNodeSetMerge:
                 assert row['n']['c'] == 5
                 assert row['labels'] == ['B']
 
+    def test_unstructured_nodeset_merge_additional_labels(self, graph, clear_graph):
+        uns1 = UnstructuredNodeSet()
+        uns1.add_node(Node(labels=["A"], merge_keys=["a"], properties={"a": 1}, additional_labels=["B", "C"]))
+
+        uns2 = UnstructuredNodeSet()
+        uns2.add_node(Node(labels=["A"], merge_keys=["a"], properties={"a": 1}, additional_labels=["D", "E"]))
+
+        uns1.merge(graph)
+        uns2.merge(graph)
+
+        result = run_query_return_results(graph, "MATCH (n:A) RETURN count(n)")
+        assert result[0][0] == 1
+
+        result = run_query_return_results(graph, "MATCH (n:A:B:C:D:E) RETURN count(n)")
+        assert result[0][0] == 1
 
 class TestUnstructuredNodeSetReturnNodeset:
     def test_unstructured_nodeset_return_nodeset(self):
