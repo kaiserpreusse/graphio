@@ -11,8 +11,8 @@ class TestUnstructuredNodeSet:
         uns.add_node(Node(labels=["B", "C"], merge_keys=["a"]))
         uns.add_node(Node(labels=["B"], merge_keys=["b", "c"]))
 
-        assert uns.unique_node_definitions == {(('A',), ('b',)), (('B', 'C'), ('a',)), (('A',), ('a',)),
-                                               (('B',), ('b', 'c'))}
+        assert uns.unique_node_definitions == {(('A',), ('b',), ()), (('B', 'C'), ('a',), ()), (('A',), ('a',), ()),
+                                               (('B',), ('b', 'c'), ())}
 
 
 class TestUnstructuredNodeSetIndexes:
@@ -161,3 +161,16 @@ class TestUnstructuredNodeSetReturnNodeset:
         assert ["A"] in [ns.labels for ns in nodesets]
         assert ["B"] in [ns.labels for ns in nodesets]
         assert ["B", "C"] in [ns.labels for ns in nodesets]
+
+    def test_unstructured_nodeset_return_nodeset_additional_labels(self):
+        uns = UnstructuredNodeSet()
+        uns.add_node(Node(labels=["A"], merge_keys=["a"], properties={"a": 1}))
+        uns.add_node(Node(labels=["A"], merge_keys=["a"], properties={"b": 2}, additional_labels=["B"]))
+        uns.add_node(Node(labels=["A"], merge_keys=["a"], properties={"b": 2}, additional_labels=["C"]))
+
+        nodesets = uns.nodesets()
+        assert len(nodesets) == 3
+
+        assert ["A"] in [ns.labels for ns in nodesets]
+        assert any([ns.additional_labels == ["B"] for ns in nodesets])
+        assert any([ns.additional_labels == ["C"] for ns in nodesets])

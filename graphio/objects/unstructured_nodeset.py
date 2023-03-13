@@ -33,14 +33,14 @@ class UnstructuredNodeSet(BaseModel):
         unique_nodes = set()
 
         for node in self.nodes:
-            node_def = (tuple(node.labels), tuple(node.merge_keys))
+            node_def = (tuple(node.labels), tuple(node.merge_keys), tuple(node.additional_labels))
             if node_def not in unique_nodes:
                 unique_nodes.add(node_def)
 
         return unique_nodes
 
     def create_index(self, driver: Driver, database: str = None):
-        for labels, merge_keys in self.unique_node_definitions:
+        for labels, merge_keys, _ in self.unique_node_definitions:
             for label in labels:
                 for merge_key in merge_keys:
                     create_single_index(driver, label, merge_key, database=database)
@@ -98,12 +98,12 @@ class UnstructuredNodeSet(BaseModel):
 
         # create and collect NodeSets
         for node_def in self.unique_node_definitions:
-            ns = NodeSet(list(node_def[0]), list(node_def[1]))
+            ns = NodeSet(list(node_def[0]), list(node_def[1]), additional_labels=list(node_def[2]))
             notedef_to_nodeset[node_def] = ns
 
         # add nodes to NodeSets
         for node in self.nodes:
-            node_def = (tuple(node.labels), tuple(node.merge_keys))
+            node_def = (tuple(node.labels), tuple(node.merge_keys), tuple(node.additional_labels))
             notedef_to_nodeset[node_def].add_node(node.properties)
 
         return list(notedef_to_nodeset.values())
