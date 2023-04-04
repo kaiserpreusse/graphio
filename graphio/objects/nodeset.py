@@ -5,7 +5,9 @@ import json
 import csv
 import gzip
 from collections import defaultdict
-from typing import Set, List
+from typing import Set, List, Union
+
+from pydantic import BaseModel
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
@@ -21,6 +23,34 @@ CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
 
 TYPE_CONVERSION = {'int': int,
                    'float': float}
+
+
+class NodeSetDefinition(BaseModel):
+    """
+    NodeSetDefinition is a NodeSet without the actual data. Independent class for now, can be parent
+    class for NodeSet in the future.
+    """
+    uuid: str
+    labels: List[str]
+    merge_keys: List[str]
+    default_props: dict = {}
+    preserve: List[str] = []
+    append_props: List[str] = []
+    indexed: bool = False
+    additional_labels: List[str] = []
+    num_nodes: int = 0
+
+    def props(self):
+        """Node properties for NodeSetDefinition."""
+        return {'uuid': self.uuid,
+                'labels': self.labels,
+                'merge_keys': self.merge_keys,
+                'default_props': str(self.default_props),
+                'preserve': self.preserve,
+                'append_props': self.append_props,
+                'indexed': self.indexed,
+                'additional_labels': self.additional_labels,
+                'num_nodes': self.num_nodes}
 
 class NodeSet:
     """
@@ -61,6 +91,12 @@ class NodeSet:
         # a node index with merge_key_id -> [positions in nodes list]
         # this works for both unique and non-unique settings
         self.node_index = defaultdict(list)
+
+    def to_definition(self):
+        """Create a NodeSetDefinition from this NodeSet. Later, NodeSetDefinition can become parent class of NodeSet."""
+        return NodeSetDefinition(uuid=self.uuid, labels=self.labels, merge_keys=self.merge_keys, default_props=self.default_props or {},
+                                 preserve=self.preserve or [], append_props=self.append_props or [], indexed=self.indexed,
+                                 additional_labels=self.additional_labels or [], num_nodes=len(self.nodes))
 
     def __str__(self):
         return f"<NodeSet ({self.labels}; {self.merge_keys})>"

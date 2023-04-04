@@ -141,6 +141,19 @@ def test_relationshipset_estiamte_types():
     assert rel_property_types['number'] == int
 
 
+
+class TestRelationshipSetInstance:
+
+    def test_relationshipset_to_definition(self, small_relationshipset):
+        rsdef = small_relationshipset.to_definition()
+        assert rsdef.uuid == small_relationshipset.uuid
+        assert rsdef.rel_type == 'TEST'
+        assert rsdef.start_node_labels == ['Test']
+        assert rsdef.end_node_labels == ['Foo']
+        assert rsdef.start_node_properties == ['uuid']
+        assert rsdef.end_node_properties == ['uuid']
+
+
 class TestDefaultProps:
 
     def test_default_props(self):
