@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
 from graphio.queries import nodes_create_unwind, nodes_merge_unwind, nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
-    nodes_merge_unwind_preserve_array_props
+    nodes_merge_unwind_preserve_array_props, nodes_merge_factory
 from graphio.graph import run_query_return_results
 
 log = logging.getLogger(__name__)
@@ -58,23 +58,19 @@ class NodeSet:
     """
 
     def __init__(self, labels=None, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False,
-                 additional_labels: List[str]=None):
+                 additional_labels: List[str]=None, source: bool=False):
         """
 
-        :param labels: The labels for the nodes in this NodeSet.
-        :type labels: list[str]
-        :param merge_keys: The properties that define uniqueness of the nodes in this NodeSet.
-        :type merge_keys: list[str]
-        :param batch_size: Batch size for Neo4j operations.
-        :type batch_size: int
+
         """
         self.labels = labels
         self.merge_keys = merge_keys
-        self.default_props = default_props
-        self.preserve = preserve
-        self.append_props = append_props
+        self.default_props = default_props or {}
+        self.preserve = preserve or []
+        self.append_props = append_props or []
         self.indexed = indexed
-        self.additional_labels = additional_labels
+        self.additional_labels = additional_labels or []
+        self.source = source
 
         if self.labels:
             self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
@@ -421,28 +417,14 @@ class NodeSet:
 
         log.debug('Batch Size: {}'.format(batch_size))
 
-        if not self.preserve and not self.append_props:
-            q = nodes_merge_unwind(self.labels, self.merge_keys, additional_labels=self.additional_labels)
-            for batch in chunks(self.node_properties(), size=batch_size):
-                run_query_return_results(graph, q, database=database, props=list(batch))
+        q = nodes_merge_factory(self.labels, self.merge_keys, array_props=self.append_props, preserve=self.preserve,
+                                property_parameter='props', additional_labels=self.additional_labels, source=self.source)
+        print(q)
+        print(dict(append_props=self.append_props, preserve=self.preserve))
+        for batch in chunks(self.node_properties(), size=batch_size):
+            run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props,
+                                     preserve=self.preserve, source=self.uuid)
 
-        elif self.preserve and not self.append_props:
-            q = nodes_merge_unwind_preserve(self.labels, self.merge_keys, property_parameter='props', additional_labels=self.additional_labels)
-            for batch in chunks(self.node_properties(), size=batch_size):
-                run_query_return_results(graph, q, database=database, props=list(batch), preserve=self.preserve)
-
-        elif not self.preserve and self.append_props:
-            q = nodes_merge_unwind_array_props(self.labels, self.merge_keys, self.append_props,
-                                               property_parameter='props', additional_labels=self.additional_labels)
-            for batch in chunks(self.node_properties(), size=batch_size):
-                run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props)
-
-        elif self.preserve and self.append_props:
-
-            q = nodes_merge_unwind_preserve_array_props(self.labels, self.merge_keys, self.append_props, self.preserve,
-                                                        property_parameter='props', additional_labels=self.additional_labels)
-            for batch in chunks(self.node_properties(), size=batch_size):
-                run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props, preserve=self.preserve)
 
     def node_properties(self):
         """

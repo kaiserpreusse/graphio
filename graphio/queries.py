@@ -236,6 +236,61 @@ def nodes_merge_unwind_array_props(labels, merge_properties, array_props, proper
     return q.query()
 
 
+def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=None, property_parameter=None,
+                        additional_labels=None, source=False):
+    """
+    Generate a :code:`MERGE` query based on the combination of paremeters.
+    """
+    if not property_parameter:
+        property_parameter = 'props'
+
+    on_create_array_props_list = []
+    for ap in array_props:
+        on_create_array_props_list.append(f"n.{ap} = [properties.{ap}]")
+    on_create_array_props_string = ', '.join(on_create_array_props_list)
+
+    on_match_array_props_list = []
+    for ap in array_props:
+        if ap not in preserve:
+            on_match_array_props_list.append(f"n.{ap} = n.{ap} + properties.{ap}")
+    on_match_array_props_string = ', '.join(on_match_array_props_list)
+
+    q = CypherQuery()
+    # add UNWIND
+    q.append(f"UNWIND ${property_parameter} AS properties")
+    # add MERGE
+    q.append(merge_clause_with_properties(labels, merge_properties))
+
+    # handle different ON CREATE SET and ON MATCH SET cases
+    if not array_props and not preserve:
+        q.append("ON CREATE SET n = properties")
+        q.append("ON MATCH SET n += properties")
+    elif not array_props and preserve:
+        q.append("ON CREATE SET n = properties")
+        q.append("ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)")
+    elif array_props and not preserve:
+        q.append("ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)")
+        q.append(f"ON CREATE SET {on_create_array_props_string}")
+        q.append("ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)")
+        q.append(f"ON MATCH SET {on_match_array_props_string}")
+    elif array_props and preserve:
+        q.append("ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)")
+        q.append(f"ON CREATE SET {on_create_array_props_string}")
+        q.append("ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)")
+        if on_match_array_props_list:
+            q.append(f"ON MATCH SET {on_match_array_props_string}")
+
+    if source:
+        q.append(f"ON CREATE SET n._source = [$source]")
+        q.append(f"ON MATCH SET n._source = n._source + [$source]")
+
+    if additional_labels:
+        q.append(f"SET n:{':'.join(additional_labels)}")
+
+
+    return q.query()
+
+
 def nodes_merge_unwind_preserve_array_props(labels, merge_properties, array_props, preserve, property_parameter=None, additional_labels=None):
     """
     Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::

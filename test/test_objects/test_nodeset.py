@@ -408,6 +408,42 @@ class TestNodeSetMerge:
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar:Kurt:Peter) RETURN count(n)")
         assert result[0][0] == 1
 
+    def test_nodeset_source(self, graph, clear_graph):
+        """
+        Merge a nodeset 3 times and check number of nodes.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], source=True)
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+
+        ns.merge(graph)
+
+        assert run_query_return_results(graph, f"MATCH (n:Test) where '{ns.uuid}' IN n._source RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) WHERE size(n._source) = 1 RETURN count(n)")[0][0] == 100
+
+    def test_nodeset_source_update(self, graph, clear_graph):
+        """
+        Merge a nodeset 3 times and check number of nodes.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], source=True)
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+
+        ns.merge(graph)
+
+        # new nodeset with same data but different uuid
+        ns2 = NodeSet(['Test'], merge_keys=['uuid'], source=True)
+        for i in range(100):
+            ns2.add_node({'uuid': i, 'key': 'value'})
+        ns2.merge(graph)
+
+        assert run_query_return_results(graph, f"MATCH (n:Test) where '{ns.uuid}' IN n._source RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, f"MATCH (n:Test) where '{ns2.uuid}' IN n._source RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) WHERE size(n._source) = 2 RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, "MATCH (n:Test) WHERE size(n._source) <> 2 RETURN count(n)")[0][0] == 0
+
+
+
 class TestNodeSetToJSON:
 
     def test_nodeset_file_name(self, small_nodeset):
