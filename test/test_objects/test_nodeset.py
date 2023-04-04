@@ -224,6 +224,14 @@ class TestNodeSetCreate:
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar) RETURN count(n)")
         assert result[0][0] == 20
 
+    def test_nodeset_create_source(self, graph, clear_graph, small_nodeset):
+        small_nodeset.source = True
+        small_nodeset.create(graph)
+
+        assert run_query_return_results(graph, f"MATCH (n:Test) WHERE '{small_nodeset.uuid}' IN n._source RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, f"MATCH (n:Test) WHERE size(n._source) = 1 RETURN count(n)")[0][0] == 100
+        assert run_query_return_results(graph, f"MATCH (n:Test) WHERE size(n._source) <> 1 RETURN count(n)")[0][0] == 0
+
 
 class TestNodeSetIndex:
 

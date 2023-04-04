@@ -236,6 +236,24 @@ def nodes_merge_unwind_array_props(labels, merge_properties, array_props, proper
     return q.query()
 
 
+def nodes_create_factory(labels, property_parameter=None, additional_labels=None, source=False):
+    if not property_parameter:
+        property_parameter = 'props'
+
+    if additional_labels:
+        labels = labels + additional_labels
+
+    label_string = get_label_string_from_list_of_labels(labels)
+
+    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
+                    f"CREATE (n{label_string})",
+                    "SET n = properties")
+    if source:
+        q.append("SET n._source = [$source]")
+
+    return q.query()
+
+
 def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=None, property_parameter=None,
                         additional_labels=None, source=False):
     """

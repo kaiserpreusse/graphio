@@ -11,8 +11,7 @@ from pydantic import BaseModel
 
 from graphio.helper import chunks, create_single_index, create_composite_index
 from graphio import defaults
-from graphio.queries import nodes_create_unwind, nodes_merge_unwind, nodes_merge_unwind_preserve, nodes_merge_unwind_array_props, \
-    nodes_merge_unwind_preserve_array_props, nodes_merge_factory
+from graphio.queries import nodes_merge_factory, nodes_create_factory
 from graphio.graph import run_query_return_results
 
 log = logging.getLogger(__name__)
@@ -383,14 +382,10 @@ class NodeSet:
             batch_size = self.batch_size
         log.debug('Batch Size: {}'.format(batch_size))
 
-        if self.additional_labels:
-            all_labels = self.labels + self.additional_labels
-            q = nodes_create_unwind(all_labels)
-        else:
-            q = nodes_create_unwind(self.labels)
+        q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels, source=self.source)
 
         for batch in chunks(self.nodes, size=batch_size):
-            run_query_return_results(graph, q, database=database, props=list(batch))
+            run_query_return_results(graph, q, database=database, props=list(batch), source=self.uuid)
 
     def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None, database=None):
         """
@@ -423,7 +418,6 @@ class NodeSet:
         for batch in chunks(self.node_properties(), size=batch_size):
             run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props,
                                      preserve=self.preserve, source=self.uuid)
-
 
     def node_properties(self):
         """
