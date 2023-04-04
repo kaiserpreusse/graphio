@@ -49,7 +49,7 @@ SET n = properties"""
 
     def test_nodes_create_additional_labels(self):
         q = nodes_create_factory(['Person'], additional_labels=['Foo'])
-        assert q == """NWIND $props AS properties
+        assert q == """UNWIND $props AS properties
 CREATE (n:Person:Foo)
 SET n = properties"""
 
