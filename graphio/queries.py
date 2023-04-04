@@ -82,160 +82,6 @@ def match_clause_with_properties(labels: List[str], merge_properties: List[str],
     return f"MATCH ({node_variable}{label_string} {{ {match_properties_as_string(merge_properties, prop_name)} }} )"
 
 
-def nodes_create_unwind(labels, property_parameter=None):
-    """
-    Generate a :code:`CREATE` query using :code:`UNWIND` for batch creation of nodes.::
-
-        UNWIND $props AS properties CREATE (n:Gene) SET n = properties
-
-    Pass the node properties as parameter to the query:
-
-        graph.run(query, props=[{'id': 1}, {'id': 2}, ...])
-
-    You can optionally set the name of the parameter with the argument :code:`property_parameter`::
-
-        query = nodes_create_unwind(['Foo'], query_parameter='mynodes')
-
-        graph.run(query, mynodes=[{'id': 1}, {'id': 2}, ...])
-
-
-    :param labels: Labels for the create query.
-    :type labels: list[str]
-    :param property_parameter: Optional name of the parameter used in the query. Default is 'props'.
-    :type property_parameter: str
-    :return: Query
-    """
-    if not property_parameter:
-        property_parameter = 'props'
-
-    label_string = get_label_string_from_list_of_labels(labels)
-
-    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    f"CREATE (n{label_string})",
-                    "SET n = properties")
-
-    return q.query()
-
-
-def nodes_merge_unwind_preserve(labels, merge_properties, property_parameter=None, additional_labels=None):
-    """
-    Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
-
-        UNWIND $props AS properties
-        MERGE (n:Node {properties.sid: '1234'})
-        ON CREATE SET n = properties
-        ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)
-
-    The '+=' operator in ON MATCH updates the node properties provided and leaves the others untouched.
-    """
-    if not property_parameter:
-        property_parameter = 'props'
-
-    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    merge_clause_with_properties(labels, merge_properties),
-                    "ON CREATE SET n = properties",
-                    "ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)")
-
-    if additional_labels:
-        q.append(f"SET n:{':'.join(additional_labels)}")
-
-    return q.query()
-
-
-def nodes_merge_unwind(labels, merge_properties, property_parameter=None, additional_labels=None):
-    """
-    Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
-
-        UNWIND $props AS properties
-        MERGE (n:Node {properties.sid: '1234'})
-        ON CREATE SET n = properties
-        ON MATCH SET n += properties
-
-    The '+=' operator in ON MATCH updates the node properties provided and leaves the others untouched.
-
-    Call with the labels and a list of properties to :code:`MERGE` on::
-
-        query = nodes_merge_unwind(['Foo', 'Bar'], ['node_id'])
-
-    Pass the node properties as parameter to the query:
-
-        graph.run(query, props=[{'node_id': 1}, {'node_id': 2}, ...])
-
-    You can optionally set the name of the parameter with the argument :code:`property_parameter`::
-
-        query = nodes_merge_unwind([['Foo', 'Bar'], ['node_id'], query_parameter='mynodes')
-
-        graph.run(query, mynodes=[{'node_id': 1}, {'node_id': 2}, ...])
-
-
-    :param labels: Labels for the query.
-    :type labels: list[str]
-    :param merge_properties: Unique properties for the node.
-    :type merge_properties: list[str]
-    :param property_parameter: Optional name of the parameter used in the query. Default is 'props'.
-    :type property_parameter: str
-    :param additional_labels: Optional additional labels to set on the node.
-    :return: Query
-    """
-    if not property_parameter:
-        property_parameter = 'props'
-
-    label_string = get_label_string_from_list_of_labels(labels)
-
-    merge_strings = []
-    for u in merge_properties:
-        merge_strings.append("{0}: properties.{0}".format(u))
-
-    merge_string = ', '.join(merge_strings)
-
-    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    f"MERGE (n{label_string} {{ {merge_string} }} )",
-                    "ON CREATE SET n = properties",
-                    "ON MATCH SET n += properties")
-
-    if additional_labels:
-        q.append(f"SET n:{':'.join(additional_labels)}")
-
-    return q.query()
-
-
-def nodes_merge_unwind_array_props(labels, merge_properties, array_props, property_parameter=None, additional_labels=None):
-    """
-    Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
-
-        UNWIND $props AS properties
-        MERGE (n:Node {properties.sid: '1234'})
-        ON CREATE SET n = properties
-        ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)
-
-    The '+=' operator in ON MATCH updates the node properties provided and leaves the others untouched.
-    """
-    if not property_parameter:
-        property_parameter = 'props'
-
-    on_create_array_props_list = []
-    for ap in array_props:
-        on_create_array_props_list.append(f"n.{ap} = [properties.{ap}]")
-    on_create_array_props_string = ', '.join(on_create_array_props_list)
-
-    on_match_array_props_list = []
-    for ap in array_props:
-        on_match_array_props_list.append(f"n.{ap} = n.{ap} + properties.{ap}")
-    on_match_array_props_string = ', '.join(on_match_array_props_list)
-
-    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    merge_clause_with_properties(labels, merge_properties),
-                    "ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)",
-                    f"ON CREATE SET {on_create_array_props_string}",
-                    "ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)",
-                    f"ON MATCH SET {on_match_array_props_string}")
-
-    if additional_labels:
-        q.append(f"SET n:{':'.join(additional_labels)}")
-
-    return q.query()
-
-
 def nodes_create_factory(labels, property_parameter=None, additional_labels=None, source=False):
     if not property_parameter:
         property_parameter = 'props'
@@ -259,6 +105,12 @@ def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=Non
     """
     Generate a :code:`MERGE` query based on the combination of paremeters.
     """
+    if not array_props:
+        array_props = []
+
+    if not preserve:
+        preserve = []
+
     if not property_parameter:
         property_parameter = 'props'
 
@@ -305,46 +157,6 @@ def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=Non
     if additional_labels:
         q.append(f"SET n:{':'.join(additional_labels)}")
 
-
-    return q.query()
-
-
-def nodes_merge_unwind_preserve_array_props(labels, merge_properties, array_props, preserve, property_parameter=None, additional_labels=None):
-    """
-    Generate a :code:`MERGE` query which uses defined properties to :code:`MERGE` upon::
-
-        UNWIND $props AS properties
-        MERGE (n:Person { name: properties.name } )
-        ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)
-        ON CREATE SET n.foo = [properties.foo], n.bar = [properties.bar]
-        ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)
-        ON MATCH SET n.foo = n.foo + properties.foo"
-    """
-    if not property_parameter:
-        property_parameter = 'props'
-
-    on_create_array_props_list = []
-    for ap in array_props:
-        on_create_array_props_list.append(f"n.{ap} = [properties.{ap}]")
-    on_create_array_props_string = ', '.join(on_create_array_props_list)
-
-    on_match_array_props_list = []
-    for ap in array_props:
-        if ap not in preserve:
-            on_match_array_props_list.append(f"n.{ap} = n.{ap} + properties.{ap}")
-    on_match_array_props_string = ', '.join(on_match_array_props_list)
-
-    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    merge_clause_with_properties(labels, merge_properties),
-                    "ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)",
-                    f"ON CREATE SET {on_create_array_props_string}",
-                    "ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)")
-
-    if on_match_array_props_list:
-        q.append(f"ON MATCH SET {on_match_array_props_string}")
-
-    if additional_labels:
-        q.append(f"SET n:{':'.join(additional_labels)}")
 
     return q.query()
 
