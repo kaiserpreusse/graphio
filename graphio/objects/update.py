@@ -42,6 +42,22 @@ class GraphUpdate(BaseModel):
             q = """MERGE (u:GraphUpdate {uuid: $uuid}) SET u += $properties"""
             session.run(q, uuid=self.uuid, properties=self.props())
 
+    def add(self, *args):
+        """
+        Add a NodeSet or RelationshipSet to the GraphUpdate.
+        """
+        for arg in args:
+            if isinstance(arg, NodeSet):
+                self.add_nodeset(arg.to_definition())
+            elif isinstance(arg, RelationshipSet):
+                self.add_relationshipset(arg.to_definition())
+            elif isinstance(arg, NodeSetDefinition):
+                self.add_nodeset(arg)
+            elif isinstance(arg, RelationshipSetDefinition):
+                self.add_relationshipset(arg)
+            else:
+                raise TypeError(f"add() expects NodeSet, NodeSetDefinition, RelationshipSet or RelationshipSetDefinition, got {type(arg)}")
+
     def add_nodeset(self, nodeset: NodeSetDefinition):
         """Add a NodeSet that was created outside of the GraphUpdate object."""
         self.nodesets.append(nodeset)

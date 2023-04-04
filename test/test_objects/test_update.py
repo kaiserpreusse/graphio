@@ -64,3 +64,20 @@ class TestGraphUpdateCycle:
             assert list(s.run("MATCH (n:RelationshipSet) RETURN count(n)"))[0][0] == 1
             assert list(s.run("MATCH (g:GraphUpdate)-[:CONTAINS]->(n:RelationshipSet) RETURN count(n)"))[0][0] == 1
             assert list(s.run("MATCH (g:GraphUpdate)-[:CONTAINS]->(n:NodeSet) RETURN count(n)"))[0][0] == 2
+
+    def test_graph_update_mixed_add(self, graph, clear_graph, small_relationshipset, matching_nodesets):
+        ns1, ns2 = matching_nodesets
+
+        graph_update = GraphUpdate()
+        graph_update.start(graph)
+
+        graph_update.add(ns1, ns2, small_relationshipset)
+
+        graph_update.finish()
+
+        with graph.session() as s:
+            assert list(s.run("MATCH (n:GraphUpdate) RETURN n.uuid as uuid"))[0][0] == graph_update.uuid
+            assert list(s.run("MATCH (n:NodeSet) RETURN count(n)"))[0][0] == 2
+            assert list(s.run("MATCH (n:RelationshipSet) RETURN count(n)"))[0][0] == 1
+            assert list(s.run("MATCH (g:GraphUpdate)-[:CONTAINS]->(n:RelationshipSet) RETURN count(n)"))[0][0] == 1
+            assert list(s.run("MATCH (g:GraphUpdate)-[:CONTAINS]->(n:NodeSet) RETURN count(n)"))[0][0] == 2
