@@ -419,8 +419,7 @@ class NodeSet:
 
         q = nodes_merge_factory(self.labels, self.merge_keys, array_props=self.append_props, preserve=self.preserve,
                                 property_parameter='props', additional_labels=self.additional_labels, source=self.source)
-        print(q)
-        print(dict(append_props=self.append_props, preserve=self.preserve))
+
         for batch in chunks(self.node_properties(), size=batch_size):
             run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props,
                                      preserve=self.preserve, source=self.uuid)
