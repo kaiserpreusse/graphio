@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index
-from graphio.queries import rels_create_unwind, rels_merge_unwind, rels_params_from_objects
+from graphio.queries import rels_create_factory, rels_merge_factory, rels_params_from_objects
 from graphio.graph import run_query_return_results
 
 log = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class RelationshipSet:
     """
 
     def __init__(self, rel_type, start_node_labels, end_node_labels, start_node_properties, end_node_properties,
-                 batch_size=None, default_props=None):
+                 batch_size=None, default_props=None, source=False):
         """
 
         :param rel_type: Realtionship type.
@@ -101,6 +101,7 @@ class RelationshipSet:
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
         self.default_props = default_props
+        self.source = source
 
         self.fixed_order_start_node_properties = tuple(self.start_node_properties)
         self.fixed_order_end_node_properties = tuple(self.end_node_properties)
@@ -478,11 +479,11 @@ class RelationshipSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
-        q = rels_create_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                               self.end_node_properties, self.rel_type)
+        q = rels_create_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
+                                self.end_node_properties, self.rel_type, source=self.source)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
-            run_query_return_results(graph, q, database=database, **query_parameters)
+            run_query_return_results(graph, q, database=database, source=self.uuid, **query_parameters)
 
     def merge(self, graph, database=None, batch_size=None):
         """
@@ -494,11 +495,11 @@ class RelationshipSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
-        q = rels_merge_unwind(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                              self.end_node_properties, self.rel_type)
+        q = rels_merge_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
+                               self.end_node_properties, self.rel_type, source=self.source)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
-            run_query_return_results(graph, q, database=database, **query_parameters)
+            run_query_return_results(graph, q, database=database, source=self.uuid, **query_parameters)
 
     def create_index(self, graph, database=None):
         """

@@ -196,8 +196,8 @@ def rels_params_from_objects(relationships, property_identifier=None):
     return {property_identifier: output}
 
 
-def rels_create_unwind(start_node_labels, end_node_labels, start_node_properties,
-                             end_node_properties, rel_type, property_identifier=None):
+def rels_create_factory(start_node_labels, end_node_labels, start_node_properties,
+                        end_node_properties, rel_type, property_identifier=None, source=False):
     """
     Create relationship query with explicit arguments.
 
@@ -244,13 +244,16 @@ def rels_create_unwind(start_node_labels, end_node_labels, start_node_properties
     q.append("WHERE " + ' AND '.join(where_clauses))
 
     q.append(f"CREATE (a)-[r:{rel_type}]->(b)")
-    q.append("SET r = rel.properties RETURN count(r)")
+    q.append("SET r = rel.properties")
+
+    if source:
+        q.append(f"SET r._source = [$source]")
 
     return q.query()
 
 
-def rels_merge_unwind(start_node_labels, end_node_labels, start_node_properties,
-                             end_node_properties, rel_type, property_identifier=None):
+def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties,
+                       end_node_properties, rel_type, property_identifier=None, source=False):
     """
     Merge relationship query with explicit arguments.
 
@@ -299,6 +302,11 @@ def rels_merge_unwind(start_node_labels, end_node_labels, start_node_properties,
     q.append("WHERE " + ' AND '.join(where_clauses))
 
     q.append(f"MERGE (a)-[r:{rel_type}]->(b)")
-    q.append("SET r = rel.properties RETURN count(r)")
+    q.append("ON CREATE SET r = rel.properties")
+    q.append("ON MATCH SET r += rel.properties")
+
+    if source:
+        q.append(f"ON CREATE SET r._source = [$source]")
+        q.append(f"ON MATCH SET r._source = r._source + [$source]")
 
     return q.query()

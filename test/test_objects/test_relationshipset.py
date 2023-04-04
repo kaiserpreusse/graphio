@@ -3,6 +3,7 @@
 # however, NodeSets are also tested separately
 import os
 import json
+from uuid import uuid4
 import pytest
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
@@ -210,6 +211,13 @@ class TestRelationshipSetCreate:
 
         assert result[0][0] == 100
 
+    def test_relationshipset_create_source(self, graph, create_nodes_test, small_relationshipset):
+        small_relationshipset.source = True
+        small_relationshipset.create(graph)
+
+        assert run_query_return_results(graph, f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE '{small_relationshipset.uuid}' in r._source RETURN count(r)")[0][0] == 100
+        assert run_query_return_results(graph, f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE size(r._source) = 1 RETURN count(r)")[0][0] == 100
+
     def test_relationshipset_create_mulitple_node_props(self, graph, create_nodes_test):
 
         rs = RelationshipSet('TEST', ['Test'], ['Bar'], ['uuid'], ['uuid', 'key'])
@@ -290,6 +298,22 @@ class TestRelationshipSetMerge:
         result = run_query_return_results(graph, "MATCH (t:Test)-[r:TEST]->(f:Foo) RETURN count(r)")
 
         assert result[0][0] == 100
+
+    def test_relationshipset_merge_source(self, graph, create_nodes_test, small_relationshipset):
+        small_relationshipset.source = True
+        small_relationshipset.merge(graph)
+
+        assert run_query_return_results(graph, f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE '{small_relationshipset.uuid}' in r._source RETURN count(r)")[0][0] == 100
+        assert run_query_return_results(graph, f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE size(r._source) = 1 RETURN count(r)")[0][0] == 100
+
+        # change uuid of relationshipset
+        small_relationshipset.uuid = str(uuid4())
+        small_relationshipset.merge(graph)
+
+        assert run_query_return_results(graph,f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE '{small_relationshipset.uuid}' in r._source RETURN count(r)")[0][0] == 100
+
+        assert run_query_return_results(graph, f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE size(r._source) = 2 RETURN count(r)")[0][0] == 100
+        assert run_query_return_results(graph, f"MATCH (:Test)-[r:TEST]->(:Foo) WHERE size(r._source) <> 2 RETURN count(r)")[0][0] == 0
 
     def test_relationshipset_merge_no_labels(self, graph, create_nodes_test, small_relationshipset_no_labels):
 

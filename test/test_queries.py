@@ -1,4 +1,4 @@
-from graphio.queries import rels_create_unwind, rels_merge_unwind, CypherQuery, get_label_string_from_list_of_labels, \
+from graphio.queries import rels_create_factory, rels_merge_factory, CypherQuery, get_label_string_from_list_of_labels, \
     match_clause_with_properties, merge_clause_with_properties, match_properties_as_string, nodes_merge_factory, \
     nodes_create_factory
 
@@ -107,23 +107,44 @@ ON CREATE SET n._source = [$source]
 ON MATCH SET n._source = n._source + [$source]"""
 
 
-class TestRelsCreate:
+class TestRelationshipsCreateFactory:
 
     def test_rels_create(self):
-        q = rels_create_unwind(['Person'], ['Movie'], ['name'], ['title'], "LIKES")
+        q = rels_create_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES")
         assert q == """UNWIND $rels AS rel
 MATCH (a:Person), (b:Movie)
 WHERE a.name = rel.start_name AND b.title = rel.end_title
 CREATE (a)-[r:LIKES]->(b)
-SET r = rel.properties RETURN count(r)"""
+SET r = rel.properties"""
+
+    def test_rels_create_source(self):
+        q = rels_create_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES", source=True)
+        assert q == """UNWIND $rels AS rel
+MATCH (a:Person), (b:Movie)
+WHERE a.name = rel.start_name AND b.title = rel.end_title
+CREATE (a)-[r:LIKES]->(b)
+SET r = rel.properties
+SET r._source = [$source]"""
 
 
 class TestRelsMerge:
 
     def test_rels_merge_unwind(self):
-        q = rels_merge_unwind(['Person'], ['Movie'], ['name'], ['title'], "LIKES")
+        q = rels_merge_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES")
         assert q == """UNWIND $rels AS rel
 MATCH (a:Person), (b:Movie)
 WHERE a.name = rel.start_name AND b.title = rel.end_title
 MERGE (a)-[r:LIKES]->(b)
-SET r = rel.properties RETURN count(r)"""
+ON CREATE SET r = rel.properties
+ON MATCH SET r += rel.properties"""
+
+    def test_rels_merge_source(self):
+        q = rels_merge_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES", source=True)
+        assert q == """UNWIND $rels AS rel
+MATCH (a:Person), (b:Movie)
+WHERE a.name = rel.start_name AND b.title = rel.end_title
+MERGE (a)-[r:LIKES]->(b)
+ON CREATE SET r = rel.properties
+ON MATCH SET r += rel.properties
+ON CREATE SET r._source = [$source]
+ON MATCH SET r._source = r._source + [$source]"""
