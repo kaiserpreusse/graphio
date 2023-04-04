@@ -5,3 +5,4 @@ from graphio.objects.relationshipset import RelationshipSet, RelationshipSetDefi
 from graphio.objects.datacontainer import Container
 from graphio.model import ModelNode, ModelRelationship, MergeKey, Label, NodeDescriptor
 from graphio.objects.properties import ArrayProperty
+from graphio.objects.update import GraphUpdate

@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
 from datetime import datetime
 from typing import List
-from neo4j import Driver
+from neo4j import Driver, DEFAULT_DATABASE
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,7 @@ class GraphUpdate(BaseModel):
     finish_time: datetime = None
 
     driver: Driver = None
+    database: str = DEFAULT_DATABASE
 
     class Config:
         arbitrary_types_allowed = True
@@ -31,10 +32,13 @@ class GraphUpdate(BaseModel):
             'start_time': self.start_time,
         }
 
-    def start(self, driver: Driver):
+    def start(self, driver: Driver, database: str = None):
         self.driver = driver
         self.start_time = datetime.utcnow()
-        with self.driver.session() as session:
+        if database:
+            self.database = database
+            
+        with self.driver.session(database=self.database) as session:
             q = """MERGE (u:GraphUpdate {uuid: $uuid}) SET u += $properties"""
             session.run(q, uuid=self.uuid, properties=self.props())
 
@@ -42,7 +46,7 @@ class GraphUpdate(BaseModel):
         """Add a NodeSet that was created outside of the GraphUpdate object."""
         self.nodesets.append(nodeset)
 
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database) as session:
             # merge the nodeset
             q = "MERGE (ns:NodeSet {uuid: $uuid}) SET ns += $properties"
             session.run(q, uuid=nodeset.uuid, properties=nodeset.props())
@@ -55,7 +59,7 @@ class GraphUpdate(BaseModel):
         """Add a RelationshipSet that was created outside of the GraphUpdate object."""
         self.relationshipsets.append(relationshipset)
 
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database) as session:
             # merge the relationshipset
             q = "MERGE (rs:RelationshipSet {uuid: $uuid}) SET rs += $properties"
             session.run(q, uuid=relationshipset.uuid, properties=relationshipset.props())
@@ -66,6 +70,6 @@ class GraphUpdate(BaseModel):
 
     def finish(self):
         self.finish_time = datetime.utcnow()
-        with self.driver.session() as session:
+        with self.driver.session(database=self.database) as session:
             q = "MATCH (gu:GraphUpdate {uuid: $uuid}) SET gu.finish_time = $time"
             session.run(q, time=self.finish_time, uuid=self.uuid)
