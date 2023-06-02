@@ -282,7 +282,7 @@ class RelationshipSet:
             json.dump(self.metadata_dict, f)
 
     @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False):
+    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False, reltype_key=None):
         """
         Read the default CSV/JSON file combination.
 
@@ -293,6 +293,9 @@ class RelationshipSet:
         :param load_items: Yield items from file (False, default) or load them to memory (True).
         :return: The RelationshipSet.
         """
+        if not reltype_key:
+            reltype_key = 'rel_type'
+
         with open(json_file_path) as f:
             metadata = json.load(f)
 
@@ -311,7 +314,7 @@ class RelationshipSet:
         end_node_type_conversion = metadata.get('end_node_type_conversion', None)
 
         # RelationshipSet instance
-        rs = cls(metadata['rel_type'],
+        rs = cls(metadata[reltype_key],
                  metadata['start_node_labels'],
                  metadata['end_node_labels'],
                  remove_prefix_from_keys(metadata['start_node_properties']),
