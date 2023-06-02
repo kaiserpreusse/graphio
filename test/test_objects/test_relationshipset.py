@@ -573,6 +573,41 @@ class TestRelationshipSetCSVandJSON:
 
         assert run_query_return_results(graph, "MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)")[0][0] == 1
 
+    def test_read_from_files_custom_json_keys_load_items_to_memory(self, root_dir, clear_graph, graph):
+
+        files_path = os.path.join(root_dir, "test", "files")
+
+        # load nodes first (taken from NodeSet test)
+        nodes_json_file_path = os.path.join(files_path, 'nodes_csv_json.json')
+        nodes_csv_file_path = os.path.join(files_path, 'nodes_csv_json.csv')
+
+        ns = NodeSet.from_csv_json_set(nodes_csv_file_path, nodes_json_file_path, load_items=True)
+        ns.merge(graph)
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
+
+        # create relset and load relationships
+        json_file_path = os.path.join(files_path, 'custom_keys_rel_csv_json.json')
+        csv_file_path = os.path.join(files_path, 'custom_keys_rel_csv_json.csv')
+
+        assert os.path.exists(json_file_path)
+        assert os.path.exists(csv_file_path)
+
+        rs = RelationshipSet.from_csv_json_set(csv_file_path, json_file_path, load_items=True,
+                                               reltype_key='reltype', startnodelables_key='startnode_labels',
+                                               endnodelables_key='endnode_labels', startnodeproperties_key='start_node_keys',
+                                               endnodeproperties_key='end_node_keys')
+
+        assert rs.start_node_labels == ['Test']
+        assert rs.end_node_labels == ['Test']
+        assert rs.start_node_properties == ['test_id']
+        assert rs.end_node_properties == ['test_id']
+        assert rs.rel_type == 'RELATIONSHIP'
+
+        rs.merge(graph)
+
+        assert run_query_return_results(graph, "MATCH (:Test)-[r:RELATIONSHIP]->(:Test) RETURN count(r)")[0][0] == 1
+
+
     def test_write_files_read_again_load_items_into_memory(self, graph, clear_graph, create_nodes_test, tmp_path, small_relationshipset):
         csv_file_path = os.path.join(tmp_path, 'rels.csv')
         json_file_path = os.path.join(tmp_path, 'rels.json')

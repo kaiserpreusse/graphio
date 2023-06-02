@@ -1,0 +1,5 @@
+{
+  "types":  ["Test"],
+  "mergekeys":  ["test_id"],
+  "type_conversion": {"test_id": "int"}
+}

@@ -1,0 +1,9 @@
+{
+  "startnode_labels": ["Test"],
+  "endnode_labels": ["Test"],
+  "start_node_keys": ["test_id"],
+  "start_node_type_conversion": {"test_id": "int"},
+  "end_node_keys": ["test_id"],
+  "end_node_type_conversion": {"test_id": "int"},
+  "reltype": "RELATIONSHIP"
+}

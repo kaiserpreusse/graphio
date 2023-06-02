@@ -309,17 +309,23 @@ class NodeSet:
             json.dump(json_dict, f)
 
     @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items:bool = False):
+    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items:bool = False,
+                          labels_key:str = None, mergekey_key:str = None):
         """
-        Read the default CSV/JSON file combination.
+        Read the default CSV/JSON file combination. Needs paths to CSV and JSON file.
 
-        Needs paths to CSV and JSON file.
+        JSON keys can be overwritten by passing the respective parameters.
 
         :param csv_file_path: Path to the CSV file.
         :param json_file_path: Path to the JSON file.
         :param load_items: Yield items from file (False, default) or load them to memory (True).
         :return: The NodeSet.
         """
+        if not labels_key:
+            labels_key = 'labels'
+        if not mergekey_key:
+            mergekey_key = 'merge_keys'
+
         with open(json_file_path) as f:
             metadata = json.load(f)
 
@@ -328,13 +334,13 @@ class NodeSet:
         if 'property_map' in metadata:
             # replace mergekeys if necessary
             property_map = metadata['property_map']
-            metadata['merge_keys'] = [property_map[x] if x in property_map else x for x in metadata['merge_keys']]
+            metadata[mergekey_key] = [property_map[x] if x in property_map else x for x in metadata[mergekey_key]]
 
         # type conversion
         type_conversion = metadata.get('type_conversion', None)
 
         # NodeSet instance
-        nodeset = cls(metadata['labels'], merge_keys=metadata['merge_keys'])
+        nodeset = cls(metadata[labels_key], merge_keys=metadata[mergekey_key])
 
         if load_items:
             nodeset.nodes = _read_nodes(csv_file_path, property_map, type_conversion)

@@ -580,6 +580,26 @@ class TestNodeSetCSVandJSON:
         ns.merge(graph)
         assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
 
+    def test_read_from_files_custom_json_keys_load_items_to_memory(self, root_dir, clear_graph, graph):
+
+        files_path = os.path.join(root_dir, "test", "files")
+
+        json_file_path = os.path.join(files_path, 'custom_keys_nodes_csv_json.json')
+        csv_file_path = os.path.join(files_path, 'custom_keys_nodes_csv_json.csv')
+
+        assert os.path.exists(json_file_path)
+        assert os.path.exists(csv_file_path)
+
+        ns = NodeSet.from_csv_json_set(csv_file_path, json_file_path, load_items=True, labels_key="types",
+                                       mergekey_key="mergekeys")
+        assert ns.labels == ['Test']
+        assert ns.merge_keys == ['test_id']
+        for n in ns.nodes:
+            assert isinstance(n['test_id'], int)
+
+        ns.merge(graph)
+        assert run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")[0][0] == 2
+
     def test_write_files_read_again_load_items_into_memory(self, small_nodeset, tmp_path, clear_graph, graph):
         """
         Test writing files, reading them again and loading items from files.

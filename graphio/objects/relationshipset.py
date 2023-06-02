@@ -282,11 +282,13 @@ class RelationshipSet:
             json.dump(self.metadata_dict, f)
 
     @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False, reltype_key=None):
+    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False,
+                          reltype_key=None, startnodeproperties_key=None, endnodeproperties_key=None,
+                          startnodelables_key=None, endnodelables_key=None):
         """
-        Read the default CSV/JSON file combination.
+        Read the default CSV/JSON file combination. Needs paths to CSV and JSON file.
 
-        Needs paths to CSV and JSON file.
+        JSON keys can be overwritten by passing the respective parameters.
 
         :param csv_file_path: Path to the CSV file.
         :param json_file_path: Path to the JSON file.
@@ -295,6 +297,14 @@ class RelationshipSet:
         """
         if not reltype_key:
             reltype_key = 'rel_type'
+        if not startnodeproperties_key:
+            startnodeproperties_key = 'start_node_properties'
+        if not endnodeproperties_key:
+            endnodeproperties_key = 'end_node_properties'
+        if not startnodelables_key:
+            startnodelables_key = 'start_node_labels'
+        if not endnodelables_key:
+            endnodelables_key = 'end_node_labels'
 
         with open(json_file_path) as f:
             metadata = json.load(f)
@@ -304,10 +314,10 @@ class RelationshipSet:
         if 'property_map' in metadata:
             # replace start_node/end_node keys if necessary
             property_map = metadata['property_map']
-            metadata['start_node_properties'] = [property_map[x] if x in property_map else x for x in
-                                                 metadata['start_node_properties']]
-            metadata['end_node_properties'] = [property_map[x] if x in property_map else x for x in
-                                               metadata['end_node_properties']]
+            metadata[startnodeproperties_key] = [property_map[x] if x in property_map else x for x in
+                                                 metadata[startnodeproperties_key]]
+            metadata[endnodeproperties_key] = [property_map[x] if x in property_map else x for x in
+                                               metadata[endnodeproperties_key]]
 
         # type conversions
         start_node_type_conversion = metadata.get('start_node_type_conversion', None)
@@ -315,10 +325,10 @@ class RelationshipSet:
 
         # RelationshipSet instance
         rs = cls(metadata[reltype_key],
-                 metadata['start_node_labels'],
-                 metadata['end_node_labels'],
-                 remove_prefix_from_keys(metadata['start_node_properties']),
-                 remove_prefix_from_keys(metadata['end_node_properties']))
+                 metadata[startnodelables_key],
+                 metadata[endnodelables_key],
+                 remove_prefix_from_keys(metadata[startnodeproperties_key]),
+                 remove_prefix_from_keys(metadata[endnodeproperties_key]))
 
         start_key_to_header = {}
         for k in rs.start_node_properties:
