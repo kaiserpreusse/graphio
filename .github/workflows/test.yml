@@ -15,33 +15,24 @@ jobs:
       RUN_ENVIRONMENT: 'github_actions'
 
     services:
-      neo4j42:
-        image: neo4j:4.2.11
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-      neo4j43:
-        image: neo4j:4.3.7
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-      neo4j44:
-        image: neo4j:4.4.15
-        env:
-          NEO4J_AUTH: neo4j/test
-          NEO4JLABS_PLUGINS: '["apoc"]'
-          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
-      neo4j51:
-        image: neo4j:5.1
+      neo4j5_community:
+        image: neo4j:5-community
         env:
           NEO4J_AUTH: neo4j/test
           NEO4J_PLUGINS: '["apoc"]'
           NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
+          NEO4J_dbms_security_auth__minimum__password__length: 4
+      neo4j5_enterprise:
+        image: neo4j:5-enterprise
+        env:
+          NEO4J_AUTH: neo4j/test
+          NEO4J_PLUGINS: '["apoc"]'
+          NEO4J_dbms_security_procedures_unrestricted: gds.*, apoc.*
+          NEO4J_dbms_security_auth__minimum__password__length: 4
+          NEO4J_ACCEPT_LICENSE_AGREEMENT: yes
     strategy:
       matrix:
-        python-container: ["python:3.7", "python:3.8", "python:3.9", "python:3.10"]
+        python-container: ["python:3.10", "python:3.11", "python:3.12"]
 
     container: ${{ matrix.python-container }}
 
