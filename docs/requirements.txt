@@ -1,5 +1,5 @@
 # temprory docs requirements (remove when neo4j 6.0 is released)
 tomlkit~=0.11.6
-setuptools~=65.6
+setuptools>=70.0.0
 sphinx
 sphinx_rtd_theme
