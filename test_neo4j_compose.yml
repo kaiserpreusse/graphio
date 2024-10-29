@@ -1,0 +1,24 @@
+services:
+  test_neo4j_5_community:
+    image: neo4j:5-community
+    container_name: graphio_test_neo4j_5_community
+    environment:
+      - NEO4J_AUTH=neo4j/test
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
+      - NEO4J_dbms_security_auth__minimum__password__length=4
+    ports:
+      - 13687:7687
+      - 13474:7474
+  test_neo4j_5_enterprise:
+    image: neo4j:5-enterprise
+    container_name: graphio_test_neo4j_5_enterprise
+    environment:
+      - NEO4J_AUTH=neo4j/test
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
+      - NEO4J_dbms_security_auth__minimum__password__length=4
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+    ports:
+      - 14687:7687
+      - 14474:7474
