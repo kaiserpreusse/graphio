@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'graphio'
-copyright = '2023, Martin Preusse'
+copyright = '2024, Martin Preusse'
 author = 'Martin Preusse'
 
 # -- General configuration ---------------------------------------------------
