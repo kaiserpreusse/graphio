@@ -97,17 +97,6 @@ class RelationshipSet:
     def __str__(self):
         return f"<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>"
 
-    def to_definition(self):
-        return RelationshipSetDefinition(uuid=self.uuid,
-                                         rel_type=self.rel_type,
-                                         start_node_labels=self.start_node_labels,
-                                         end_node_labels=self.end_node_labels,
-                                         start_node_properties=self.start_node_properties,
-                                         end_node_properties=self.end_node_properties,
-                                         default_props=self.default_props or {},
-                                         batch_size=self.batch_size,
-                                         unique=self.unique)
-
     def add_relationship(self, start_node_properties: dict, end_node_properties: dict, properties: dict = None):
         """
         Add a relationship to this RelationshipSet.

@@ -60,12 +60,6 @@ class NodeSet:
         # this works for both unique and non-unique settings
         self.node_index = defaultdict(list)
 
-    def to_definition(self):
-        """Create a NodeSetDefinition from this NodeSet. Later, NodeSetDefinition can become parent class of NodeSet."""
-        return NodeSetDefinition(uuid=self.uuid, labels=self.labels, merge_keys=self.merge_keys, default_props=self.default_props or {},
-                                 preserve=self.preserve or [], append_props=self.append_props or [], indexed=self.indexed,
-                                 additional_labels=self.additional_labels or [], num_nodes=len(self.nodes))
-
     def __str__(self):
         return f"<NodeSet ({self.labels}; {self.merge_keys})>"
 
