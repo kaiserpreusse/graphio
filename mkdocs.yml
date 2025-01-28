@@ -3,10 +3,11 @@ site_url: https://graphio.readthedocs.io/en/latest/
 theme:
   name: material
   features:
-    - navigation.path
     - content.code.copy
+    - navigation.path
     - navigation.tabs
-#    - navigation.sections
+    - navigation.sections
+    - navigation.indexes
 markdown_extensions:
   - toc:
       permalink: true
@@ -19,6 +20,13 @@ markdown_extensions:
   - pymdownx.superfences
   - admonition
   - pymdownx.details
+nav:
+  - Home: index.md
+  - Getting Started: getting_started/index.md
+  - Details: details.md
+  - API Documentation:
+      - NodeSet: api_reference/nodeset.md
+      - RelationshipSet: api_reference/relationshipset.md
 plugins:
 - mkdocstrings:
     handlers:
