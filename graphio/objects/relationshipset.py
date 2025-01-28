@@ -44,36 +44,6 @@ def tuplify_json_list(list_object: list) -> tuple:
     return output
 
 
-class RelationshipSetDefinition(BaseModel):
-    """
-    Definition of a RelationshipSet. Independent class for now, but could be merged with RelationshipSet or become the
-    base class for RelationshipSet.
-    """
-    uuid: str = Field(..., description="Unique identifier for the RelationshipSet.")
-    rel_type: str = Field(..., description="Relationship type.")
-    start_node_labels: List[str] = Field(..., description="Labels of the start node.")
-    end_node_labels: List[str] = Field(..., description="Labels of the end node.")
-    start_node_properties: List[str] = Field(..., description="Property keys to identify the start node.")
-    end_node_properties: List[str] = Field(..., description="Properties to identify the end node.")
-    default_props: dict = Field({}, description="Default properties for the relationships.")
-    batch_size: int = Field(defaults.BATCHSIZE, description="Batch size for Neo4j operations.")
-    unique: bool = Field(False, description="If True, only create unique relationships.")
-
-    def props(self):
-        """
-        Return a dictionary with the properties of the RelationshipSetDefinition.
-        """
-        return {'uuid': self.uuid,
-                'rel_type': self.rel_type,
-                'start_node_labels': self.start_node_labels,
-                'end_node_labels': self.end_node_labels,
-                'start_node_properties': self.start_node_properties,
-                'end_node_properties': self.end_node_properties,
-                'default_props': str(self.default_props),
-                'batch_size': self.batch_size,
-                'unique': self.unique}
-
-
 class RelationshipSet:
     """
     Container for a set of Relationships with the same type of start and end nodes.

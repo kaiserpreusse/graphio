@@ -24,33 +24,6 @@ TYPE_CONVERSION = {'int': int,
                    'float': float}
 
 
-class NodeSetDefinition(BaseModel):
-    """
-    NodeSetDefinition is a NodeSet without the actual data. Independent class for now, can be parent
-    class for NodeSet in the future.
-    """
-    uuid: str
-    labels: List[str]
-    merge_keys: List[str]
-    default_props: dict = {}
-    preserve: List[str] = []
-    append_props: List[str] = []
-    indexed: bool = False
-    additional_labels: List[str] = []
-    num_nodes: int = 0
-
-    def props(self):
-        """Node properties for NodeSetDefinition."""
-        return {'uuid': self.uuid,
-                'labels': self.labels,
-                'merge_keys': self.merge_keys,
-                'default_props': str(self.default_props),
-                'preserve': self.preserve,
-                'append_props': self.append_props,
-                'indexed': self.indexed,
-                'additional_labels': self.additional_labels,
-                'num_nodes': self.num_nodes}
-
 class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
