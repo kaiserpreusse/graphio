@@ -7,12 +7,9 @@ import gzip
 from collections import defaultdict
 from typing import Set, List, Union
 
-from pydantic import BaseModel
-
-from graphio.helper import chunks, create_single_index, create_composite_index
+from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio import defaults
 from graphio.queries import nodes_merge_factory, nodes_create_factory
-from graphio.graph import run_query_return_results
 
 log = logging.getLogger(__name__)
 

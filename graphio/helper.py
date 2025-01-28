@@ -1,7 +1,7 @@
 from itertools import chain, islice
 import logging
 
-from graphio.graph import run_query_return_results
+from neo4j import Driver, DEFAULT_DATABASE
 
 log = logging.getLogger(__name__)
 
@@ -50,3 +50,12 @@ def create_composite_index(graph, label, properties, database=None):
     q = f"CREATE INDEX IF NOT EXISTS FOR (n:{label}) ON ({','.join(property_list)})"
     log.debug(q)
     run_query_return_results(graph, q, database=database)
+
+
+def run_query_return_results(connection: Driver, query: str, database: str = None, **params):
+    if not database:
+        database = DEFAULT_DATABASE
+    with connection.session(database=database) as s:
+        result = list(s.run(query, **params))
+
+    return result

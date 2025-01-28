@@ -1,17 +1,17 @@
 from typing import List, Union
-from graphio.objects.properties import ArrayProperty
 
 
-def get_label_string_from_list_of_labels(labels: Union[List[str], None]) -> str:
-    """
-    Get a label string from a list of labels. If the list is empty, return an empty string.
-    :param labels: List of labels
-    :return: Label string
-    """
-    if labels:
-        return f":{':'.join(labels)}"
-    else:
-        return ""
+class Property:
+    def __init__(self, key: str):
+        self.key = key
+
+    def __str__(self):
+        return self.key
+
+
+class ArrayProperty(Property):
+    def __init__(self, key: str):
+        super(ArrayProperty, self).__init__(key)
 
 
 class CypherQuery:
@@ -28,6 +28,18 @@ class CypherQuery:
 
     def append(self, value):
         self._statements.append(value)
+
+
+def get_label_string_from_list_of_labels(labels: Union[List[str], None]) -> str:
+    """
+    Get a label string from a list of labels. If the list is empty, return an empty string.
+    :param labels: List of labels
+    :return: Label string
+    """
+    if labels:
+        return f":{':'.join(labels)}"
+    else:
+        return ""
 
 
 def match_properties_as_string(merge_properties, prop_name):
@@ -310,3 +322,5 @@ def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties
         q.append(f"ON MATCH SET r._source = r._source + [$source]")
 
     return q.query()
+
+

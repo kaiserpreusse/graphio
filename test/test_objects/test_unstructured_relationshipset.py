@@ -2,7 +2,7 @@ from graphio.objects.unstructured_relationshipset import UnstructuredRelationshi
 from graphio.objects.unstructured_nodeset import UnstructuredNodeSet, Node
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet
-from graphio.graph import run_query_return_results
+from graphio.helper import run_query_return_results
 
 
 def test_unstructred_relationship_unique_node_definitions():

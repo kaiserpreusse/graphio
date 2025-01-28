@@ -4,7 +4,7 @@ import json
 from hypothesis import given, strategies as st
 
 from graphio.objects.nodeset import NodeSet
-from graphio.graph import run_query_return_results
+from graphio.helper import run_query_return_results
 
 
 @pytest.fixture(scope="session")
@@ -109,14 +109,6 @@ class TestNodeSetInstances:
         ns = NodeSet(labels, merge_keys)
         for i in data:
             ns.add_node(i)
-
-    def test_node_set_definition(self, small_nodeset):
-        nsdef = small_nodeset.to_definition()
-
-        assert nsdef.labels == ['Test']
-        assert nsdef.merge_keys == ['uuid']
-        assert nsdef.default_props == {}
-
 
 
 class TestNodeIndexOnNodeSet:

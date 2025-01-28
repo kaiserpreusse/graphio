@@ -7,8 +7,8 @@ from uuid import uuid4
 import pytest
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
-from graphio.objects.properties import ArrayProperty
-from graphio.graph import run_query_return_results
+from graphio import ArrayProperty
+from graphio.helper import run_query_return_results
 
 
 @pytest.fixture
@@ -140,19 +140,6 @@ def test_relationshipset_estiamte_types():
     assert rel_property_types['country'] == str
     assert rel_property_types['weight'] == float
     assert rel_property_types['number'] == int
-
-
-
-class TestRelationshipSetInstance:
-
-    def test_relationshipset_to_definition(self, small_relationshipset):
-        rsdef = small_relationshipset.to_definition()
-        assert rsdef.uuid == small_relationshipset.uuid
-        assert rsdef.rel_type == 'TEST'
-        assert rsdef.start_node_labels == ['Test']
-        assert rsdef.end_node_labels == ['Foo']
-        assert rsdef.start_node_properties == ['uuid']
-        assert rsdef.end_node_properties == ['uuid']
 
 
 class TestDefaultProps:

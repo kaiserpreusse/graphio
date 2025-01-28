@@ -1,5 +1,5 @@
 from graphio.objects.unstructured_nodeset import UnstructuredNodeSet, Node
-from graphio.graph import run_query_return_results
+from graphio.helper import run_query_return_results
 
 
 class TestUnstructuredNodeSet:

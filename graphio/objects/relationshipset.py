@@ -6,12 +6,9 @@ import csv
 from typing import Set, List
 import gzip
 
-from pydantic import BaseModel, Field
-
 from graphio import defaults
-from graphio.helper import chunks, create_single_index, create_composite_index
+from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio.queries import rels_create_factory, rels_merge_factory, rels_params_from_objects
-from graphio.graph import run_query_return_results
 
 log = logging.getLogger(__name__)
 
