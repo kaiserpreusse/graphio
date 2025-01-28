@@ -4,6 +4,9 @@ theme:
   name: material
   features:
     - navigation.path
+    - content.code.copy
+    - navigation.tabs
+#    - navigation.sections
 markdown_extensions:
   - toc:
       permalink: true
@@ -14,3 +17,12 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+plugins:
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          allow_inspection: true
+          docstring_style: sphinx
