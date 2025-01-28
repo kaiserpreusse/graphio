@@ -7,7 +7,7 @@
    # https://docs.readthedocs.io/page/guides/reproducible-builds.html
    jobs:
      pre_install:
-       - pip install mkdocs-material
+       - pip install mkdocs-material mkdocstrings-python
 
  mkdocs:
    configuration: mkdocs.yml
