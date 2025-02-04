@@ -5,10 +5,12 @@ import os
 import csv
 from typing import Set, List
 import gzip
+from dataclasses import dataclass
 
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio.queries import rels_create_factory, rels_merge_factory, rels_params_from_objects
+from graphio.defaults import BATCHSIZE
 
 log = logging.getLogger(__name__)
 
@@ -41,13 +43,35 @@ def tuplify_json_list(list_object: list) -> tuple:
     return output
 
 
+@dataclass
+class Relationship:
+    rel_type: str
+    start_node_labels: List[str]
+    end_node_labels: List[str]
+    start_node_properties: List[str]
+    end_node_properties: List[str]
+    properties: dict = None
+
+    def relationshipset(self):
+        return RelationshipSet(rel_type=self.rel_type,
+                               start_node_labels=self.start_node_labels,
+                               end_node_labels=self.end_node_labels,
+                               start_node_properties=self.start_node_properties,
+                               end_node_properties=self.end_node_properties,
+                               default_props=self.properties)
+
+    def dataset(self):
+        return self.relationshipset()
+
+
+
 class RelationshipSet:
     """
     Container for a set of Relationships with the same type of start and end nodes.
     """
 
-    def __init__(self, rel_type, start_node_labels, end_node_labels, start_node_properties, end_node_properties,
-                 batch_size=None, default_props=None, source=False):
+    def __init__(self, rel_type: str, start_node_labels: List[str], end_node_labels: List[str], start_node_properties: List[str], end_node_properties: List[str],
+                 default_props: dict=None):
         """
 
         :param rel_type: Realtionship type.
@@ -55,7 +79,6 @@ class RelationshipSet:
         :param end_node_labels: Labels of the end node.
         :param start_node_properties: Property keys to identify the start node.
         :param end_node_properties: Properties to identify the end node.
-        :param batch_size: Batch size for Neo4j operations.
         """
 
         self.rel_type = rel_type
@@ -68,7 +91,6 @@ class RelationshipSet:
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
         self.default_props = default_props
-        self.source = source
 
         self.fixed_order_start_node_properties = tuple(self.start_node_properties)
         self.fixed_order_end_node_properties = tuple(self.end_node_properties)
@@ -80,11 +102,6 @@ class RelationshipSet:
                                                      '_'.join(sorted([str(x) for x in self.start_node_properties])),
                                                      '_'.join(sorted([str(x) for x in self.end_node_properties]))
                                                      )
-
-        if batch_size:
-            self.batch_size = batch_size
-        else:
-            self.batch_size = defaults.BATCHSIZE
 
         self.relationships = []
 
@@ -211,13 +228,12 @@ class RelationshipSet:
                 "relationships": self.relationships}
 
     @classmethod
-    def from_dict(cls, relationship_dict, batch_size=None):
+    def from_dict(cls, relationship_dict):
         rs = cls(rel_type=relationship_dict["rel_type"],
                  start_node_labels=relationship_dict["start_node_labels"],
                  end_node_labels=relationship_dict["end_node_labels"],
                  start_node_properties=relationship_dict["start_node_properties"],
-                 end_node_properties=relationship_dict["end_node_properties"],
-                 batch_size=batch_size)
+                 end_node_properties=relationship_dict["end_node_properties"])
         rs.unique = relationship_dict["unique"]
         rs.relationships = [tuplify_json_list(r) for r in relationship_dict["relationships"]]
 
@@ -444,12 +460,12 @@ class RelationshipSet:
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
-            batch_size = self.batch_size
+            batch_size = BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
         q = rels_create_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                                self.end_node_properties, self.rel_type, source=self.source)
+                                self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, source=self.uuid, **query_parameters)
@@ -460,12 +476,12 @@ class RelationshipSet:
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
-            batch_size = self.batch_size
+            batch_size = BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
         q = rels_merge_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                               self.end_node_properties, self.rel_type, source=self.source)
+                               self.end_node_properties, self.rel_type)
         for batch in chunks(self.relationships, size=batch_size):
             query_parameters = rels_params_from_objects(batch)
             run_query_return_results(graph, q, database=database, source=self.uuid, **query_parameters)

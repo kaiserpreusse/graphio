@@ -6,10 +6,12 @@ import csv
 import gzip
 from collections import defaultdict
 from typing import Set, List, Union
+from dataclasses import dataclass
 
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio import defaults
 from graphio.queries import nodes_merge_factory, nodes_create_factory
+from graphio.defaults import BATCHSIZE as DEFAULT_BATCH_SIZE
 
 log = logging.getLogger(__name__)
 
@@ -21,13 +23,41 @@ TYPE_CONVERSION = {'int': int,
                    'float': float}
 
 
+@dataclass
+class NodeModel:
+    """
+    Entrypoint for the application.
+    """
+    labels: List[str]
+    merge_keys: List[str]
+    default_props: dict = None
+    preserve: List[str] = None
+    append_props: List[str] = None
+    additional_labels: List[str] = None
+
+
+
+    def nodeset(self):
+        """
+        Create a NodeSet from this Node.
+
+        :return: NodeSet
+        """
+        return NodeSet(labels=self.labels, merge_keys=self.merge_keys, default_props=self.default_props,
+                       preserve=self.preserve, append_props=self.append_props, additional_labels=self.additional_labels)
+
+    def dataset(self):
+        return self.nodeset()
+
+
 class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels=None, merge_keys=None, batch_size=None, default_props=None, preserve=None, append_props=None, indexed=False,
-                 additional_labels: List[str]=None, source: bool=False):
+    def __init__(self, labels: List[str] = None, merge_keys: List[str] = None, default_props: dict = None,
+                 preserve: List[str] = None, append_props: List[str] = None,
+                 additional_labels: List[str] = None, indexed: bool = False):
         """
 
 
@@ -39,18 +69,12 @@ class NodeSet:
         self.append_props = append_props or []
         self.indexed = indexed
         self.additional_labels = additional_labels or []
-        self.source = source
 
         if self.labels:
             self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
         else:
             self.combined = '_'.join(sorted(self.merge_keys))
         self.uuid = str(uuid4())
-
-        if batch_size:
-            self.batch_size = batch_size
-        else:
-            self.batch_size = defaults.BATCHSIZE
 
         self.nodes = []
         # a node index with merge_key_id -> [positions in nodes list]
@@ -255,7 +279,7 @@ class NodeSet:
 
         return q
 
-    def to_csv_json_set(self, csv_file_path, json_file_path, type_conversion:dict = None):
+    def to_csv_json_set(self, csv_file_path, json_file_path, type_conversion: dict = None):
         """
         Write the default CSV/JSON file combination.
 
@@ -273,8 +297,8 @@ class NodeSet:
             json.dump(json_dict, f)
 
     @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items:bool = False,
-                          labels_key:str = None, mergekey_key:str = None):
+    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False,
+                          labels_key: str = None, mergekey_key: str = None):
         """
         Read the default CSV/JSON file combination. Needs paths to CSV and JSON file.
 
@@ -313,7 +337,6 @@ class NodeSet:
 
         return nodeset
 
-
     def object_file_name(self, suffix: str = None) -> str:
         """
         Create a unique name for this NodeSet that indicates content. Pass an optional suffix.
@@ -343,16 +366,16 @@ class NodeSet:
         with open(path, 'wt') as f:
             json.dump(self.to_dict(), f, indent=4)
 
-    def create(self, graph, database:str = None, batch_size=None):
+    def create(self, graph, database: str = None, batch_size=None):
         """
         Create all nodes from NodeSet.
         """
         log.debug('Create NodeSet')
         if not batch_size:
-            batch_size = self.batch_size
+            batch_size = DEFAULT_BATCH_SIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
-        q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels, source=self.source)
+        q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels)
 
         for batch in chunks(self.nodes, size=batch_size):
             run_query_return_results(graph, q, database=database, props=list(batch), source=self.uuid)
@@ -375,7 +398,7 @@ class NodeSet:
         log.debug('Merge NodeSet on {}'.format(merge_properties))
 
         if not batch_size:
-            batch_size = self.batch_size
+            batch_size = DEFAULT_BATCH_SIZE
 
         if not merge_properties:
             merge_properties = self.merge_keys
@@ -383,7 +406,7 @@ class NodeSet:
         log.debug('Batch Size: {}'.format(batch_size))
 
         q = nodes_merge_factory(self.labels, self.merge_keys, array_props=self.append_props, preserve=self.preserve,
-                                property_parameter='props', additional_labels=self.additional_labels, source=self.source)
+                                property_parameter='props', additional_labels=self.additional_labels)
 
         for batch in chunks(self.node_properties(), size=batch_size):
             run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props,

@@ -3,7 +3,7 @@ import os
 import json
 from hypothesis import given, strategies as st
 
-from graphio.objects.nodeset import NodeSet
+from graphio.objects.nodeset import NodeSet, NodeModel
 from graphio.helper import run_query_return_results
 
 
@@ -13,13 +13,21 @@ def reusable_tmp_dir(tmpdir_factory):
     return fn
 
 
-@pytest.fixture
-def small_nodeset() -> NodeSet:
-    ns = NodeSet(['Test'], merge_keys=['uuid'])
-    for i in range(100):
-        ns.add_node({'uuid': i, 'key': 'value'})
+@pytest.fixture(params=["bare", "NodelNode"])
+def small_nodeset(request) -> NodeSet:
+    if request.param == "bare":
+        ns = NodeSet(['Test'], merge_keys=['uuid'])
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+        yield ns
 
-    return ns
+    elif request.param == "NodelNode":
+        n = NodeModel(['Test'], merge_keys=['uuid'])
+        ns = n.dataset()
+        for i in range(100):
+            ns.add_node({'uuid': i, 'key': 'value'})
+
+        yield ns
 
 
 @pytest.fixture
@@ -216,14 +224,6 @@ class TestNodeSetCreate:
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar) RETURN count(n)")
         assert result[0][0] == 20
 
-    def test_nodeset_create_source(self, graph, clear_graph, small_nodeset):
-        small_nodeset.source = True
-        small_nodeset.create(graph)
-
-        assert run_query_return_results(graph, f"MATCH (n:Test) WHERE '{small_nodeset.uuid}' IN n._source RETURN count(n)")[0][0] == 100
-        assert run_query_return_results(graph, f"MATCH (n:Test) WHERE size(n._source) = 1 RETURN count(n)")[0][0] == 100
-        assert run_query_return_results(graph, f"MATCH (n:Test) WHERE size(n._source) <> 1 RETURN count(n)")[0][0] == 0
-
 
 class TestNodeSetIndex:
 
@@ -291,13 +291,11 @@ class TestNodeSetIndex:
 
 
 class TestNodeSetMerge:
-    def test_nodeset_merge_preserve(self, graph, clear_graph):
+    def test_nodeset_merge_preserve(self, small_nodeset, graph, clear_graph):
         """
         Merge a nodeset 3 times and check number of nodes.
         """
-        ns = NodeSet(['Test'], merge_keys=['uuid'])
-        for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
+        ns = small_nodeset
 
         ns.merge(graph)
 
@@ -407,41 +405,6 @@ class TestNodeSetMerge:
 
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar:Kurt:Peter) RETURN count(n)")
         assert result[0][0] == 1
-
-    def test_nodeset_source(self, graph, clear_graph):
-        """
-        Merge a nodeset 3 times and check number of nodes.
-        """
-        ns = NodeSet(['Test'], merge_keys=['uuid'], source=True)
-        for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
-
-        ns.merge(graph)
-
-        assert run_query_return_results(graph, f"MATCH (n:Test) where '{ns.uuid}' IN n._source RETURN count(n)")[0][0] == 100
-        assert run_query_return_results(graph, "MATCH (n:Test) WHERE size(n._source) = 1 RETURN count(n)")[0][0] == 100
-
-    def test_nodeset_source_update(self, graph, clear_graph):
-        """
-        Merge a nodeset 3 times and check number of nodes.
-        """
-        ns = NodeSet(['Test'], merge_keys=['uuid'], source=True)
-        for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
-
-        ns.merge(graph)
-
-        # new nodeset with same data but different uuid
-        ns2 = NodeSet(['Test'], merge_keys=['uuid'], source=True)
-        for i in range(100):
-            ns2.add_node({'uuid': i, 'key': 'value'})
-        ns2.merge(graph)
-
-        assert run_query_return_results(graph, f"MATCH (n:Test) where '{ns.uuid}' IN n._source RETURN count(n)")[0][0] == 100
-        assert run_query_return_results(graph, f"MATCH (n:Test) where '{ns2.uuid}' IN n._source RETURN count(n)")[0][0] == 100
-        assert run_query_return_results(graph, "MATCH (n:Test) WHERE size(n._source) = 2 RETURN count(n)")[0][0] == 100
-        assert run_query_return_results(graph, "MATCH (n:Test) WHERE size(n._source) <> 2 RETURN count(n)")[0][0] == 0
-
 
 
 class TestNodeSetToJSON:

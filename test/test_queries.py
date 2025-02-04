@@ -53,12 +53,6 @@ SET n = properties"""
 CREATE (n:Person:Foo)
 SET n = properties"""
 
-    def test_nodes_create_additional_labels_with_source(self):
-        q = nodes_create_factory(['Person'], additional_labels=['Foo'], source=True)
-        assert q == """UNWIND $props AS properties
-CREATE (n:Person:Foo)
-SET n = properties
-SET n._source = [$source]"""
 
 
 class TestNodesMergeFactory:
@@ -95,17 +89,6 @@ ON CREATE SET n.foo = [properties.foo], n.bar = [properties.bar]
 ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)
 ON MATCH SET n.foo = n.foo + properties.foo"""
 
-    def test_nodes_merge_factory_preserve_array_props_with_source(self):
-        q = nodes_merge_factory(['Person'], ['name'], array_props=['foo', 'bar'], preserve=['bar'], source=True)
-        assert q == """UNWIND $props AS properties
-MERGE (n:Person { name: properties.name } )
-ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)
-ON CREATE SET n.foo = [properties.foo], n.bar = [properties.bar]
-ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)
-ON MATCH SET n.foo = n.foo + properties.foo
-ON CREATE SET n._source = [$source]
-ON MATCH SET n._source = n._source + [$source]"""
-
 
 class TestRelationshipsCreateFactory:
 
@@ -116,15 +99,6 @@ MATCH (a:Person), (b:Movie)
 WHERE a.name = rel.start_name AND b.title = rel.end_title
 CREATE (a)-[r:LIKES]->(b)
 SET r = rel.properties"""
-
-    def test_rels_create_source(self):
-        q = rels_create_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES", source=True)
-        assert q == """UNWIND $rels AS rel
-MATCH (a:Person), (b:Movie)
-WHERE a.name = rel.start_name AND b.title = rel.end_title
-CREATE (a)-[r:LIKES]->(b)
-SET r = rel.properties
-SET r._source = [$source]"""
 
 
 class TestRelsMerge:
@@ -137,14 +111,3 @@ WHERE a.name = rel.start_name AND b.title = rel.end_title
 MERGE (a)-[r:LIKES]->(b)
 ON CREATE SET r = rel.properties
 ON MATCH SET r += rel.properties"""
-
-    def test_rels_merge_source(self):
-        q = rels_merge_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES", source=True)
-        assert q == """UNWIND $rels AS rel
-MATCH (a:Person), (b:Movie)
-WHERE a.name = rel.start_name AND b.title = rel.end_title
-MERGE (a)-[r:LIKES]->(b)
-ON CREATE SET r = rel.properties
-ON MATCH SET r += rel.properties
-ON CREATE SET r._source = [$source]
-ON MATCH SET r._source = r._source + [$source]"""

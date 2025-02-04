@@ -94,7 +94,7 @@ def match_clause_with_properties(labels: List[str], merge_properties: List[str],
     return f"MATCH ({node_variable}{label_string} {{ {match_properties_as_string(merge_properties, prop_name)} }} )"
 
 
-def nodes_create_factory(labels, property_parameter=None, additional_labels=None, source=False):
+def nodes_create_factory(labels, property_parameter=None, additional_labels=None):
     if not property_parameter:
         property_parameter = 'props'
 
@@ -106,14 +106,12 @@ def nodes_create_factory(labels, property_parameter=None, additional_labels=None
     q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
                     f"CREATE (n{label_string})",
                     "SET n = properties")
-    if source:
-        q.append("SET n._source = [$source]")
 
     return q.query()
 
 
 def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=None, property_parameter=None,
-                        additional_labels=None, source=False):
+                        additional_labels=None):
     """
     Generate a :code:`MERGE` query based on the combination of paremeters.
     """
@@ -162,10 +160,6 @@ def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=Non
         if on_match_array_props_list:
             q.append(f"ON MATCH SET {on_match_array_props_string}")
 
-    if source:
-        q.append(f"ON CREATE SET n._source = [$source]")
-        q.append(f"ON MATCH SET n._source = n._source + [$source]")
-
     if additional_labels:
         q.append(f"SET n:{':'.join(additional_labels)}")
 
@@ -209,7 +203,7 @@ def rels_params_from_objects(relationships, property_identifier=None):
 
 
 def rels_create_factory(start_node_labels, end_node_labels, start_node_properties,
-                        end_node_properties, rel_type, property_identifier=None, source=False):
+                        end_node_properties, rel_type, property_identifier=None):
     """
     Create relationship query with explicit arguments.
 
@@ -258,14 +252,11 @@ def rels_create_factory(start_node_labels, end_node_labels, start_node_propertie
     q.append(f"CREATE (a)-[r:{rel_type}]->(b)")
     q.append("SET r = rel.properties")
 
-    if source:
-        q.append(f"SET r._source = [$source]")
-
     return q.query()
 
 
 def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties,
-                       end_node_properties, rel_type, property_identifier=None, source=False):
+                       end_node_properties, rel_type, property_identifier=None):
     """
     Merge relationship query with explicit arguments.
 
@@ -316,10 +307,6 @@ def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties
     q.append(f"MERGE (a)-[r:{rel_type}]->(b)")
     q.append("ON CREATE SET r = rel.properties")
     q.append("ON MATCH SET r += rel.properties")
-
-    if source:
-        q.append(f"ON CREATE SET r._source = [$source]")
-        q.append(f"ON MATCH SET r._source = r._source + [$source]")
 
     return q.query()
 
