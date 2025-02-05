@@ -114,17 +114,13 @@ class RelationshipModel(ModelBase):
         cls.relationshipset().create_index(driver)
 
 
-def import_all_modules(package_name):
-    package = importlib.import_module(package_name)
-    if hasattr(package, '__path__'):
-        for _, module_name, _ in pkgutil.iter_modules(package.__path__):
-            importlib.import_module(f"{package_name}.{module_name}")
-    else:
-        importlib.import_module(package_name)
-
-
 def model_initialize(module_name):
-    import_all_modules(module_name)
+    package = importlib.import_module(module_name)
+    if hasattr(package, '__path__'):
+        for _, mod_name, _ in pkgutil.iter_modules(package.__path__):
+            importlib.import_module(f"{module_name}.{mod_name}")
+    else:
+        importlib.import_module(module_name)
 
 
 def model_create_index(driver):
