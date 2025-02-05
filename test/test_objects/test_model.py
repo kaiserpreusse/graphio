@@ -1,32 +1,8 @@
 import pytest
 from typing import List
 
-from graphio import NodeModel, RelationshipModel, GraphModel, Relationship
+from graphio import NodeModel, RelationshipModel, Relationship
 
-
-class TestGraphModel:
-
-    def test_graph_model(self):
-        graph_model = GraphModel()
-        assert isinstance(graph_model, GraphModel)
-
-        class MyNode(NodeModel):
-            labels = ['Person']
-            merge_keys = ['name']
-
-        class MyRelationship(RelationshipModel):
-            rel_type: str = 'KNOWS'
-            source = MyNode
-            target = MyNode
-
-        graph_model.add(MyNode)
-        graph_model.add(MyRelationship)
-        print(graph_model.nodes)
-
-        assert len(graph_model.nodes) == 1
-        assert len(graph_model.relationships) == 1
-        assert issubclass(graph_model.nodes[0], NodeModel)
-        assert issubclass(graph_model.relationships[0], RelationshipModel)
 
 
 class TestRegistryMeta:
