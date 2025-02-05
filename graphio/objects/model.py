@@ -35,6 +35,10 @@ class NodeModel:
     def dataset(cls):
         return cls.nodeset()
 
+    @classmethod
+    def create_index(cls, driver):
+        cls.nodeset().create_index(driver)
+
 
 class RelationshipModel:
     rel_type: str
@@ -57,6 +61,10 @@ class RelationshipModel:
     def dataset(self):
         return self.relationshipset()
 
+    @classmethod
+    def create_index(cls, driver):
+        cls.relationshipset().create_index(driver)
+
 
 class GraphModel:
     """
@@ -71,6 +79,12 @@ class GraphModel:
             self.nodes.append(object)
         elif issubclass(object, RelationshipModel):
             self.relationships.append(object)
+
+    def create_indexes(self, driver):
+        for node in self.nodes:
+            node.create_index(driver)
+        for rel in self.relationships:
+            rel.create_index(driver)
 
 
 class Container:
