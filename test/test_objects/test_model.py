@@ -1,7 +1,7 @@
 import pytest
 from typing import List
 
-from graphio import NodeModel, RelationshipModel, GraphModel, RelationshipTo, RelationshipFrom
+from graphio import NodeModel, RelationshipModel, GraphModel, Relationship
 
 
 class TestGraphModel:
@@ -61,11 +61,13 @@ class TestNodeModel:
         assert node_set.merge_keys == ['name']
 
     def test_relationship_to(self):
+        # reset the registry
+        NodeModel.registry = []
         class MyNode(NodeModel):
             labels = ['Person']
             merge_keys = ['name']
 
-            friends = RelationshipTo('MyNode', 'FRIENDS', 'MyNode')
+            friends = Relationship('MyNode', 'FRIENDS', 'MyNode')
 
         relset = MyNode.friends.dataset()
 

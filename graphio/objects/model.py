@@ -7,7 +7,8 @@ class RegistryMeta(type):
     def __init__(cls, name, bases, attrs):
         if not hasattr(cls, 'registry'):
             cls.registry = []
-        cls.registry.append(cls)
+        if cls not in cls.registry:
+            cls.registry.append(cls)
         super().__init__(name, bases, attrs)
 
 
@@ -55,7 +56,7 @@ class NodeModel(metaclass=RegistryMeta):
         cls.nodeset().create_index(driver)
 
 
-class RelationshipTo:
+class Relationship:
 
     def __init__(self, source: str, rel_type: str, target: str):
         self.rel_type = rel_type
@@ -63,7 +64,6 @@ class RelationshipTo:
         self.target = target
 
     def dataset(self):
-
         source_node = NodeModel.get_class_by_name(self.source)
         target_node = NodeModel.get_class_by_name(self.target)
 
@@ -75,13 +75,11 @@ class RelationshipTo:
             end_node_properties=target_node.merge_keys
         )
 
+    def relationshipset(self):
+        return self.dataset()
 
-class RelationshipFrom:
-
-    def __init__(self, source: str, rel_type: str, target: str):
-        self.rel_type = rel_type
-        self.source = source
-        self.target = target
+    def set(self):
+        return self.dataset()
 
 
 class RelationshipModel(metaclass=RegistryMeta):
