@@ -8,12 +8,22 @@ class RegistryMeta(type):
         if not hasattr(cls, 'registry'):
             cls.registry = []
         if cls not in cls.registry:
-            if cls.__name__ != 'NodeModel' and cls.__name__ != 'RelationshipModel':
+            if cls.__name__ != 'NodeModel' and cls.__name__ != 'RelationshipModel' and cls.__name__ != 'ModelBase':
                 cls.registry.append(cls)
         super().__init__(name, bases, attrs)
 
 
-class NodeModel(metaclass=RegistryMeta):
+class ModelBase(metaclass=RegistryMeta):
+
+    @classmethod
+    def get_class_by_name(cls, name):
+        for subclass in cls.registry:
+            if subclass.__name__ == name:
+                return subclass
+        return None
+
+
+class NodeModel(ModelBase):
     """
     Entrypoint for the application.
     """
@@ -23,13 +33,6 @@ class NodeModel(metaclass=RegistryMeta):
     preserve: List[str] = None
     append_props: List[str] = None
     additional_labels: List[str] = None
-
-    @classmethod
-    def get_class_by_name(cls, name):
-        for subclass in cls.registry:
-            if subclass.__name__ == name:
-                return subclass
-        return None
 
     @classmethod
     def nodeset(cls):
@@ -83,18 +86,11 @@ class Relationship:
         return self.dataset()
 
 
-class RelationshipModel(metaclass=RegistryMeta):
+class RelationshipModel(ModelBase):
     rel_type: str
     source: type[NodeModel]
     target: type[NodeModel]
     default_props: dict = None
-
-    @classmethod
-    def get_class_by_name(cls, name):
-        for subclass in cls.registry:
-            if subclass.__name__ == name:
-                return subclass
-        return None
 
     @classmethod
     def relationshipset(cls):
