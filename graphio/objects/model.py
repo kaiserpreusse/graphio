@@ -79,9 +79,26 @@ class NodeModel(ModelBase):
                     relset.create(driver)
 
     def merge(self, driver):
+        # this node
         ns = self.nodeset()
         ns.add_node(self.properties)
         ns.merge(driver)
+        # nodes from relationships
+        for rel in self.relationships:
+            for other_node, properties in rel.nodes:
+                other_node.merge(driver)
+
+            # relationships
+            if self.__class__.__name__ == rel.source:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(self.match_dict, other_node.match_dict, properties)
+                    relset.merge(driver)
+            elif self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(other_node.match_dict, self.match_dict, properties)
+                    relset.merge(driver)
 
     @classmethod
     def nodeset(cls):

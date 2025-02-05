@@ -119,6 +119,42 @@ class TestNodeModel:
         assert result[0][0]['name'] == 'Peter'
         assert result[0][2]['name'] == 'Berlin'
 
+    def test_merge_node_with_relationship(self, graph, clear_graph):
+        class Person(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+            lives_in = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(NodeModel):
+            labels = ['City']
+            merge_keys = ['name']
+
+        peter = Person({'name': 'Peter'})
+        berlin = City({'name': 'Berlin'})
+
+        peter.lives_in.add(berlin)
+        peter.merge(graph)
+        peter.merge(graph)
+        peter.merge(graph)
+
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN count(m)')
+        assert result[0][0] == 1
+
+        result = run_query_return_results(graph, 'MATCH (n:Person) RETURN count(n)')
+        assert result[0][0] == 1
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN count(r)')
+        assert result[0][0] == 1
+
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
+        assert result[0][0]['name'] == 'Berlin'
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
+
+
     def test_create_node_with_relationship_and_properties(self, graph, clear_graph):
         class Person(NodeModel):
             labels = ['Person']
@@ -135,6 +171,43 @@ class TestNodeModel:
 
         peter.lives_in.add(berlin, {'since': 2010, 'why': 'just because'})
         peter.create(graph)
+
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
+        assert result[0][0]['name'] == 'Berlin'
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][1]['since'] == 2010
+        assert result[0][1]['why'] == 'just because'
+        assert result[0][2]['name'] == 'Berlin'
+
+    def test_merge_node_with_relationship_and_properties(self, graph, clear_graph):
+        class Person(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+            lives_in = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(NodeModel):
+            labels = ['City']
+            merge_keys = ['name']
+
+        peter = Person({'name': 'Peter'})
+        berlin = City({'name': 'Berlin'})
+
+        peter.lives_in.add(berlin, {'since': 2010, 'why': 'just because'})
+        peter.merge(graph)
+        peter.merge(graph)
+        peter.merge(graph)
+
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN count(m)')
+        assert result[0][0] == 1
+
+        result = run_query_return_results(graph, 'MATCH (n:Person) RETURN count(n)')
+        assert result[0][0] == 1
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN count(r)')
+        assert result[0][0] == 1
 
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
         assert result[0][0]['name'] == 'Berlin'
