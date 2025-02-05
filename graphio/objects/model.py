@@ -1,4 +1,6 @@
 from typing import List, Union
+import importlib
+import pkgutil
 
 from graphio import NodeSet, RelationshipSet
 
@@ -110,6 +112,25 @@ class RelationshipModel(ModelBase):
     @classmethod
     def create_index(cls, driver):
         cls.relationshipset().create_index(driver)
+
+
+def import_all_modules(package_name):
+    package = importlib.import_module(package_name)
+    if hasattr(package, '__path__'):
+        for _, module_name, _ in pkgutil.iter_modules(package.__path__):
+            importlib.import_module(f"{package_name}.{module_name}")
+    else:
+        importlib.import_module(package_name)
+
+
+def model_initialize(module_name):
+    import_all_modules(module_name)
+
+
+def model_create_index(driver):
+    for model in ModelBase.registry:
+        if issubclass(model, NodeModel):
+            model.create_index(driver)
 
 
 class GraphModel:
