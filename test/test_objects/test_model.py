@@ -1,7 +1,7 @@
 import pytest
 from typing import List
 
-from graphio import NodeModel, RelationshipModel, Relationship
+from graphio import NodeModel, RelationshipModel, Relationship, Graph
 from graphio.helper import run_query_return_results
 
 
@@ -43,7 +43,7 @@ class TestNodeModel:
             merge_keys: List[str] = ['name']
 
         node_model = MyNode({'name': 'John'})
-        node_model.create(graph)
+        node_model.create_node(graph)
 
         result = run_query_return_results(graph, 'MATCH (n:Person) RETURN n')
         assert result[0][0]['name'] == 'John'
@@ -54,12 +54,12 @@ class TestNodeModel:
             merge_keys: List[str] = ['name']
 
         node_model = MyNode({'name': 'John'})
-        node_model.merge(graph)
+        node_model.merge_node(graph)
 
         result = run_query_return_results(graph, 'MATCH (n:Person) RETURN n')
         assert result[0][0]['name'] == 'John'
 
-        node_model.merge(graph)
+        node_model.merge_node(graph)
 
         result = run_query_return_results(graph, 'MATCH (n:Person) RETURN n')
         assert result[0][0]['name'] == 'John'
@@ -110,7 +110,9 @@ class TestNodeModel:
         berlin = City({'name': 'Berlin'})
 
         peter.lives_in.add(berlin)
-        peter.create(graph)
+
+        neo = Graph(graph)
+        neo.create(peter, berlin)
 
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
         assert result[0][0]['name'] == 'Berlin'
@@ -118,6 +120,42 @@ class TestNodeModel:
         result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
         assert result[0][0]['name'] == 'Peter'
         assert result[0][2]['name'] == 'Berlin'
+
+    def test_create_node_with_relationship_chain(self, graph, clear_graph):
+        class Person(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+            lives_in = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(NodeModel):
+            labels = ['City']
+            merge_keys = ['name']
+
+            located_in = Relationship('City', 'LOCATED_IN', 'Country')
+
+        class Country(NodeModel):
+            labels = ['Country']
+            merge_keys = ['name']
+
+        peter = Person({'name': 'Peter'})
+        berlin = City({'name': 'Berlin'})
+        germany = Country({'name': 'Germany'})
+
+        peter.lives_in.add(berlin)
+        berlin.located_in.add(germany)
+
+        neo = Graph(graph)
+        neo.create(peter, berlin, germany)
+
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
+        assert result[0][0]['name'] == 'Berlin'
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City)-[l:LOCATED_IN]->(o:Country) RETURN n, r, m, l, o')
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
+        assert result[0][4]['name'] == 'Germany'
+
 
     def test_merge_node_with_relationship(self, graph, clear_graph):
         class Person(NodeModel):
@@ -134,9 +172,11 @@ class TestNodeModel:
         berlin = City({'name': 'Berlin'})
 
         peter.lives_in.add(berlin)
-        peter.merge(graph)
-        peter.merge(graph)
-        peter.merge(graph)
+
+        neo = Graph(graph)
+        neo.merge(peter, berlin)
+        neo.merge(peter, berlin)
+        neo.merge(peter, berlin)
 
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN count(m)')
         assert result[0][0] == 1
@@ -170,7 +210,9 @@ class TestNodeModel:
         berlin = City({'name': 'Berlin'})
 
         peter.lives_in.add(berlin, {'since': 2010, 'why': 'just because'})
-        peter.create(graph)
+
+        neo = Graph(graph)
+        neo.create(peter, berlin)
 
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
         assert result[0][0]['name'] == 'Berlin'
@@ -196,9 +238,10 @@ class TestNodeModel:
         berlin = City({'name': 'Berlin'})
 
         peter.lives_in.add(berlin, {'since': 2010, 'why': 'just because'})
-        peter.merge(graph)
-        peter.merge(graph)
-        peter.merge(graph)
+        neo = Graph(graph)
+        neo.merge(peter, berlin)
+        neo.merge(peter, berlin)
+        neo.merge(peter, berlin)
 
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN count(m)')
         assert result[0][0] == 1

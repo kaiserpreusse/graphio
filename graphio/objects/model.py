@@ -56,16 +56,15 @@ class NodeModel(ModelBase):
     def match_dict(self):
         return {key: self.properties[key] for key in self.merge_keys}
 
-    def create(self, driver):
+    def create_node(self, driver):
         # this node
         ns = self.nodeset()
         ns.add_node(self.properties)
         ns.create(driver)
+
+    def create_relationships(self, driver):
         # nodes from relationships
         for rel in self.relationships:
-            for other_node, properties in rel.nodes:
-                other_node.create(driver)
-
             # relationships
             if self.__class__.__name__ == rel.source:
                 for other_node, properties in rel.nodes:
@@ -78,16 +77,15 @@ class NodeModel(ModelBase):
                     relset.add_relationship(other_node.match_dict, self.match_dict, properties)
                     relset.create(driver)
 
-    def merge(self, driver):
+    def merge_node(self, driver):
         # this node
         ns = self.nodeset()
         ns.add_node(self.properties)
         ns.merge(driver)
+
+    def merge_relationships(self, driver):
         # nodes from relationships
         for rel in self.relationships:
-            for other_node, properties in rel.nodes:
-                other_node.merge(driver)
-
             # relationships
             if self.__class__.__name__ == rel.source:
                 for other_node, properties in rel.nodes:
@@ -180,6 +178,31 @@ class RelationshipModel(ModelBase):
     @classmethod
     def create_index(cls, driver):
         cls.relationshipset().create_index(driver)
+
+
+class Graph:
+
+    def __init__(self, driver):
+        self.driver = driver
+
+    def create(self, *objects: NodeModel):
+        for o in objects:
+            if isinstance(o, NodeModel):
+                o.create_node(self.driver)
+        for o in objects:
+            if isinstance(o, NodeModel):
+                o.create_relationships(self.driver)
+
+    def merge(self, *objects: Union[NodeModel, RelationshipModel]):
+        for o in objects:
+            if isinstance(o, NodeModel):
+                o.merge_node(self.driver)
+        for o in objects:
+            if isinstance(o, NodeModel):
+                o.merge_relationships(self.driver)
+
+    def create_index(self, model: Union[NodeModel, RelationshipModel]):
+        model.create_index(self.driver)
 
 
 def model_initialize(module_name):
