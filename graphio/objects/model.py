@@ -1,9 +1,17 @@
-from typing import List
+from typing import List, Union
 
 from graphio import NodeSet, RelationshipSet
 
 
-class NodeModel:
+class RegistryMeta(type):
+    def __init__(cls, name, bases, attrs):
+        if not hasattr(cls, 'registry'):
+            cls.registry = []
+        cls.registry.append(cls)
+        super().__init__(name, bases, attrs)
+
+
+class NodeModel(metaclass=RegistryMeta):
     """
     Entrypoint for the application.
     """
@@ -13,6 +21,13 @@ class NodeModel:
     preserve: List[str] = None
     append_props: List[str] = None
     additional_labels: List[str] = None
+
+    @classmethod
+    def get_class_by_name(cls, name):
+        for subclass in cls.registry:
+            if subclass.__name__ == name:
+                return subclass
+        return None
 
     @classmethod
     def nodeset(cls):
@@ -40,11 +55,47 @@ class NodeModel:
         cls.nodeset().create_index(driver)
 
 
-class RelationshipModel:
+class RelationshipTo:
+
+    def __init__(self, source: str, rel_type: str, target: str):
+        self.rel_type = rel_type
+        self.source = source
+        self.target = target
+
+    def dataset(self):
+
+        source_node = NodeModel.get_class_by_name(self.source)
+        target_node = NodeModel.get_class_by_name(self.target)
+
+        return RelationshipSet(
+            rel_type=self.rel_type,
+            start_node_labels=source_node.labels,
+            end_node_labels=target_node.labels,
+            start_node_properties=source_node.merge_keys,
+            end_node_properties=target_node.merge_keys
+        )
+
+
+class RelationshipFrom:
+
+    def __init__(self, source: str, rel_type: str, target: str):
+        self.rel_type = rel_type
+        self.source = source
+        self.target = target
+
+
+class RelationshipModel(metaclass=RegistryMeta):
     rel_type: str
     source: type[NodeModel]
     target: type[NodeModel]
     default_props: dict = None
+
+    @classmethod
+    def get_class_by_name(cls, name):
+        for subclass in cls.registry:
+            if subclass.__name__ == name:
+                return subclass
+        return None
 
     @classmethod
     def relationshipset(cls):

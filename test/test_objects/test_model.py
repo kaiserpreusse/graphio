@@ -1,10 +1,10 @@
 import pytest
 from typing import List
 
-from graphio import NodeModel, RelationshipModel, GraphModel
+from graphio import NodeModel, RelationshipModel, GraphModel, RelationshipTo, RelationshipFrom
 
 
-class TestModelInstantiate:
+class TestGraphModel:
 
     def test_graph_model(self):
         graph_model = GraphModel()
@@ -29,6 +29,15 @@ class TestModelInstantiate:
         assert issubclass(graph_model.relationships[0], RelationshipModel)
 
 
+class TestRegistryMeta:
+    def test_registry_meta(self):
+        class MyNode(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+        assert type(NodeModel.get_class_by_name('MyNode')) == type(MyNode)
+
+
 class TestNodeModel:
 
     def test_create_node_model(self):
@@ -50,6 +59,21 @@ class TestNodeModel:
 
         assert node_set.labels == ['Person']
         assert node_set.merge_keys == ['name']
+
+    def test_relationship_to(self):
+        class MyNode(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+            friends = RelationshipTo('MyNode', 'FRIENDS', 'MyNode')
+
+        relset = MyNode.friends.dataset()
+
+        assert relset.rel_type == 'FRIENDS'
+        assert relset.start_node_labels == ['Person']
+        assert relset.end_node_labels == ['Person']
+        assert relset.start_node_properties == ['name']
+        assert relset.end_node_properties == ['name']
 
 
 class TestRelationshipModel:
