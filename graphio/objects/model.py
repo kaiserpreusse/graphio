@@ -127,24 +127,3 @@ def model_create_index(driver):
     for model in ModelBase.registry:
         if issubclass(model, NodeModel):
             model.create_index(driver)
-
-
-class GraphModel:
-    """
-    Container for NodeModel and RelationshipModel classes.
-    """
-
-    nodes: List[NodeModel] = []
-    relationships: List[RelationshipModel] = []
-
-    def add(self, object):
-        if issubclass(object, NodeModel):
-            self.nodes.append(object)
-        elif issubclass(object, RelationshipModel):
-            self.relationships.append(object)
-
-    def create_indexes(self, driver):
-        for node in self.nodes:
-            node.create_index(driver)
-        for rel in self.relationships:
-            rel.create_index(driver)
