@@ -3,7 +3,9 @@ import os
 import json
 from hypothesis import given, strategies as st
 
-from graphio.objects.nodeset import NodeSet, NodeModel
+from graphio.objects.nodeset import NodeSet
+from graphio.objects.model import NodeModel
+
 from graphio.helper import run_query_return_results
 
 
@@ -22,8 +24,12 @@ def small_nodeset(request) -> NodeSet:
         yield ns
 
     elif request.param == "NodelNode":
-        n = NodeModel(['Test'], merge_keys=['uuid'])
-        ns = n.dataset()
+        class MyNode(NodeModel):
+            labels:list[str] = ['Test']
+            merge_keys:list[str] = ['uuid']
+
+        ns = MyNode.dataset()
+
         for i in range(100):
             ns.add_node({'uuid': i, 'key': 'value'})
 

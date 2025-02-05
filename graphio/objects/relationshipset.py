@@ -5,7 +5,6 @@ import os
 import csv
 from typing import Set, List
 import gzip
-from dataclasses import dataclass
 
 from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
@@ -41,28 +40,6 @@ def tuplify_json_list(list_object: list) -> tuple:
         else:
             output = output + (element,)
     return output
-
-
-@dataclass
-class Relationship:
-    rel_type: str
-    start_node_labels: List[str]
-    end_node_labels: List[str]
-    start_node_properties: List[str]
-    end_node_properties: List[str]
-    properties: dict = None
-
-    def relationshipset(self):
-        return RelationshipSet(rel_type=self.rel_type,
-                               start_node_labels=self.start_node_labels,
-                               end_node_labels=self.end_node_labels,
-                               start_node_properties=self.start_node_properties,
-                               end_node_properties=self.end_node_properties,
-                               default_props=self.properties)
-
-    def dataset(self):
-        return self.relationshipset()
-
 
 
 class RelationshipSet:

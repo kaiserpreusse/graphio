@@ -6,10 +6,9 @@ import csv
 import gzip
 from collections import defaultdict
 from typing import Set, List, Union
-from dataclasses import dataclass
+
 
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
-from graphio import defaults
 from graphio.queries import nodes_merge_factory, nodes_create_factory
 from graphio.defaults import BATCHSIZE as DEFAULT_BATCH_SIZE
 
@@ -21,33 +20,6 @@ CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
 
 TYPE_CONVERSION = {'int': int,
                    'float': float}
-
-
-@dataclass
-class NodeModel:
-    """
-    Entrypoint for the application.
-    """
-    labels: List[str]
-    merge_keys: List[str]
-    default_props: dict = None
-    preserve: List[str] = None
-    append_props: List[str] = None
-    additional_labels: List[str] = None
-
-
-
-    def nodeset(self):
-        """
-        Create a NodeSet from this Node.
-
-        :return: NodeSet
-        """
-        return NodeSet(labels=self.labels, merge_keys=self.merge_keys, default_props=self.default_props,
-                       preserve=self.preserve, append_props=self.append_props, additional_labels=self.additional_labels)
-
-    def dataset(self):
-        return self.nodeset()
 
 
 class NodeSet:

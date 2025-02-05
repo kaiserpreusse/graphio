@@ -1,4 +1,76 @@
+from typing import List
+
 from graphio import NodeSet, RelationshipSet
+
+
+class NodeModel:
+    """
+    Entrypoint for the application.
+    """
+    labels: List[str]
+    merge_keys: List[str]
+    default_props: dict = None
+    preserve: List[str] = None
+    append_props: List[str] = None
+    additional_labels: List[str] = None
+
+    @classmethod
+    def nodeset(cls):
+        """
+        Create a NodeSet from this Node.
+
+        :return: NodeSet
+        """
+        labels = cls.labels
+        merge_keys = cls.merge_keys
+        default_props = cls.default_props
+        preserve = cls.preserve
+        append_props = cls.append_props
+        additional_labels = cls.additional_labels
+
+        return NodeSet(labels=labels, merge_keys=merge_keys, default_props=default_props,
+                       preserve=preserve, append_props=append_props, additional_labels=additional_labels)
+
+    @classmethod
+    def dataset(cls):
+        return cls.nodeset()
+
+
+class RelationshipModel:
+    rel_type: str
+    source: type[NodeModel]
+    target: type[NodeModel]
+    default_props: dict = None
+
+    @classmethod
+    def relationshipset(cls):
+        return RelationshipSet(
+            rel_type=cls.rel_type,
+            start_node_labels=cls.source.labels,
+            end_node_labels=cls.target.labels,
+            start_node_properties=cls.source.merge_keys,
+            end_node_properties=cls.target.merge_keys,
+            default_props=cls.default_props
+        )
+
+    @classmethod
+    def dataset(self):
+        return self.relationshipset()
+
+
+class GraphModel:
+    """
+    Container for NodeModel and RelationshipModel classes.
+    """
+
+    nodes: List[NodeModel] = []
+    relationships: List[RelationshipModel] = []
+
+    def add(self, object):
+        if issubclass(object, NodeModel):
+            self.nodes.append(object)
+        elif issubclass(object, RelationshipModel):
+            self.relationships.append(object)
 
 
 class Container:
