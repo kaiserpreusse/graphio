@@ -36,6 +36,53 @@ class NodeModel(ModelBase):
     append_props: List[str] = None
     additional_labels: List[str] = None
 
+    def __init__(self, properties):
+        self.properties = properties
+        if not all([key in properties for key in self.merge_keys]):
+            raise ValueError(f"Missing merge key properties: {self.merge_keys}")
+
+    @property
+    def relationships(self):
+        # get all attributes of this class that are instances of Relationship
+        relationship_objects = []
+        for attr_name in dir(self):
+            if attr_name != 'relationships':
+                attr = getattr(self, attr_name)
+                if isinstance(attr, Relationship):
+                    relationship_objects.append(attr)
+        return relationship_objects
+
+    @property
+    def match_dict(self):
+        return {key: self.properties[key] for key in self.merge_keys}
+
+    def create(self, driver):
+        # this node
+        ns = self.nodeset()
+        ns.add_node(self.properties)
+        ns.create(driver)
+        # nodes from relationships
+        for rel in self.relationships:
+            for other_node, properties in rel.nodes:
+                other_node.create(driver)
+
+            # relationships
+            if self.__class__.__name__ == rel.source:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(self.match_dict, other_node.match_dict, properties)
+                    relset.create(driver)
+            elif self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(other_node.match_dict, self.match_dict, properties)
+                    relset.create(driver)
+
+    def merge(self, driver):
+        ns = self.nodeset()
+        ns.add_node(self.properties)
+        ns.merge(driver)
+
     @classmethod
     def nodeset(cls):
         """
@@ -68,6 +115,10 @@ class Relationship:
         self.rel_type = rel_type
         self.source = source
         self.target = target
+        self.nodes = []
+
+    def add(self, node: NodeModel, properties: dict = None):
+        self.nodes.append((node, properties))
 
     def dataset(self):
         source_node = NodeModel.get_class_by_name(self.source)
