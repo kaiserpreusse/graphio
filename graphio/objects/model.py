@@ -8,7 +8,8 @@ class RegistryMeta(type):
         if not hasattr(cls, 'registry'):
             cls.registry = []
         if cls not in cls.registry:
-            cls.registry.append(cls)
+            if cls.__name__ != 'NodeModel' and cls.__name__ != 'RelationshipModel':
+                cls.registry.append(cls)
         super().__init__(name, bases, attrs)
 
 
