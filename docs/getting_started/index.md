@@ -130,7 +130,10 @@ model_initialize('path.to.module')
 ```
 
 #### Create individual nodes and relationships
-Instances of the model can be used to create individual nodes and relationships.
+Instances of the model can be used to create individual nodes and relationships. This is not very efficient and Graphio does not take care of 
+batches, indexes or other optimizations.
+
+It is useful for testing or small data sets or loading small amounts of data.
 
 ```python
 
