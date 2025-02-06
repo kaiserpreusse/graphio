@@ -83,7 +83,7 @@ Graphio takes care of batching and efficiently loads the data into Neo4j.
 
 Next to `.create()` Graphio also offers a `.merge()` operation on `NodeSet` and `RelationshipSet`.
 
-!!! warning
+!!! Note
     Graphio does not check if the source or targe nodes exist before creating relationships.
     If the nodes do not exist, they will not be created.
 
@@ -95,6 +95,11 @@ The second method is to define a data model and use it to load data into Neo4j.
 From the data model, you can either use instances of the model to 
 individual nodes and relationships or create `NodeSet` and `RelationshipSet` 
 objects to load large amounts of data. 
+
+!!! Note
+    Graphio is __not a full object relational mapper (ORM)__. It does not provide a bi-directional mapping between model objects and Neo4j.
+    The object model is meant to define the structure of the data and 
+    to consistently use the data model for multiple data loading operations in a larger application.
 
 ### Example
 
