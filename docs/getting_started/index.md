@@ -1,32 +1,35 @@
-# Example
+# Overview
 
-Here's an example workflow and explanation for parsing a csv file, structuring the data for Graphio, and loading the
-graph to Neo4j.
+Graphio can be used in two ways:
 
-## Example CSV file
+1. Define `NodeSet` and `RelationshipSet` objects and load them to Neo4j
+2. Define a data model which is then used to load data into Neo4j
 
-```csv
-   Alice; Matrix,Titanic
-   Peter; Matrix,Forrest Gump
-   John; Forrest Gump,Titanic
-```
+The [first method](#use-datasets) is more suitable for quick data loading or testing of new data models
+, while the [second method](#use-object-model) is useful for complex data models and applications.
 
-## Step 1: Neo4j connection
+## Use datasets
 
-The official Neo4j Python driver is required to connect to Neo4j, and a Driver instance is always necessary.
+`NodeSet` and `RelationshipSet` objects are used to define the structure of the
+data to be loaded into Neo4j. All nodes in a `NodeSet` have the same labels and
+the same unique properties (called `merge_keys` in Graphio). All relationships in a
+`RelationshipSet` have the same type and the same source and target nodes.
 
-```python 
-from neo4j import GraphDatabase
+Based on the structure of the data, Graphio can load large numbers of nodes and relationships
+efficiently. Graphio takes care of batching and supports `CREATE` and `MERGE` operations
+on nodes and relationships.
 
-driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
-```
+### Example
 
-## Step 2: Define the datasets
+Here's an example of how to define a `NodeSet` and a `RelationshipSet` for a social network.
 
-Create a `NodeSet` for the movies and a `RelationshipSet` for the relationships between the people and movies.
+#### Define datasets
 
 ```python
 from graphio import NodeSet, RelationshipSet
+from neo4j import GraphDatabase
+
+driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
 
 people = NodeSet(['Person'], merge_keys=['name'])
 movies = NodeSet(['Movie'], merge_keys=['title'])
@@ -35,31 +38,40 @@ person_likes_movie = RelationshipSet(
 )
 ```
 
-The `merge_keys` parameter is used to define one or more node properties that define the uniqueness of a node for
-`MERGE` operations.
+In this example, `people` is a `NodeSet` with the label `Person` and a unique property `name`,
+`movies` is a `NodeSet` with the label `Movie` and a unique property `title`.
 
-## Step 3: Parse the CSV file
+Note that both labels and merge keys are lists, so you can define multiple labels and merge keys.
+
+`person_likes_movie` is a `RelationshipSet` with the type `LIKES`, start nodes with label `Person`,
+end nodes with label `Movie`, and the properties `name` and `title` to match the start and end nodes 
+(equivalent to the `merge_keys` of the respective nodes).
+
+#### Add data to datasets
+Data can now be added to these sets and loaded into Neo4j.
 
 ```python
-with open('people.csv') as my_file:
-    for line in my_file:
-        # prepare data from the line
-        name, titles = line.split(';')
-        # split up the movies
-        titles = titles.strip().split(',')
-
-        # add one (Person) node per line
-        people.add_node({'name': name})
-
-        # add (Movie) nodes and :LIKES relationships
-        for title in titles:
-            movies.add_node({'title': title})
-            person_likes_movie.add_relationship(
-                {'name': name}, {'title': title}, {'source': 'my_file'}
-            )
+people.add_node({'name': 'Alice'})
+movies.add_node({'title': 'Matrix'})
+person_likes_movie.add_relationship({'name': 'Alice'}, {'title': 'Matrix'})
 ```
 
-## Step 4: Load the data
+To add a node to the node set, use the `add_node` method with a dictionary of properties. The properties must
+contain the unique properties defined in the `merge_keys`.
+
+To add a relationship to the relationship set, use the `add_relationship` method 
+with dictionaries containing the specified properties to match the start and end nodes.
+
+#### Create indexes
+Before loading data we should create indexes for the merge keys.
+
+```python
+people.create_index(driver)
+movies.create_index(driver)
+``` 
+
+#### Load to Neo4j
+Finally, the data can be loaded into Neo4j.
 
 ```python
 people.create(driver)
@@ -67,4 +79,61 @@ movies.create(driver)
 person_likes_movie.create(driver)
 ```
 
-The `driver` object is passed to the `.create()` function.
+Graphio takes care of batching and efficiently loads the data into Neo4j.
+
+Next to `.create()` Graphio also offers a `.merge()` operation on `NodeSet` and `RelationshipSet`.
+
+!!! warning
+    Graphio does not check if the source or targe nodes exist before creating relationships.
+    If the nodes do not exist, they will not be created.
+
+
+## Use object model
+
+The second method is to define a data model and use it to load data into Neo4j.
+
+From the data model, you can either use instances of the model to 
+individual nodes and relationships or create `NodeSet` and `RelationshipSet` 
+objects to load large amounts of data. 
+
+### Example
+
+Here's an example of how to define a data model for a social network.
+
+#### Define data model
+
+```python
+from graphio import NodeModel, Relationship, Graph, model_initialize
+
+class Person(NodeModel):
+    labels = ['Person']
+    merge_keys = ['name']
+    
+    likes = Relationship('Person', 'LIKES', 'Movie')
+
+class Movie(NodeModel):
+    labels = ['Movie']
+    merge_keys = ['title']
+```
+Relations are defined as attributes of the node model. The `Relationship` class takes the source 
+node label, the relationship type, and the target node label as arguments.
+
+When the model is defined in a separate module, it has be initialized first:
+
+```python
+model_initialize('path.to.module')
+```
+
+#### Create individual nodes and relationships
+Instances of the model can be used to create individual nodes and relationships.
+
+```python
+
+alice = Person(name='Alice')
+matrix = Movie(title='Matrix')
+alice.likes(matrix)
+
+graph = Graph(driver)
+
+graph.create(alice, matrix)
+```

@@ -22,8 +22,9 @@ markdown_extensions:
   - pymdownx.details
 nav:
   - Home: index.md
-  - Getting Started: getting_started/index.md
-  - Details: details.md
+  - Getting Started:
+      - Overview: getting_started/index.md
+  - Details: details/details.md
   - API Documentation:
       - NodeSet: api_reference/nodeset.md
       - RelationshipSet: api_reference/relationshipset.md
