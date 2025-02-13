@@ -6,10 +6,9 @@ import csv
 from typing import Set, List
 import gzip
 
-from graphio import defaults
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio.queries import rels_create_factory, rels_merge_factory, rels_params_from_objects
-from graphio.defaults import BATCHSIZE
+from graphio.config import config
 
 log = logging.getLogger(__name__)
 
@@ -437,7 +436,7 @@ class RelationshipSet:
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
-            batch_size = BATCHSIZE
+            batch_size = config.BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
@@ -453,7 +452,7 @@ class RelationshipSet:
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
-            batch_size = BATCHSIZE
+            batch_size = config.BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels

@@ -10,7 +10,7 @@ from typing import Set, List, Union
 
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio.queries import nodes_merge_factory, nodes_create_factory
-from graphio.defaults import BATCHSIZE as DEFAULT_BATCH_SIZE
+from graphio.config import config
 
 log = logging.getLogger(__name__)
 
@@ -344,7 +344,7 @@ class NodeSet:
         """
         log.debug('Create NodeSet')
         if not batch_size:
-            batch_size = DEFAULT_BATCH_SIZE
+            batch_size = config.BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels)
@@ -370,7 +370,7 @@ class NodeSet:
         log.debug('Merge NodeSet on {}'.format(merge_properties))
 
         if not batch_size:
-            batch_size = DEFAULT_BATCH_SIZE
+            batch_size = config.BATCHSIZE
 
         if not merge_properties:
             merge_properties = self.merge_keys
