@@ -7,7 +7,6 @@ from pydantic import BaseModel, PrivateAttr
 from graphio import NodeSet, RelationshipSet
 from graphio.queries import where_clause_with_properties
 
-
 log = logging.getLogger(__name__)
 
 
@@ -25,6 +24,7 @@ class RegistryMeta(type):
 class GraphModel(BaseModel):
     _driver = None  # Class variable to store the driver
     _registry: list[type] = PrivateAttr(default=[])
+
     @classmethod
     def set_driver(cls, driver):
         cls._driver = driver
@@ -54,8 +54,6 @@ class CustomMeta(RegistryMeta, BaseModel.__class__):
 
 
 class _NodeModel(GraphModel, metaclass=CustomMeta):
-
-
     _default_props: dict = {}
     _preserve: List[str] = None
     _append_props: List[str] = None
@@ -70,7 +68,6 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
     def __init__(self, **data):
         super().__init__(**data)
         for k, v in data.items():
-            print(f"Setting {k} to {v}")
             setattr(self, k, v)
 
         self._validate_merge_keys()
@@ -111,19 +108,77 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
     def create_index(cls):
         cls.nodeset().create_index(cls._driver)
 
-    def create(self):
+    @property
+    def relationships(self) -> list['Relationship']:
+        # get all attributes of this class that are instances of Relationship
+        relationship_objects = []
+        for attr_name, attr_value in self.__dict__.items():
+            if attr_name != 'relationships':
+                if isinstance(attr_value, Relationship):
+                    relationship_objects.append(attr_value)
+        return relationship_objects
+
+    @property
+    def match_dict(self) -> dict:
+        return {key: getattr(self, key) for key in self._merge_keys}
+
+    def create_target_nodes(self):
+        if self._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    other_node.create()
+
+    def create_relationships(self) -> None:
+        """
+        Create relationships for this node.
+        """
+        if self._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            # relationships
+            if self.__class__.__name__ == rel.source:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(self.match_dict, other_node.match_dict, properties)
+                    print(relset)
+                    relset.create(self._driver)
+            elif self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(other_node.match_dict, self.match_dict, properties)
+                    print(relset)
+                    relset.create(self._driver)
+
+    def create_node(self):
         if self._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
         ns = self.nodeset()
 
+        # get all propertie that are not relationships
         properties = {}
         for field in self.model_fields:
-            properties[field] = getattr(self, field)
+            attr = getattr(self, field)
+            if not isinstance(attr, Relationship):
+                properties[field] = getattr(self, field)
 
         properties.update(self._additional_properties)
 
         ns.add_node(properties)
         ns.create(self._driver)
+
+    def create(self):
+        """
+        A full create on a node including relationships and target nodes.
+
+        In most cases it's better to use a container class that manages the
+        creation of all nodes and relationships. In principle, this method
+        walks down a chain of nodes but that's difficult to handle from code.
+        """
+        self.create_node()
+        self.create_target_nodes()
+        self.create_relationships()
 
     def merge(self):
         if self._driver is None:
@@ -183,13 +238,13 @@ class Relationship(BaseModel):
     source: str
     rel_type: str
     target: str
-    nodes: List[Union[_NodeModel]] = []
+    nodes: List[tuple[_NodeModel, dict]] = []
 
     def __init__(self, source: str, rel_type: str, target: str, **data):
         super().__init__(source=source, rel_type=rel_type, target=target, **data)
 
-    def add(self, node: _NodeModel):
-        self.nodes.append(node)
+    def add(self, node: _NodeModel, properties: dict = None):
+        self.nodes.append((node, properties))
 
     def dataset(self):
         source_node = _NodeModel.get_class_by_name(self.source)
@@ -208,3 +263,22 @@ class Relationship(BaseModel):
 
     def set(self):
         return self.dataset()
+
+
+class Graph(BaseModel):
+
+    def create(self, *objects: _NodeModel):
+        for o in objects:
+            if isinstance(o, _NodeModel):
+                o.create_node()
+        for o in objects:
+            if isinstance(o, _NodeModel):
+                o.create_relationships()
+
+    def merge(self, *objects: _NodeModel):
+        for o in objects:
+            if isinstance(o, _NodeModel):
+                o.merge_node(self.driver)
+        for o in objects:
+            if isinstance(o, _NodeModel):
+                o.merge_relationships(self.driver)
