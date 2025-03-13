@@ -33,6 +33,16 @@ else:
     ]
 
 
+import pytest
+from graphio.objects._model import GraphModel
+
+@pytest.fixture(scope="function", autouse=True)
+def set_driver(graph):
+    GraphModel.set_driver(graph)
+    yield
+    GraphModel.set_driver(None)
+
+
 @pytest.fixture(scope='session')
 def wait_for_neo4j():
     # check availability for both containers

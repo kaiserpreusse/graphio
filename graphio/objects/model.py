@@ -1,8 +1,13 @@
 from typing import List, Union
 import importlib
 import pkgutil
+import logging
+from neo4j import Driver
 
 from graphio import NodeSet, RelationshipSet
+from graphio.queries import where_clause_with_properties
+
+log = logging.getLogger(__name__)
 
 
 class RegistryMeta(type):
@@ -97,6 +102,37 @@ class NodeModel(ModelBase):
                     relset = rel.dataset()
                     relset.add_relationship(other_node.match_dict, self.match_dict, properties)
                     relset.merge(driver)
+
+    @classmethod
+    def _label_match_string(cls):
+        return ":" + ":".join(cls.labels)
+
+    @classmethod
+    def match(cls, properties: dict, driver: Driver) -> list[('NodeModel')]:
+        """
+        Match and return an instance of this NodeModel.
+
+        :return: NodeModel
+        """
+
+        query = f"""WITH $properties AS properties
+        MATCH (n{cls._label_match_string()})
+        WHERE {where_clause_with_properties(properties, 'properties', node_variable='n')}
+        RETURN n"""
+        log.debug(query)
+        nodes = []
+
+        with driver.session() as session:
+            result = session.run(query, properties=properties)
+            for record in result:
+                node = record['n']
+                properties = dict(node.items())
+
+                nodes.append(
+                    cls(properties)
+                )
+
+        return nodes
 
     @classmethod
     def nodeset(cls):

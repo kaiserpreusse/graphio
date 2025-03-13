@@ -311,3 +311,50 @@ class TestRelationshipModel:
         assert relationship_set.start_node_properties == ['name']
         assert relationship_set.end_node_properties == ['name']
         assert relationship_set.default_props == None
+
+
+class TestNodeModelMatch:
+
+    def test_node_match(self, clear_graph, graph):
+
+        class Person(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+        john = Person({'name': 'John'})
+        john.merge_node(graph)
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        assert result[0][0]['name'] == 'John'
+
+        result = Person.match({'name': 'John'}, graph)
+
+        assert all([x.properties['name'] == 'John' for x in result])
+        assert all(isinstance(x, Person) for x in result)
+
+    def test_node_match_multiple_properties(self, clear_graph, graph):
+
+        class Person(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+        p = Person({'name': 'John', 'age': 30})
+        p2 = Person({'name': 'Peter', 'age': 40})
+        p.merge_node(graph)
+        p2.merge_node(graph)
+
+        result = Person.match({'name': 'John', 'age': 30}, graph)
+
+        assert all([x.properties['name'] == 'John' for x in result])
+        assert all([x.properties['age'] == 30 for x in result])
+        assert all(isinstance(x, Person) for x in result)
+
+    def test_node_match_no_data(self, clear_graph, graph):
+
+        class Person(NodeModel):
+            labels = ['Person']
+            merge_keys = ['name']
+
+        result = Person.match({'name': 'John'}, graph)
+
+        assert result == []

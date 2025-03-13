@@ -1,6 +1,6 @@
 from graphio.queries import rels_create_factory, rels_merge_factory, CypherQuery, get_label_string_from_list_of_labels, \
     match_clause_with_properties, merge_clause_with_properties, match_properties_as_string, nodes_merge_factory, \
-    nodes_create_factory
+    nodes_create_factory, where_clause_with_properties
 
 
 def test_match_clause_with_properties():
@@ -111,3 +111,28 @@ WHERE a.name = rel.start_name AND b.title = rel.end_title
 MERGE (a)-[r:LIKES]->(b)
 ON CREATE SET r = rel.properties
 ON MATCH SET r += rel.properties"""
+
+
+class TestMatchClauses:
+    """
+    Test query functions for matching nodes and relationships
+    """
+    def test_where_clause_with_properties(self):
+        properties = {'sid': '1234', 'name': 'John Doe', 'age': 30}
+        expected = "n.sid = properties.sid AND n.name = properties.name AND n.age = properties.age"
+        assert where_clause_with_properties(properties) == expected
+
+    def test_where_clause_with_properties_custom_prop_name(self):
+        properties = {'sid': '1234', 'name': 'John Doe', 'age': 30}
+        expected = "n.sid = custom_props.sid AND n.name = custom_props.name AND n.age = custom_props.age"
+        assert where_clause_with_properties(properties, prop_name='custom_props') == expected
+
+    def test_where_clause_with_properties_custom_node_variable(self):
+        properties = {'sid': '1234', 'name': 'John Doe', 'age': 30}
+        expected = "node.sid = properties.sid AND node.name = properties.name AND node.age = properties.age"
+        assert where_clause_with_properties(properties, node_variable='node') == expected
+
+    def test_where_clause_with_properties_custom_prop_name_and_node_variable(self):
+        properties = {'sid': '1234', 'name': 'John Doe', 'age': 30}
+        expected = "node.sid = custom_props.sid AND node.name = custom_props.name AND node.age = custom_props.age"
+        assert where_clause_with_properties(properties, prop_name='custom_props', node_variable='node') == expected

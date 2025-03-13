@@ -23,6 +23,7 @@ setup(name='graphio',
       packages=find_packages(),
       install_requires=[
           'neo4j>=5.25.0',
+          'pydantic<3'
       ],
       keywords=['NEO4J'],
       zip_safe=False,
