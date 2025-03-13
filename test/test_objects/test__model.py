@@ -187,6 +187,36 @@ class TestNodeModel:
         assert result[0][0]['name'] == 'Peter'
         assert result[0][2]['name'] == 'Berlin'
 
+        # create again to test if the nodes and relationships are created again
+        peter.create()
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
+        print(len(result))
+        assert len(result) == 2
+        assert result[0][0]['name'] == 'Berlin'
+        assert result[1][0]['name'] == 'Berlin'
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        print(len(result))
+        assert len(result) == 2
+        assert result[0][0]['name'] == 'Peter'
+        assert result[1][0]['name'] == 'Peter'
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        print(len(result))
+        for row in result:
+            print(row)
+
+        # we expect 5 relationships because the nodes were created once with one relationship
+        # in the second run the source and target node were created again and 4
+        # relationships between two source nodes and two target nodes were created
+        assert len(result) == 5
+        for i in range(5):
+            assert result[i][0]['name'] == 'Peter'
+            assert result[i][2]['name'] == 'Berlin'
+            assert result[i][0]['name'] == 'Peter'
+            assert result[i][2]['name'] == 'Berlin'
+
+
     def test_create_node_with_relationship_chain(self, graph, clear_graph):
         class Person(_NodeModel):
             name: str
@@ -216,9 +246,6 @@ class TestNodeModel:
 
         peter.create()
 
-        # neo = Graph(graph)
-        # neo.create(peter, berlin, germany)
-
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
         assert result[0][0]['name'] == 'Berlin'
 
@@ -227,6 +254,39 @@ class TestNodeModel:
         assert result[0][0]['name'] == 'Peter'
         assert result[0][2]['name'] == 'Berlin'
         assert result[0][4]['name'] == 'Germany'
+
+    def test_merge_node_with_relationship(self, graph, clear_graph):
+        class Person(_NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(_NodeModel):
+            name: str
+
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        peter = Person(name='Peter')
+        berlin = City(name='Berlin')
+
+        peter.lives_in.add(berlin)
+
+        peter.merge()
+        peter.merge()
+        peter.merge()
+
+        result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Berlin'
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
 
 
 class TestNodeModelMatch:
@@ -295,18 +355,3 @@ class TestNodeModelMatch:
         assert all([x.name == 'John' for x in result])
         assert all([x.age == 30 for x in result])
         assert all(isinstance(x, Person) for x in result)
-
-class Person(_NodeModel):
-    __labels__ = ['Person']
-    __merge_keys__ = ['name']
-
-    name: str
-    age: int
-
-
-class Person(_NodeModel):
-    _labels = ['Person']
-    _merge_keys = ['name']
-
-    name: str
-    age: int

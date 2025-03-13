@@ -87,6 +87,18 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
 
         return extra_fields
 
+    @property
+    def _all_properties(self) -> dict:
+        # get all propertie that are not relationships
+        properties = {}
+        for field in self.model_fields:
+            attr = getattr(self, field)
+            if not isinstance(attr, Relationship):
+                properties[field] = getattr(self, field)
+
+        properties.update(self._additional_properties)
+        return properties
+
     @classmethod
     def nodeset(cls):
         """
@@ -156,16 +168,7 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
         ns = self.nodeset()
 
-        # get all propertie that are not relationships
-        properties = {}
-        for field in self.model_fields:
-            attr = getattr(self, field)
-            if not isinstance(attr, Relationship):
-                properties[field] = getattr(self, field)
-
-        properties.update(self._additional_properties)
-
-        ns.add_node(properties)
+        ns.add_node(self._all_properties)
         ns.create(self._driver)
 
     def create(self):
@@ -180,19 +183,52 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
         self.create_target_nodes()
         self.create_relationships()
 
-    def merge(self):
+    def merge_target_nodes(self):
+        if self._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    other_node.merge()
+
+    def merge_relationships(self) -> None:
+        """
+        Merge relationships for this node.
+        """
+        if self._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            # relationships
+            if self.__class__.__name__ == rel.source:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(self.match_dict, other_node.match_dict, properties)
+                    relset.merge(self._driver)
+            elif self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    relset = rel.dataset()
+                    relset.add_relationship(other_node.match_dict, self.match_dict, properties)
+                    relset.merge(self._driver)
+
+    def merge_node(self):
         if self._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
         ns = self.nodeset()
 
-        properties = {}
-        for field in self.model_fields:
-            properties[field] = getattr(self, field)
-
-        properties.update(self._additional_properties)
-
-        ns.add_node(properties)
+        ns.add_node(self._all_properties)
         ns.merge(self._driver)
+
+    def merge(self):
+        """
+        A full merge on a node including relationships and target nodes.
+
+        In most cases it's better to use a container class that manages the
+        creation of all nodes and relationships. In principle, this method
+        walks down a chain of nodes but that's difficult to handle from code.
+        """
+        self.merge_node()
+        self.merge_target_nodes()
+        self.merge_relationships()
 
     @classmethod
     def _label_match_string(cls):
