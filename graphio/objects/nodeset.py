@@ -42,10 +42,6 @@ class NodeSet:
         self.indexed = indexed
         self.additional_labels = additional_labels or []
 
-        if self.labels:
-            self.combined = '_'.join(sorted(self.labels)) + '_' + '_'.join(sorted(self.merge_keys))
-        else:
-            self.combined = '_'.join(sorted(self.merge_keys))
         self.uuid = str(uuid4())
 
         self.nodes = []
@@ -167,7 +163,7 @@ class NodeSet:
         if not quoting:
             quoting = csv.QUOTE_MINIMAL
 
-        log.debug(f"Create CSV file {filepath} for NodeSet {self.combined}")
+        log.debug(f"Create CSV file {filepath} for NodeSet {self.labels}, {self.merge_keys}")
 
         all_props = self.all_property_keys()
 
@@ -360,6 +356,10 @@ class NodeSet:
         """
         if not self.labels:
             log.warning("MERGing without labels will not use an index and is slow.")
+
+        if not self.merge_keys:
+            raise ValueError("Merge keys are empty, MERGE requires merge keys.")
+
         # overwrite if preserve is passed
         if preserve:
             self.preserve = preserve

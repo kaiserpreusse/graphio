@@ -230,6 +230,19 @@ class TestNodeSetCreate:
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar) RETURN count(n)")
         assert result[0][0] == 20
 
+    def test_nodeset_create_without_merge_key(self, graph, clear_graph):
+        ns = NodeSet(['Test'])
+        for i in range(10):
+            ns.add_node({'key': i})
+
+        ns.create(graph)
+
+        result = run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")
+        assert result[0][0] == 10
+
+        ns.create(graph)
+        result = run_query_return_results(graph, "MATCH (n:Test) RETURN count(n)")
+        assert result[0][0] == 20
 
 class TestNodeSetIndex:
 
@@ -411,6 +424,13 @@ class TestNodeSetMerge:
 
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar:Kurt:Peter) RETURN count(n)")
         assert result[0][0] == 1
+
+    def test_nodeset_merge_no_merge_keys(self, graph, clear_graph):
+
+        with pytest.raises(ValueError):
+            ns = NodeSet(['Test'])
+            ns.add_node({'uuid': 1})
+            ns.merge(graph)
 
 
 class TestNodeSetToJSON:
