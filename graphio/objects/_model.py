@@ -333,8 +333,6 @@ MATCH (source{self._parent_instance._label_match_string()})-[:{self.rel_type}]->
 WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}
 RETURN distinct target"""
 
-        print(query)
-
         instances = []
         with target_node._driver.session() as session:
             result = session.run(query, properties=self._parent_instance.match_dict)
