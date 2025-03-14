@@ -5,7 +5,7 @@ theme:
   features:
     - content.code.copy
     - navigation.path
-    - navigation.tabs
+#    - navigation.tabs
     - navigation.sections
     - navigation.indexes
 markdown_extensions:
@@ -24,7 +24,9 @@ nav:
   - Home: index.md
   - Getting Started:
       - Overview: getting_started/index.md
-  - Details: details/details.md
+  - Details:
+      - Data Sets: details/datasets.md
+      - ORM: details/orm.md
   - API Documentation:
       - NodeSet: api_reference/nodeset.md
       - RelationshipSet: api_reference/relationshipset.md

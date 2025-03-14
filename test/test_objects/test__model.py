@@ -190,21 +190,18 @@ class TestNodeModel:
         # create again to test if the nodes and relationships are created again
         peter.create()
         result = run_query_return_results(graph, 'MATCH (m:City) RETURN m')
-        print(len(result))
+
         assert len(result) == 2
         assert result[0][0]['name'] == 'Berlin'
         assert result[1][0]['name'] == 'Berlin'
 
         result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
-        print(len(result))
+
         assert len(result) == 2
         assert result[0][0]['name'] == 'Peter'
         assert result[1][0]['name'] == 'Peter'
 
         result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
-        print(len(result))
-        for row in result:
-            print(row)
 
         # we expect 5 relationships because the nodes were created once with one relationship
         # in the second run the source and target node were created again and 4
@@ -355,3 +352,27 @@ class TestNodeModelMatch:
         assert all([x.name == 'John' for x in result])
         assert all([x.age == 30 for x in result])
         assert all(isinstance(x, Person) for x in result)
+
+    def test_matching_relationships(self, graph, clear_graph):
+        class Person(_NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        john = Person(name='John')
+        peter = Person(name='Peter')
+        bob = Person(name='Bob')
+
+        john.friends.add(peter)
+        john.friends.add(bob)
+
+        john.create()
+
+        johns_friends = john.friends.match()
+
+        assert len(johns_friends) == 2
+        assert all(isinstance(x, Person) for x in johns_friends)
+        assert set([x.name for x in johns_friends]) == {'Peter', 'Bob'}

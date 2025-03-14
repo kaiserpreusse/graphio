@@ -36,7 +36,7 @@ class GraphModel(BaseModel):
         return cls._driver
 
     @classmethod
-    def get_class_by_name(cls, name):
+    def get_class_by_name(cls, name) -> Union['_NodeModel', None]:
         for subclass in cls._registry.default:
             if subclass.__name__ == name:
                 return subclass
@@ -67,15 +67,36 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
 
     def __init__(self, **data):
         super().__init__(**data)
+        # Initialize a dictionary to store relationship instances
+        self._relationship_cache = {}
+        self._initialize_relationships()
         for k, v in data.items():
             setattr(self, k, v)
 
         self._validate_merge_keys()
 
     def _validate_merge_keys(self):
-        for key in self._merge_keys:
+        for key in self.__class__._merge_keys.default:
             if key not in self.model_fields:
                 raise ValueError(f"Merge key '{key}' is not a valid model field.")
+
+    def _initialize_relationships(self):
+        """Initialize all relationship attributes defined on the class"""
+        # Get all fields from model_fields
+        for field_name, field_info in self.model_fields.items():
+            # Check if the field's default value is a Relationship
+            field_default = field_info.default
+
+            if isinstance(field_default, Relationship):
+                # Create a new relationship instance with this object as parent
+                relationship = Relationship(
+                    source=field_default.source,
+                    rel_type=field_default.rel_type,
+                    target=field_default.target,
+                    parent=self
+                )
+                # Directly set the attribute on self, overriding the class attribute
+                setattr(self, field_name, relationship)
 
     @property
     def _additional_properties(self) -> dict:
@@ -132,7 +153,7 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
 
     @property
     def match_dict(self) -> dict:
-        return {key: getattr(self, key) for key in self._merge_keys}
+        return {key: getattr(self, key) for key in self.__class__._merge_keys.default}
 
     def create_target_nodes(self):
         if self._driver is None:
@@ -154,13 +175,11 @@ class _NodeModel(GraphModel, metaclass=CustomMeta):
                 for other_node, properties in rel.nodes:
                     relset = rel.dataset()
                     relset.add_relationship(self.match_dict, other_node.match_dict, properties)
-                    print(relset)
                     relset.create(self._driver)
             elif self.__class__.__name__ == rel.target:
                 for other_node, properties in rel.nodes:
                     relset = rel.dataset()
                     relset.add_relationship(other_node.match_dict, self.match_dict, properties)
-                    print(relset)
                     relset.create(self._driver)
 
     def create_node(self):
@@ -275,12 +294,17 @@ class Relationship(BaseModel):
     rel_type: str
     target: str
     nodes: List[tuple[_NodeModel, dict]] = []
+    _parent_instance: Optional['_NodeModel'] = None
 
-    def __init__(self, source: str, rel_type: str, target: str, **data):
+    def __init__(self, source: str, rel_type: str, target: str, parent=None, **data):
         super().__init__(source=source, rel_type=rel_type, target=target, **data)
+        self._parent_instance = parent
+        self.nodes = []  # Initialize empty list for each instance
 
-    def add(self, node: _NodeModel, properties: dict = None):
-        self.nodes.append((node, properties))
+    def add(self, node: '_NodeModel', properties: dict = None):
+        """Add a target node to this relationship"""
+        self.nodes.append((node, properties or {}))
+        return self  # Allow method chaining
 
     def dataset(self):
         source_node = _NodeModel.get_class_by_name(self.source)
@@ -299,6 +323,29 @@ class Relationship(BaseModel):
 
     def set(self):
         return self.dataset()
+
+    def match(self):
+        # how to figure out if this node is source or target?
+        target_node = _NodeModel.get_class_by_name(self.target)
+
+        query = f"""WITH $properties AS properties
+MATCH (source{self._parent_instance._label_match_string()})-[:{self.rel_type}]->(target{target_node._label_match_string()})
+WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}
+RETURN distinct target"""
+
+        print(query)
+
+        instances = []
+        with target_node._driver.session() as session:
+            result = session.run(query, properties=self._parent_instance.match_dict)
+
+            for record in result:
+                node = record['target']
+                properties = dict(node.items())
+                instances.append(
+                    target_node(**properties)
+                )
+        return instances
 
 
 class Graph(BaseModel):

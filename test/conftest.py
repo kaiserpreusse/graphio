@@ -4,6 +4,9 @@ import os
 import shutil
 from neo4j import GraphDatabase, Driver
 from neo4j.exceptions import ServiceUnavailable
+from pydantic import PrivateAttr
+
+from graphio.objects._model import _NodeModel
 
 from time import sleep
 
@@ -38,9 +41,34 @@ from graphio.objects._model import GraphModel
 
 @pytest.fixture(scope="function", autouse=True)
 def set_driver(graph):
+    """
+    Pytest fixture to set the driver for the GraphModel.
+
+    This fixture is automatically used for each test function. It sets the driver for the GraphModel
+    to the provided graph instance before the test runs, and resets it to None after the test completes.
+
+    Args:
+        graph: The graph instance to be used as the driver for the GraphModel.
+    """
     GraphModel.set_driver(graph)
     yield
     GraphModel.set_driver(None)
+
+
+@pytest.fixture(autouse=True)
+def reset_node_registry():
+    """
+    Pytest fixture to reset the _NodeModel registry.
+
+    This fixture is automatically used for each test function. It stores a copy of the original registry
+    before the test runs, and resets the registry to its original state after the test completes.
+    """
+
+    # Store original registry
+    original_registry = _NodeModel._registry.default.copy()
+    yield
+    # Reset registry after test
+    _NodeModel._registry = PrivateAttr(original_registry)
 
 
 @pytest.fixture(scope='session')
