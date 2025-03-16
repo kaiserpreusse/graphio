@@ -227,22 +227,22 @@ class TestNodeModel:
             assert result[i][2]['name'] == 'Berlin'
 
 
-    def test_create_node_with_relationship_chain(self, graph, clear_graph):
-        class Person(_NodeModel):
+    def test_create_node_with_relationship_chain(self, graph, test_base):
+        class Person(test_base.NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(_NodeModel):
+        class City(test_base.NodeModel):
             name: str
             _labels = ['City']
             _merge_keys = ['name']
 
             located_in: Relationship = Relationship('City', 'LOCATED_IN', 'Country')
 
-        class Country(_NodeModel):
+        class Country(test_base.NodeModel):
             name: str
             _labels = ['Country']
             _merge_keys = ['name']
@@ -265,8 +265,8 @@ class TestNodeModel:
         assert result[0][2]['name'] == 'Berlin'
         assert result[0][4]['name'] == 'Germany'
 
-    def test_merge_node_with_relationship(self, graph, clear_graph):
-        class Person(_NodeModel):
+    def test_merge_node_with_relationship(self, graph, test_base):
+        class Person(test_base.NodeModel):
             name: str
 
             _labels = ['Person']
@@ -274,7 +274,7 @@ class TestNodeModel:
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(_NodeModel):
+        class City(test_base.NodeModel):
             name: str
 
             _labels = ['City']
@@ -301,8 +301,8 @@ class TestNodeModel:
 
 class TestNodeModelMatch:
 
-    def test_node_match(self, clear_graph, graph):
-        class Person(_NodeModel):
+    def test_node_match(self, test_base, graph):
+        class Person(test_base.NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -318,8 +318,8 @@ class TestNodeModelMatch:
         assert all([x.name == 'John' for x in result])
         assert all(isinstance(x, Person) for x in result)
 
-    def test_node_match_multiple_properties(self, clear_graph, graph):
-        class Person(_NodeModel):
+    def test_node_match_multiple_properties(self, test_base, graph):
+        class Person(test_base.NodeModel):
             name: str
             age: int
 
@@ -338,8 +338,8 @@ class TestNodeModelMatch:
         assert all([x.age == 30 for x in result])
         assert all(isinstance(x, Person) for x in result)
 
-    def test_node_match_no_data(self, clear_graph, graph):
-        class Person(_NodeModel):
+    def test_node_match_no_data(self, test_base, graph):
+        class Person(test_base.NodeModel):
             name: str
             age: int
 
@@ -350,8 +350,8 @@ class TestNodeModelMatch:
 
         assert result == []
 
-    def test_node_match_with_addtional_properties(self):
-        class Person(_NodeModel):
+    def test_node_match_with_addtional_properties(self, test_base):
+        class Person(test_base.NodeModel):
             name: str
 
             _labels = ['Person']
@@ -366,8 +366,8 @@ class TestNodeModelMatch:
         assert all([x.age == 30 for x in result])
         assert all(isinstance(x, Person) for x in result)
 
-    def test_matching_relationships(self, graph, clear_graph):
-        class Person(_NodeModel):
+    def test_matching_relationships(self, graph, test_base):
+        class Person(test_base.NodeModel):
             name: str
 
             _labels = ['Person']

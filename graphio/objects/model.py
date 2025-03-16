@@ -122,18 +122,6 @@ class Registry:
                     self.add(obj)
 
 
-# class CustomMeta(BaseModel.__class__):
-#     def __init__(cls, name, bases, attrs):
-#         super().__init__(name, bases, attrs)
-#
-#         # Skip base classes
-#         if name not in ('Base', 'NodeModel', 'RelationshipModel'):
-#             # Use Base's registry if it exists
-#             if hasattr(cls, 'get_registry'):
-#                 registry = cls.get_registry()
-#                 registry.add(cls)
-
-
 class CustomMeta(BaseModel.__class__):
     def __new__(mcs, name, bases, attrs):
         # First create the class using the normal mechanism
@@ -143,7 +131,6 @@ class CustomMeta(BaseModel.__class__):
         # regardless of inheritance chain
         if name not in ('Base', 'NodeModel', 'RelationshipModel'):
             if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
-                print("registering", cls)
                 # Always register with the global registry
                 registry = get_global_registry()
                 registry.add(cls)
@@ -161,8 +148,8 @@ def declarative_base():
         _driver = None
 
         @classmethod
-        def initialize(cls):
-            """Initialize the Base class"""
+        def discover_models(cls):
+            """Scan modules to discover model classes"""
             cls.get_registry().auto_discover()
             return cls
 
@@ -229,14 +216,11 @@ def declarative_base():
             """Initialize all relationship attributes defined on the class"""
             # Get all fields from model_fields
             for field_name, field_info in self.model_fields.items():
-                print(field_name, field_info)
+
                 # Check if the field's default value is a Relationship
                 field_default = field_info.default
-                print(field_default)
 
                 if isinstance(field_default, Relationship):
-                    print("Relationship found")
-                    print(field_default)
                     # Create a new relationship instance with this object as parent
                     relationship = field_default.__class__(
                         source=field_default.source,
@@ -283,6 +267,10 @@ def declarative_base():
 
             return NodeSet(labels=labels, merge_keys=merge_keys, default_props=default_props,
                            preserve=preserve, append_props=append_props, additional_labels=additional_labels)
+
+        @classmethod
+        def dataset(cls):
+            return cls.nodeset()
 
         @classmethod
         def create_index(cls):
@@ -491,10 +479,6 @@ class Relationship(BaseModel):
 
         # Add debugging to see what's in the registry
         base = self._get_base()
-        print("\n----\n in dataset \n----\n")
-        print(base)
-        print(base.get_registry())
-        print(base.get_registry().default)
 
         source_node = base.get_class_by_name(self.source)
         target_node = base.get_class_by_name(self.target)
@@ -506,20 +490,6 @@ class Relationship(BaseModel):
             start_node_properties=source_node._merge_keys,
             end_node_properties=target_node._merge_keys,
         )
-
-
-    # def _get_base(self):
-    #     """Helper method to get the Base class"""
-    #     # Since we're using a global registry, we can use any reference to Base
-    #     import sys
-    #     for module_name in sys.modules:
-    #         module = sys.modules[module_name]
-    #         if hasattr(module, 'Base'):
-    #             base = getattr(module, 'Base')
-    #             if hasattr(base, 'get_registry'):
-    #                 return base
-    #
-    #     return None
 
     def _get_base(self):
         """Helper method to get the Base class"""

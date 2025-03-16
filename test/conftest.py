@@ -108,7 +108,7 @@ def set_driver(graph, test_base):
 
     # Use the test_base fixture directly which creates and returns a Base class
     Base = test_base
-    Base.initialize().set_driver(graph)
+    Base.set_driver(graph)
     yield
     Base.set_driver(None)
 

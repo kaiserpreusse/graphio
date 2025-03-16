@@ -4,7 +4,6 @@ import json
 from hypothesis import given, strategies as st
 
 from graphio.objects.nodeset import NodeSet
-from graphio.objects.model import NodeModel
 
 from graphio.helper import run_query_return_results
 
@@ -16,7 +15,7 @@ def reusable_tmp_dir(tmpdir_factory):
 
 
 @pytest.fixture(params=["bare", "NodelNode"])
-def small_nodeset(request) -> NodeSet:
+def small_nodeset(request, test_base) -> NodeSet:
     if request.param == "bare":
         ns = NodeSet(['Test'], merge_keys=['uuid'])
         for i in range(100):
@@ -24,11 +23,14 @@ def small_nodeset(request) -> NodeSet:
         yield ns
 
     elif request.param == "NodelNode":
-        class MyNode(NodeModel):
-            labels:list[str] = ['Test']
-            merge_keys:list[str] = ['uuid']
+        class MyNode(test_base.NodeModel):
+            uuid: str
+            _labels = ['Test']
+            _merge_keys = ['uuid']
+
 
         ns = MyNode.dataset()
+        print(ns)
 
         for i in range(100):
             ns.add_node({'uuid': i, 'key': 'value'})
