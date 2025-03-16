@@ -1,6 +1,6 @@
 import logging
 from neo4j import GraphDatabase
-from model import Base, User, Post, Likes
+from model import Base, User, Post
 
 
 # Configure logging
@@ -43,7 +43,6 @@ def main():
         logger.info("Setting up relationships...")
         alice.friends.add(bob)
         bob.friends.add(charlie)
-        charlie.friends.add(alice)
 
         post1.author.add(alice)
         post2.author.add(bob)
@@ -69,7 +68,8 @@ def main():
         logger.info("Application completed successfully")
 
     except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
+        raise
+
     finally:
         driver.close()
         logger.info("Database connection closed")

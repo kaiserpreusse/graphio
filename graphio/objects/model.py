@@ -12,20 +12,133 @@ from graphio.queries import where_clause_with_properties
 
 log = logging.getLogger(__name__)
 
+_GLOBAL_REGISTRY = None
 
-class RegistryMeta(type):
+def get_global_registry():
+    global _GLOBAL_REGISTRY
+    if _GLOBAL_REGISTRY is None:
+        _GLOBAL_REGISTRY = Registry()
+    return _GLOBAL_REGISTRY
+
+
+class Registry:
+    def __init__(self):
+        self.default = []
+        self._is_initialized = False
+
+    def __iter__(self):
+        return iter(self.default)
+
+    def add(self, cls):
+        # Check if the class is already in the registry by class object (not just name)
+        if cls not in self.default:
+            print(f"Adding {cls.__name__} to registry")
+            self.default.append(cls)
+            return True
+        return False
+
+    def auto_discover(self):
+        """Auto-discover all model classes in the caller's module and related modules"""
+        if self._is_initialized:
+            return
+        print("doing auto discover")
+
+        # Get the frame that called this method
+        frame = inspect.currentframe().f_back.f_back
+        module = inspect.getmodule(frame)
+
+        if not module:
+            return
+
+        module_name = module.__name__
+        print(f"Auto-discovering in module: {module_name}")
+
+        # Track all modules we've scanned
+        scanned_modules = set()
+
+        # Scan the caller's module first
+        self._scan_module_for_models(module, scanned_modules)
+
+        # Import common related modules
+        try:
+            # Try to import a 'model' or 'models' module in the same package
+            package_name = module.__name__.split('.')[0]
+            for related_name in ['model', 'models']:
+                try:
+                    related_module = importlib.import_module(f"{package_name}.{related_name}")
+                    self._scan_module_for_models(related_module, scanned_modules)
+                except ImportError:
+                    try:
+                        # Try as a direct import
+                        related_module = importlib.import_module(related_name)
+                        self._scan_module_for_models(related_module, scanned_modules)
+                    except ImportError:
+                        pass
+
+            # Import the package itself if it's not already imported
+            try:
+                package = importlib.import_module(package_name)
+                self._scan_module_for_models(package, scanned_modules)
+            except ImportError:
+                pass
+
+            # If it's a package, import all submodules
+            if hasattr(sys.modules[module_name], '__path__'):
+                pkg = sys.modules[module_name]
+                for _, name, is_pkg in pkgutil.iter_modules(pkg.__path__, pkg.__name__ + '.'):
+                    try:
+                        imported_module = importlib.import_module(name)
+                        self._scan_module_for_models(imported_module, scanned_modules)
+                    except ImportError as e:
+                        log.warning(f"Could not import {name}: {e}")
+        except (KeyError, AttributeError) as e:
+            log.warning(f"Error during module discovery: {e}")
+
+        self._is_initialized = True
+
+    def _scan_module_for_models(self, module, scanned_modules=None):
+        """Scan a module for model classes and add them to the registry"""
+        if scanned_modules is None:
+            scanned_modules = set()
+
+        if module.__name__ in scanned_modules:
+            return
+
+        scanned_modules.add(module.__name__)
+        print(f"Scanning module: {module.__name__}")
+
+        # Find and register all classes with _labels and _merge_keys
+        for name, obj in inspect.getmembers(module):
+            if inspect.isclass(obj) and hasattr(obj, '_labels') and hasattr(obj, '_merge_keys'):
+                print(f"Found model class: {obj.__name__}")
+                # Get reference to the Base class through the MRO
+                base_class = None
+                for parent in obj.__mro__:
+                    if hasattr(parent, 'get_registry') and hasattr(parent, 'NodeModel'):
+                        base_class = parent
+                        break
+
+                if base_class:
+                    # Use Base's registry directly
+                    registry = base_class.get_registry()
+                    registry.add(obj)
+                    print(f"Added {obj.__name__} to registry using Base class")
+                else:
+                    # Fall back to adding directly to this registry
+                    self.add(obj)
+                    print(f"Added {obj.__name__} to registry directly")
+
+
+class CustomMeta(BaseModel.__class__):
     def __init__(cls, name, bases, attrs):
-        if not hasattr(cls, '_registry'):
-            cls._registry = []
-        if cls not in cls._registry:
-            if name not in ('Base', 'NodeModel', 'RelationshipModel'):
-                cls._registry.append(cls)
-
         super().__init__(name, bases, attrs)
 
-
-class CustomMeta(RegistryMeta, BaseModel.__class__):
-    pass
+        # Skip base classes
+        if name not in ('Base', 'NodeModel', 'RelationshipModel'):
+            # Use Base's registry if it exists
+            if hasattr(cls, 'get_registry'):
+                registry = cls.get_registry()
+                registry.add(cls)
 
 
 def declarative_base():
@@ -33,58 +146,24 @@ def declarative_base():
     Create a declarative base for Neo4j model definitions.
     Similar to SQLAlchemy's declarative_base but works with Pydantic.
     """
-
-    class Registry:
-        def __init__(self):
-            self.default = []
-            self._is_initialized = False
-
-        def __iter__(self):
-            return iter(self.default)
-
-        def add(self, cls):
-            if cls not in self.default:
-                self.default.append(cls)
-
-        def auto_discover(self):
-            """Auto-discover all model classes in the caller's module"""
-            if self._is_initialized:
-                return
-
-            # Get the frame that called this method
-            frame = inspect.currentframe().f_back.f_back
-            module = inspect.getmodule(frame)
-
-            if not module:
-                return
-
-            module_name = module.__name__
-            try:
-                # Import the module itself
-                importlib.import_module(module_name)
-
-                # If it's a package, import all submodules
-                if hasattr(sys.modules[module_name], '__path__'):
-                    pkg = sys.modules[module_name]
-                    for _, name, is_pkg in pkgutil.iter_modules(pkg.__path__, pkg.__name__ + '.'):
-                        try:
-                            importlib.import_module(name)
-                        except ImportError as e:
-                            log.warning(f"Could not import {name}: {e}")
-            except (KeyError, AttributeError) as e:
-                log.warning(f"Error during module discovery: {e}")
-
-            self._is_initialized = True
-
     # Create the base class
     class Base(BaseModel, metaclass=CustomMeta):
-        _registry = Registry()
         _driver = None
+
+        @classmethod
+        def initialize(cls):
+            """Initialize the Base class"""
+            cls.get_registry().auto_discover()
+            return cls
+
+        @classmethod
+        def get_registry(cls):
+            return get_global_registry()
 
         @classmethod
         def set_driver(cls, driver):
             cls._driver = driver
-            return cls  # For method chaining
+            return cls
 
         @classmethod
         def get_driver(cls):
@@ -93,15 +172,10 @@ def declarative_base():
             return cls._driver
 
         @classmethod
-        def initialize(cls):
-            """Initialize the model registry"""
-            cls._registry.auto_discover()
-            return cls  # For method chaining
-
-        @classmethod
         def get_class_by_name(cls, name):
             """Get a model class by its name"""
-            for subclass in cls._registry:
+            registry = cls.get_registry()
+            for subclass in registry:
                 if subclass.__name__ == name:
                     return subclass
             return None
@@ -109,9 +183,11 @@ def declarative_base():
         @classmethod
         def model_create_index(cls):
             """Create indexes for all models"""
-            for model in cls._registry:
+            registry = cls.get_registry()
+            for model in registry:
                 if hasattr(model, 'create_index'):
                     model.create_index()
+
 
     # Create the node model class with all functionality from _NodeModel
     class NodeModel(BaseModel, metaclass=CustomMeta):
@@ -128,8 +204,6 @@ def declarative_base():
 
         def __init__(self, **data):
             super().__init__(**data)
-            # Initialize a dictionary to store relationship instances
-            self._relationship_cache = {}
             self._initialize_relationships()
             for k, v in data.items():
                 setattr(self, k, v)
@@ -371,8 +445,15 @@ class Relationship(BaseModel):
     source: str
     rel_type: str
     target: str
-    nodes: List[Tuple['NodeModel', Dict]] = []
-    _parent_instance: Optional[Any] = None
+    nodes: List[Tuple[Any, Dict]] = []
+
+    # Use PrivateAttr for non-model fields
+    _parent_instance: Optional[Any] = PrivateAttr(default=None)
+
+    # Add model_config for Pydantic v2
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
 
     def __init__(self, source: str, rel_type: str, target: str, parent=None, **data):
         super().__init__(source=source, rel_type=rel_type, target=target, **data)
@@ -385,7 +466,20 @@ class Relationship(BaseModel):
         return self  # Allow method chaining
 
     def dataset(self):
+
+        # Add debugging to see what's in the registry
         base = self._get_base()
+        registry = base.get_registry()
+        print(f"Registry contains {len(list(registry))} classes:")
+        for cls in registry:
+            print(f"  - {cls.__name__}")
+
+        print("base")
+        print(base)
+        print(self.source)
+        print(self.target)
+        print(base.get_class_by_name(self.source))
+
         source_node = base.get_class_by_name(self.source)
         target_node = base.get_class_by_name(self.target)
 
@@ -398,11 +492,16 @@ class Relationship(BaseModel):
         )
 
     def _get_base(self):
-        """Helper method to get the Base class through the parent instance"""
-        if self._parent_instance:
-            for cls in self._parent_instance.__class__.__mro__:
-                if hasattr(cls, '_registry'):
-                    return cls.__class__
+        """Helper method to get the Base class"""
+        # Since we're using a global registry, we can use any reference to Base
+        import sys
+        for module_name in sys.modules:
+            module = sys.modules[module_name]
+            if hasattr(module, 'Base'):
+                base = getattr(module, 'Base')
+                if hasattr(base, 'get_registry'):
+                    return base
+
         return None
 
     def relationshipset(self):

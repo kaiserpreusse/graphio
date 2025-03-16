@@ -1,6 +1,4 @@
 from graphio.objects.nodeset import NodeSet
 from graphio.objects.relationshipset import RelationshipSet
-from graphio.objects._model import declarative_base, Relationship
-#from graphio.objects.model import NodeModel, RelationshipModel, Relationship, ModelBase, \
-    # model_initialize, model_create_index, Graph
+from graphio.objects.model import declarative_base, Relationship
 from graphio.queries import ArrayProperty

@@ -1,7 +1,7 @@
 import pytest
 from typing import List
 
-from graphio.objects._model import _NodeModel, GraphModel, Relationship
+from graphio.objects.model import _NodeModel, GraphModel, Relationship
 from graphio.helper import run_query_return_results
 
 

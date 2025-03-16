@@ -6,7 +6,7 @@ from neo4j import GraphDatabase, Driver
 from neo4j.exceptions import ServiceUnavailable
 from pydantic import PrivateAttr
 
-from graphio.objects._model import _NodeModel
+from graphio.objects.model import _NodeModel
 
 from time import sleep
 
@@ -37,38 +37,46 @@ else:
 
 
 import pytest
-from graphio.objects._model import GraphModel
+
 
 @pytest.fixture(scope="function", autouse=True)
 def set_driver(graph):
     """
-    Pytest fixture to set the driver for the GraphModel.
+    Pytest fixture to set the driver for the Base model.
 
-    This fixture is automatically used for each test function. It sets the driver for the GraphModel
-    to the provided graph instance before the test runs, and resets it to None after the test completes.
-
-    Args:
-        graph: The graph instance to be used as the driver for the GraphModel.
+    This fixture automatically sets the driver for each test, then resets it.
     """
-    GraphModel.set_driver(graph)
+    from graphio.objects.model import get_global_registry
+    registry = get_global_registry()
+    registry.base.initialize().set_driver(graph)
     yield
-    GraphModel.set_driver(None)
+    registry.base.set_driver(None)
 
 
 @pytest.fixture(autouse=True)
-def reset_node_registry():
+def reset_registry():
     """
-    Pytest fixture to reset the _NodeModel registry.
-
-    This fixture is automatically used for each test function. It stores a copy of the original registry
-    before the test runs, and resets the registry to its original state after the test completes.
+    Pytest fixture to reset the registry between tests.
     """
-
-    # Store original registry
-    original_registry = _NodeModel._registry.default.copy()
+    from graphio.objects.model import _GLOBAL_REGISTRY, Registry
+    # Store original registry state
+    original = _GLOBAL_REGISTRY
+    # Reset for test
+    import graphio.objects.model
+    graphio.objects.model._GLOBAL_REGISTRY = None
     yield
-    # Reset registry after test
-    _NodeModel._registry = PrivateAttr(original_registry)
+    # Restore original registry
+    graphio.objects.model._GLOBAL_REGISTRY = original
+
+
+@pytest.fixture
+def test_base():
+    """
+    Creates a clean Base class for testing.
+    """
+    from graphio.objects.model import declarative_base
+    Base = declarative_base()
+    return Base
 
 
 @pytest.fixture(scope='session')
@@ -105,7 +113,7 @@ def graph(request, wait_for_neo4j):
         yield GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def clear_graph(graph):
     if isinstance(graph, Driver):
         with graph.session() as s:
