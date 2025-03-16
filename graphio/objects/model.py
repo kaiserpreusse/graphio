@@ -1,7 +1,7 @@
 import importlib
-import inspect
 import sys
 import pkgutil
+import inspect
 import logging
 from typing import List, ClassVar, Dict, Any, Optional, Type, Union, Set, Tuple
 
@@ -32,7 +32,6 @@ class Registry:
     def add(self, cls):
         # Check if the class is already in the registry by class object (not just name)
         if cls not in self.default:
-            print(f"Adding {cls.__name__} to registry")
             self.default.append(cls)
             return True
         return False
@@ -41,7 +40,6 @@ class Registry:
         """Auto-discover all model classes in the caller's module and related modules"""
         if self._is_initialized:
             return
-        print("doing auto discover")
 
         # Get the frame that called this method
         frame = inspect.currentframe().f_back.f_back
@@ -51,7 +49,6 @@ class Registry:
             return
 
         module_name = module.__name__
-        print(f"Auto-discovering in module: {module_name}")
 
         # Track all modules we've scanned
         scanned_modules = set()
@@ -105,12 +102,10 @@ class Registry:
             return
 
         scanned_modules.add(module.__name__)
-        print(f"Scanning module: {module.__name__}")
 
         # Find and register all classes with _labels and _merge_keys
         for name, obj in inspect.getmembers(module):
             if inspect.isclass(obj) and hasattr(obj, '_labels') and hasattr(obj, '_merge_keys'):
-                print(f"Found model class: {obj.__name__}")
                 # Get reference to the Base class through the MRO
                 base_class = None
                 for parent in obj.__mro__:
@@ -122,23 +117,38 @@ class Registry:
                     # Use Base's registry directly
                     registry = base_class.get_registry()
                     registry.add(obj)
-                    print(f"Added {obj.__name__} to registry using Base class")
                 else:
                     # Fall back to adding directly to this registry
                     self.add(obj)
-                    print(f"Added {obj.__name__} to registry directly")
+
+
+# class CustomMeta(BaseModel.__class__):
+#     def __init__(cls, name, bases, attrs):
+#         super().__init__(name, bases, attrs)
+#
+#         # Skip base classes
+#         if name not in ('Base', 'NodeModel', 'RelationshipModel'):
+#             # Use Base's registry if it exists
+#             if hasattr(cls, 'get_registry'):
+#                 registry = cls.get_registry()
+#                 registry.add(cls)
 
 
 class CustomMeta(BaseModel.__class__):
-    def __init__(cls, name, bases, attrs):
-        super().__init__(name, bases, attrs)
+    def __new__(mcs, name, bases, attrs):
+        # First create the class using the normal mechanism
+        cls = super().__new__(mcs, name, bases, attrs)
 
-        # Skip base classes
+        # Register any class that has the required NodeModel attributes
+        # regardless of inheritance chain
         if name not in ('Base', 'NodeModel', 'RelationshipModel'):
-            # Use Base's registry if it exists
-            if hasattr(cls, 'get_registry'):
-                registry = cls.get_registry()
+            if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
+                print("registering", cls)
+                # Always register with the global registry
+                registry = get_global_registry()
                 registry.add(cls)
+
+        return cls
 
 
 def declarative_base():
@@ -219,16 +229,20 @@ def declarative_base():
             """Initialize all relationship attributes defined on the class"""
             # Get all fields from model_fields
             for field_name, field_info in self.model_fields.items():
+                print(field_name, field_info)
                 # Check if the field's default value is a Relationship
                 field_default = field_info.default
+                print(field_default)
 
                 if isinstance(field_default, Relationship):
+                    print("Relationship found")
+                    print(field_default)
                     # Create a new relationship instance with this object as parent
-                    relationship = Relationship(
+                    relationship = field_default.__class__(
                         source=field_default.source,
                         rel_type=field_default.rel_type,
                         target=field_default.target,
-                        parent=self
+                        parent=self  # Pass the parent instance
                     )
                     # Directly set the attribute on self, overriding the class attribute
                     setattr(self, field_name, relationship)
@@ -286,7 +300,15 @@ def declarative_base():
 
         @property
         def match_dict(self) -> dict:
-            return {key: getattr(self, key) for key in self.__class__._merge_keys}
+            # Get merge keys directly from class.__dict__
+            merge_keys = self.__class__.__dict__.get('_merge_keys', [])
+
+            # Build result dictionary
+            result = {}
+            for key in merge_keys:
+                if hasattr(self, key):
+                    result[key] = getattr(self, key)
+            return result
 
         def create_target_nodes(self):
             if Base._driver is None:
@@ -469,16 +491,10 @@ class Relationship(BaseModel):
 
         # Add debugging to see what's in the registry
         base = self._get_base()
-        registry = base.get_registry()
-        print(f"Registry contains {len(list(registry))} classes:")
-        for cls in registry:
-            print(f"  - {cls.__name__}")
-
-        print("base")
+        print("\n----\n in dataset \n----\n")
         print(base)
-        print(self.source)
-        print(self.target)
-        print(base.get_class_by_name(self.source))
+        print(base.get_registry())
+        print(base.get_registry().default)
 
         source_node = base.get_class_by_name(self.source)
         target_node = base.get_class_by_name(self.target)
@@ -491,18 +507,68 @@ class Relationship(BaseModel):
             end_node_properties=target_node._merge_keys,
         )
 
+
+    # def _get_base(self):
+    #     """Helper method to get the Base class"""
+    #     # Since we're using a global registry, we can use any reference to Base
+    #     import sys
+    #     for module_name in sys.modules:
+    #         module = sys.modules[module_name]
+    #         if hasattr(module, 'Base'):
+    #             base = getattr(module, 'Base')
+    #             if hasattr(base, 'get_registry'):
+    #                 return base
+    #
+    #     return None
+
     def _get_base(self):
         """Helper method to get the Base class"""
-        # Since we're using a global registry, we can use any reference to Base
-        import sys
-        for module_name in sys.modules:
-            module = sys.modules[module_name]
-            if hasattr(module, 'Base'):
-                base = getattr(module, 'Base')
-                if hasattr(base, 'get_registry'):
-                    return base
+        # First try through parent instance if available
+        if self._parent_instance is not None:
+            for base_class in self._parent_instance.__class__.__mro__:
+                if hasattr(base_class, 'get_registry') and hasattr(base_class, 'NodeModel'):
+                    return base_class
 
-        return None
+        # If we can't find it through the parent, use the global registry directly
+        from graphio.objects.model import get_global_registry
+
+        # Create a dynamic Base object that uses the global registry
+        class DynamicBase:
+            @staticmethod
+            def get_registry():
+                return get_global_registry()
+
+            @staticmethod
+            def get_driver():
+                # Try to find a driver from loaded modules
+                import sys
+                for module_name, module in sys.modules.items():
+                    if hasattr(module, 'Base') and hasattr(module.Base, 'get_driver'):
+                        return module.Base.get_driver()
+                # If not found, try to get from test environment
+                import inspect
+                frame = inspect.currentframe()
+                try:
+                    while frame:
+                        if 'graph' in frame.f_locals:
+                            return frame.f_locals['graph']
+                        frame = frame.f_back
+                finally:
+                    del frame
+
+                raise ValueError("Could not find driver")
+
+            @staticmethod
+            def get_class_by_name(name):
+                registry = DynamicBase.get_registry()
+                for cls in registry:
+                    if cls.__name__ == name:
+                        return cls
+                return None
+
+        # Add NodeModel attribute to satisfy checks
+        DynamicBase.NodeModel = True
+        return DynamicBase
 
     def relationshipset(self):
         return self.dataset()

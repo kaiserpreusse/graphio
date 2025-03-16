@@ -6,8 +6,6 @@ from neo4j import GraphDatabase, Driver
 from neo4j.exceptions import ServiceUnavailable
 from pydantic import PrivateAttr
 
-from graphio.objects.model import _NodeModel
-
 from time import sleep
 
 logging.basicConfig()
@@ -35,25 +33,47 @@ else:
          'lib': 'neodriver'},
     ]
 
-
 import pytest
 
-
+# Make fixture execution order explicit
 @pytest.fixture(scope="function", autouse=True)
-def set_driver(graph):
+def test_environment(reset_registry, clear_graph, set_driver):
     """
-    Pytest fixture to set the driver for the Base model.
-
-    This fixture automatically sets the driver for each test, then resets it.
+    Meta-fixture to ensure fixtures run in the correct order:
+    1. reset_registry - Clean the global registry
+    2. clear_graph - Clean the database
+    3. set_driver - Configure the driver
     """
-    from graphio.objects.model import get_global_registry
-    registry = get_global_registry()
-    registry.base.initialize().set_driver(graph)
+    # This fixture doesn't need to do anything itself
+    # It just ensures execution order through dependencies
     yield
-    registry.base.set_driver(None)
+
+##############################################################
+# Fixtures used in tests
+##############################################################
+
+@pytest.fixture(scope='session', params=NEO4J_VERSIONS)
+def graph(request, wait_for_neo4j):
+    if request.param['lib'] == 'neodriver':
+        uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
+        yield GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
+def test_base():
+    """
+    Creates a clean Base class for testing.
+    """
+    from graphio.objects.model import declarative_base
+    Base = declarative_base()
+    return Base
+
+
+##############################################################
+# Fixtures to reset test environment between tests
+##############################################################
+
+@pytest.fixture(scope='function')
 def reset_registry():
     """
     Pytest fixture to reset the registry between tests.
@@ -69,14 +89,28 @@ def reset_registry():
     graphio.objects.model._GLOBAL_REGISTRY = original
 
 
-@pytest.fixture
-def test_base():
+@pytest.fixture()
+def clear_graph(graph):
+    """Clear all data in the graph before each test."""
+    if isinstance(graph, Driver):
+        with graph.session() as s:
+            s.run("MATCH (n) DETACH DELETE n")
+    yield
+
+
+@pytest.fixture(scope="function")
+def set_driver(graph, test_base):
     """
-    Creates a clean Base class for testing.
+    Pytest fixture to set the driver for the Base model.
+    This fixture automatically sets the driver for each test, then resets it.
     """
-    from graphio.objects.model import declarative_base
-    Base = declarative_base()
-    return Base
+    from graphio.objects.model import get_global_registry
+
+    # Use the test_base fixture directly which creates and returns a Base class
+    Base = test_base
+    Base.initialize().set_driver(graph)
+    yield
+    Base.set_driver(None)
 
 
 @pytest.fixture(scope='session')
@@ -104,20 +138,6 @@ def wait_for_neo4j():
             if retries > max_retries:
                 break
             sleep(1)
-
-
-@pytest.fixture(scope='session', params=NEO4J_VERSIONS)
-def graph(request, wait_for_neo4j):
-    if request.param['lib'] == 'neodriver':
-        uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
-        yield GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
-
-
-@pytest.fixture(autouse=True)
-def clear_graph(graph):
-    if isinstance(graph, Driver):
-        with graph.session() as s:
-            s.run("MATCH (n) DETACH DELETE n")
 
 
 @pytest.fixture
