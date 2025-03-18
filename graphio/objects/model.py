@@ -370,15 +370,15 @@ def declarative_base():
             for rel in self.relationships:
                 # relationships
                 if self.__class__.__name__ == rel.source:
+                    relset = rel.dataset()
                     for other_node, properties in rel.nodes:
-                        relset = rel.dataset()
                         relset.add_relationship(self.match_dict, other_node.match_dict, properties)
-                        relset.merge(Base._driver)
+                    relset.merge(Base._driver)
                 elif self.__class__.__name__ == rel.target:
+                    relset = rel.dataset()
                     for other_node, properties in rel.nodes:
-                        relset = rel.dataset()
                         relset.add_relationship(other_node.match_dict, self.match_dict, properties)
-                        relset.merge(Base._driver)
+                    relset.merge(Base._driver)
 
         def merge_node(self):
             if Base._driver is None:
@@ -610,9 +610,10 @@ class Relationship(BaseModel):
 MATCH (source{self._parent_instance._label_match_string()})-[:{self.rel_type}]->(target{target_node._label_match_string()})
 WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}
 RETURN distinct target"""
-
+        log.debug(query)
         instances = []
         with driver.session() as session:
+            print(f"\n match parent instance {self._parent_instance.match_dict}")
             result = session.run(query, properties=self._parent_instance.match_dict)
 
             for record in result:

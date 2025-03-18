@@ -367,15 +367,11 @@ class NodeSet:
         if append_props:
             self.append_props = append_props
 
-        log.debug('Merge NodeSet on {}'.format(merge_properties))
-
         if not batch_size:
             batch_size = config.BATCHSIZE
 
         if not merge_properties:
             merge_properties = self.merge_keys
-
-        log.debug('Batch Size: {}'.format(batch_size))
 
         q = nodes_merge_factory(self.labels, self.merge_keys, array_props=self.append_props, preserve=self.preserve,
                                 property_parameter='props', additional_labels=self.additional_labels)

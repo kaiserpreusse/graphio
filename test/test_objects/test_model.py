@@ -1,5 +1,5 @@
 import pytest
-from typing import ClassVar
+import random
 
 from graphio.helper import run_query_return_results
 from graphio import Relationship, NodeSet, RelationshipSet
@@ -69,7 +69,6 @@ class TestNodeModelToDatasets:
             _labels = ['Person']
             _merge_keys = ['name']
 
-
         persons = Person.nodeset()
 
         assert isinstance(persons, NodeSet)
@@ -97,7 +96,8 @@ class TestNodeModelToDatasets:
         assert isinstance(friends, RelationshipSet)
 
         for i in range(10):
-            friends.add_relationship({'name': f'Person {i}', 'age': i}, {'name': f'Person {i-1}', 'age': i-1}, {'since': i})
+            friends.add_relationship({'name': f'Person {i}', 'age': i}, {'name': f'Person {i - 1}', 'age': i - 1},
+                                     {'since': i})
 
         assert len(friends.relationships) == 10
 
@@ -150,7 +150,7 @@ class TestNodeModel:
 
             InvalidNodeModel(name="example", age=30)
 
-    def test_match_dict(self, test_base):
+    def test_match_dict_on_class(self, test_base):
         class MyNode(test_base.NodeModel):
             name: str
             something: str
@@ -396,6 +396,67 @@ class TestNodeModel:
 
         result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
         assert result == []
+
+
+class TestRelationshipOnNodeModel:
+
+    def test_relationship_on_instance(self, test_base):
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        john = Person(name='John')
+        peter = Person(name='Peter')
+
+        john.friends.add(peter)
+
+        assert len(john.friends) == 1
+
+    def test_many_to_many_relationships(self, test_base, graph):
+        """
+        .merge() on a node merges source node, targer nodes, and then relationships.
+
+        In the beginning there was an issue that too many relationships were created.
+        """
+
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            lives_in: Relationship = Relationship('Person', 'FRIENDS', 'City')
+
+        class City(test_base.NodeModel):
+            name: str
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        # create a few cities
+        city_names = ['Berlin', 'Hamburg', 'Munich', 'Minden']
+        cities = []
+        for city_name in city_names:
+            city = City(name=city_name)
+            cities.append(city)
+
+        # now create a few Person nodes with random city
+        # but only 1 city per person
+        for i in range(25):
+            person = Person(name=f'Person {i}')
+            person.lives_in.add(random.choice(cities))
+            person.merge()
+
+        # now assert that we have 25 persons and 4 cities
+        # and exactly 25 relationships
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+
+        assert len(result) == 25
+        result = run_query_return_results(graph, 'MATCH (n:City) RETURN n')
+        assert len(result) == 4
+        result = run_query_return_results(graph, 'MATCH ()-[r:FRIENDS]->() RETURN r')
+        assert len(result) == 25
 
 
 class TestNodeModelMatch:
