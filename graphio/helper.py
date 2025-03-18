@@ -1,7 +1,10 @@
 from itertools import chain, islice
 import logging
+import datetime
 
 from neo4j import Driver, DEFAULT_DATABASE
+from neo4j.time import DateTime as Neo4jDateTime, Date as Neo4jDate
+
 
 log = logging.getLogger(__name__)
 
@@ -59,3 +62,32 @@ def run_query_return_results(connection: Driver, query: str, database: str = Non
         result = list(s.run(query, **params))
 
     return result
+
+
+def convert_neo4j_types_to_python(data):
+    """Convert Neo4j specific types to Python standard types."""
+    if isinstance(data, dict):
+        return {k: convert_neo4j_types_to_python(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [convert_neo4j_types_to_python(item) for item in data]
+    elif isinstance(data, Neo4jDateTime):
+        # Convert Neo4j DateTime to Python datetime
+        return datetime.datetime(
+            year=data.year,
+            month=data.month,
+            day=data.day,
+            hour=data.hour,
+            minute=data.minute,
+            second=data.second,
+            microsecond=data.nanosecond // 1000,
+            tzinfo=datetime.timezone.utc if data.tzinfo else None
+        )
+    elif isinstance(data, Neo4jDate):
+        # Convert Neo4j Date to Python date
+        return datetime.date(
+            year=data.year,
+            month=data.month,
+            day=data.day
+        )
+
+    return data
