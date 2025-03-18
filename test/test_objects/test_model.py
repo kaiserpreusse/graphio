@@ -1,7 +1,8 @@
 import pytest
+from typing import ClassVar
 
 from graphio.helper import run_query_return_results
-from graphio import Relationship
+from graphio import Relationship, NodeSet, RelationshipSet
 
 
 class TestRegistryMeta:
@@ -18,9 +19,6 @@ class TestRegistryMeta:
 
         # Test class registration and lookup
         retrieved_class = test_base.get_class_by_name('MyNode')
-
-        # Print registry contents for debugging
-        print(test_base.get_registry().default)
 
         # Assertions
         assert retrieved_class is not None
@@ -57,7 +55,91 @@ class TestCreateIndex:
         assert found_property
 
 
+class TestNodeModelToDatasets:
+
+    def test_nodeset_from_nodemodel(self, test_base):
+        """
+        Test if we can add data to a nodeset from a nodemodel
+        """
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+
+        persons = Person.nodeset()
+
+        assert isinstance(persons, NodeSet)
+
+        for i in range(10):
+            persons.add_node({'name': f'Person {i}', 'age': i})
+
+        assert len(persons.nodes) == 10
+
+    def test_relationshipset_from_nodemodel(self, test_base):
+        """
+        Test if we can add data to a relationshipset from a nodemodel
+        """
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        friends = Person.friends.dataset()
+        assert isinstance(friends, RelationshipSet)
+
+        for i in range(10):
+            friends.add_relationship({'name': f'Person {i}', 'age': i}, {'name': f'Person {i-1}', 'age': i-1}, {'since': i})
+
+        assert len(friends.relationships) == 10
+
+
 class TestNodeModel:
+
+    def test_unique_id_dict_basic(self, test_base):
+        """Test that _unique_id_dict correctly returns dictionary of merge keys and values"""
+
+        class User(test_base.NodeModel):
+            _labels = ["User"]
+            _merge_keys = ["username"]
+            username: str
+            age: int = None
+
+        user = User(username="alice", age=30)
+
+        # Test that _unique_id_dict returns the correct dictionary
+        assert user._unique_id_dict == {"username": "alice"}
+        assert "age" not in user._unique_id_dict
+
+    def test_unique_id_dict_with_inheritance(self, test_base):
+        """Test that _unique_id_dict works with class inheritance"""
+
+        class Person(test_base.NodeModel):
+            _labels = ["Person"]
+            _merge_keys = ["id"]
+            id: str
+            name: str = None
+
+        class Employee(Person):
+            _labels = ["Person", "Employee"]
+            _merge_keys = ["id", "employee_id"]  # Extending merge keys
+            employee_id: str
+            department: str = None
+
+        employee = Employee(id="p123", employee_id="e456", name="Bob", department="Engineering")
+
+        # Test that inherited merge keys are correctly included
+        assert employee._unique_id_dict == {"id": "p123", "employee_id": "e456"}
+        assert "name" not in employee._unique_id_dict
+        assert "department" not in employee._unique_id_dict
 
     def test_merge_keys_validation(self, test_base):
         with pytest.raises(ValueError, match="Merge key 'invalid_key' is not a valid model field."):
@@ -226,7 +308,6 @@ class TestNodeModel:
             assert result[i][0]['name'] == 'Peter'
             assert result[i][2]['name'] == 'Berlin'
 
-
     def test_create_node_with_relationship_chain(self, graph, test_base):
         class Person(test_base.NodeModel):
             name: str
@@ -298,8 +379,46 @@ class TestNodeModel:
         assert result[0][0]['name'] == 'Peter'
         assert result[0][2]['name'] == 'Berlin'
 
+    def test_node_delete(self, graph, test_base):
+        class Person(test_base.NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        john = Person(name='John')
+        john.create()
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        assert result[0][0]['name'] == 'John'
+
+        john.delete()
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        assert result == []
+
 
 class TestNodeModelMatch:
+
+    def test_node_match_without_properties(self, test_base, graph):
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        john = Person(name='John')
+        john.merge()
+        peter = Person(name='Peter')
+        peter.merge()
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+
+        assert result[0][0]['name'] == 'John'
+        assert result[1][0]['name'] == 'Peter'
+
+        result = Person.match()
+        assert len(result) == 2
+        assert all(isinstance(x, Person) for x in result)
 
     def test_node_match(self, test_base, graph):
         class Person(test_base.NodeModel):

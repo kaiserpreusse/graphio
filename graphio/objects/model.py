@@ -9,6 +9,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from graphio import NodeSet, RelationshipSet
 from graphio.queries import where_clause_with_properties
+from graphio.helper import convert_neo4j_types_to_python
 
 log = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ def declarative_base():
 
 
     # Create the node model class with all functionality from _NodeModel
-    class NodeModel(BaseModel, metaclass=CustomMeta):
+    class NodeModel(Base, metaclass=CustomMeta):
         """Base class for Neo4j node models"""
         _default_props: ClassVar[Dict] = {}
         _preserve: ClassVar[List[str]] = None
@@ -201,35 +202,29 @@ def declarative_base():
 
         def __init__(self, **data):
             super().__init__(**data)
-            self._initialize_relationships()
             for k, v in data.items():
                 setattr(self, k, v)
 
             self._validate_merge_keys()
 
+        @classmethod
+        def __init_subclass__(cls, **kwargs):
+            super().__init_subclass__(**kwargs)
+
+            # Collect relationships into a class variable
+            cls._relationships = {}
+            for name, value in cls.__dict__.items():
+                if isinstance(value, Relationship):
+                    cls._relationships[name] = value
+
+                    # Optionally add ClassVar annotation if using type hints
+                    if '__annotations__' in cls.__dict__:
+                        cls.__annotations__[name] = ClassVar[Relationship]
+
         def _validate_merge_keys(self):
             for key in self.__class__._merge_keys:
                 if key not in self.model_fields:
                     raise ValueError(f"Merge key '{key}' is not a valid model field.")
-
-        def _initialize_relationships(self):
-            """Initialize all relationship attributes defined on the class"""
-            # Get all fields from model_fields
-            for field_name, field_info in self.model_fields.items():
-
-                # Check if the field's default value is a Relationship
-                field_default = field_info.default
-
-                if isinstance(field_default, Relationship):
-                    # Create a new relationship instance with this object as parent
-                    relationship = field_default.__class__(
-                        source=field_default.source,
-                        rel_type=field_default.rel_type,
-                        target=field_default.target,
-                        parent=self  # Pass the parent instance
-                    )
-                    # Directly set the attribute on self, overriding the class attribute
-                    setattr(self, field_name, relationship)
 
         @property
         def _additional_properties(self) -> dict:
@@ -296,6 +291,19 @@ def declarative_base():
             for key in merge_keys:
                 if hasattr(self, key):
                     result[key] = getattr(self, key)
+            return result
+
+        @property
+        def _unique_id_dict(self) -> dict:
+            """
+            Return a dictionary of the merge keys and values to identify this node uniquely.
+
+            :return: dict with merge keys and values
+            """
+            result = {}
+            for k in self.__class__.__dict__.get('_merge_keys', []):
+                if hasattr(self, k):
+                    result[k] = getattr(self, k)
             return result
 
         def create_target_nodes(self):
@@ -414,8 +422,11 @@ def declarative_base():
 
             query = f"""WITH $properties AS properties
             MATCH (n{cls._label_match_string()})
-            WHERE {where_clause_with_properties(kwargs, 'properties', node_variable='n')}
-            RETURN n"""
+            """
+            if kwargs:
+                query += f"WHERE {where_clause_with_properties(kwargs, 'properties', node_variable='n')} \n"
+            query += "RETURN n"
+
             log.debug(query)
             nodes = []
 
@@ -425,14 +436,33 @@ def declarative_base():
                     node = record['n']
                     properties = dict(node.items())
 
+                    # Convert Neo4j types to Python types
+                    properties = convert_neo4j_types_to_python(properties)
+
                     nodes.append(
                         cls(**properties)
                     )
 
             return nodes
 
+        def delete(self):
+            if Base._driver is None:
+                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+
+            query = f"""WITH $properties AS properties 
+            MATCH (n{self._label_match_string()})
+            WHERE {where_clause_with_properties(self.match_dict, 'properties', node_variable='n')}
+            DETACH DELETE n
+            """
+
+            log.debug(query)
+            log.debug(self._unique_id_dict)
+
+            with Base._driver.session() as session:
+                session.run(query, properties=self._unique_id_dict)
+
     # Create the minimal relationship model class
-    class RelationshipModel(BaseModel, metaclass=CustomMeta):
+    class RelationshipModel(Base, metaclass=CustomMeta):
         """Base class for Neo4j relationship models"""
         source: ClassVar[str]
         target: ClassVar[str]
@@ -469,6 +499,27 @@ class Relationship(BaseModel):
         super().__init__(source=source, rel_type=rel_type, target=target, **data)
         self._parent_instance = parent
         self.nodes = []  # Initialize empty list for each instance
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            # Class access
+            return self
+
+        # Instance access
+        # Use a unique attribute name for each relationship instance
+        inst_attr = f"_rel_{self.rel_type}_{id(self)}"
+        if not hasattr(instance, inst_attr):
+            # Create instance-specific copy
+            rel_copy = self.__class__(
+                source=self.source,
+                rel_type=self.rel_type,
+                target=self.target
+            )
+            rel_copy._parent_instance = instance
+            # Store on instance using object.__setattr__ to bypass Pydantic's __setattr__
+            object.__setattr__(instance, inst_attr, rel_copy)
+
+        return getattr(instance, inst_attr)
 
     def add(self, node: Any, properties: Dict = None):
         """Add a target node to this relationship"""
