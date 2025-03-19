@@ -437,7 +437,6 @@ class RelationshipSet:
         log.debug('Create RelationshipSet')
         if not batch_size:
             batch_size = config.BATCHSIZE
-        log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels
         q = rels_create_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
@@ -450,7 +449,6 @@ class RelationshipSet:
         """
         Create relationships in this RelationshipSet
         """
-        log.debug('Create RelationshipSet')
         if not batch_size:
             batch_size = config.BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))

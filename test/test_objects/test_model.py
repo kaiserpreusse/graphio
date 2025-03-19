@@ -1,8 +1,9 @@
 import pytest
 import random
+from datetime import datetime, timedelta
 
 from graphio.helper import run_query_return_results
-from graphio import Relationship, NodeSet, RelationshipSet
+from graphio import Relationship, NodeSet, RelationshipSet, FilterOp, CypherQuery
 
 
 class TestRegistryMeta:
@@ -231,6 +232,86 @@ class TestNodeModel:
         assert len(results) == 1
         assert results[0]['n']['id'] == 'test'
 
+    def test_node_delete(self, graph, test_base):
+        class Person(test_base.NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        john = Person(name='John')
+        john.create()
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        assert result[0][0]['name'] == 'John'
+
+        john.delete()
+
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        assert result == []
+
+
+class TestRelationshipOnNodeModel:
+
+    def test_relationship_on_instance(self, test_base):
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        john = Person(name='John')
+        peter = Person(name='Peter')
+
+        john.friends.add(peter)
+
+        assert len(john.friends.nodes) == 1
+
+    def test_many_to_many_relationships(self, test_base, graph):
+        """
+        .merge() on a node merges source node, targer nodes, and then relationships.
+
+        In the beginning there was an issue that too many relationships were created.
+        """
+
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            lives_in: Relationship = Relationship('Person', 'FRIENDS', 'City')
+
+        class City(test_base.NodeModel):
+            name: str
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        # create a few cities
+        city_names = ['Berlin', 'Hamburg', 'Munich', 'Minden']
+        cities = []
+        for city_name in city_names:
+            city = City(name=city_name)
+            cities.append(city)
+
+        # now create a few Person nodes with random city
+        # but only 1 city per person
+        for i in range(25):
+            person = Person(name=f'Person {i}')
+            person.lives_in.add(random.choice(cities))
+            person.merge()
+
+        # now assert that we have 25 persons and 4 cities
+        # and exactly 25 relationships
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+
+        assert len(result) == 25
+        result = run_query_return_results(graph, 'MATCH (n:City) RETURN n')
+        assert len(result) == 4
+        result = run_query_return_results(graph, 'MATCH ()-[r:FRIENDS]->() RETURN r')
+        assert len(result) == 25
+
+
     def test_relationship_iterator(self, test_base):
         class Person(test_base.NodeModel):
             name: str
@@ -379,84 +460,80 @@ class TestNodeModel:
         assert result[0][0]['name'] == 'Peter'
         assert result[0][2]['name'] == 'Berlin'
 
-    def test_node_delete(self, graph, test_base):
+    def test_delete_all_relationships(self, graph, test_base):
         class Person(test_base.NodeModel):
             name: str
 
             _labels = ['Person']
             _merge_keys = ['name']
 
-        john = Person(name='John')
-        john.create()
-
-        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
-        assert result[0][0]['name'] == 'John'
-
-        john.delete()
-
-        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
-        assert result == []
-
-
-class TestRelationshipOnNodeModel:
-
-    def test_relationship_on_instance(self, test_base):
-        class Person(test_base.NodeModel):
-            name: str
-            _labels = ['Person']
-            _merge_keys = ['name']
-
-            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
-
-        john = Person(name='John')
-        peter = Person(name='Peter')
-
-        john.friends.add(peter)
-
-        assert len(john.friends) == 1
-
-    def test_many_to_many_relationships(self, test_base, graph):
-        """
-        .merge() on a node merges source node, targer nodes, and then relationships.
-
-        In the beginning there was an issue that too many relationships were created.
-        """
-
-        class Person(test_base.NodeModel):
-            name: str
-            _labels = ['Person']
-            _merge_keys = ['name']
-
-            lives_in: Relationship = Relationship('Person', 'FRIENDS', 'City')
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
         class City(test_base.NodeModel):
             name: str
+
             _labels = ['City']
             _merge_keys = ['name']
 
-        # create a few cities
-        city_names = ['Berlin', 'Hamburg', 'Munich', 'Minden']
-        cities = []
-        for city_name in city_names:
-            city = City(name=city_name)
-            cities.append(city)
+        peter = Person(name='Peter')
+        berlin = City(name='Berlin')
 
-        # now create a few Person nodes with random city
-        # but only 1 city per person
-        for i in range(25):
-            person = Person(name=f'Person {i}')
-            person.lives_in.add(random.choice(cities))
-            person.merge()
+        peter.lives_in.add(berlin)
 
-        # now assert that we have 25 persons and 4 cities
-        # and exactly 25 relationships
-        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        peter.create()
 
-        assert len(result) == 25
-        result = run_query_return_results(graph, 'MATCH (n:City) RETURN n')
-        assert len(result) == 4
-        result = run_query_return_results(graph, 'MATCH ()-[r:FRIENDS]->() RETURN r')
-        assert len(result) == 25
+        # assert data is in DB
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
+
+        peter.lives_in.delete()
+        result = run_query_return_results(graph, "MATCH ()-[r:LIVES_IN]->() RETURN r")
+        assert len(result) == 0
+
+    def test_delete_specific_relationships(self, graph, test_base):
+        class Person(test_base.NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(test_base.NodeModel):
+            name: str
+
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        peter = Person(name='Peter')
+        berlin = City(name='Berlin')
+        london = City(name='London')
+
+        peter.lives_in.add(berlin)
+        peter.lives_in.add(london)
+
+        peter.create()
+
+        # assert data is in DB
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m ORDER BY m.name ASC')
+        assert len(result) == 2
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
+        assert result[1][0]['name'] == 'Peter'
+        assert result[1][2]['name'] == 'London'
+
+        peter.lives_in.delete(london)
+        # assert data is in DB
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
+
+        peter.lives_in.delete(berlin)
+        result = run_query_return_results(graph, "MATCH ()-[r:LIVES_IN]->() RETURN r")
+        assert len(result) == 0
 
 
 class TestNodeModelMatch:
@@ -546,6 +623,7 @@ class TestNodeModelMatch:
         assert all([x.age == 30 for x in result])
         assert all(isinstance(x, Person) for x in result)
 
+
     def test_matching_relationships(self, graph, test_base):
         class Person(test_base.NodeModel):
             name: str
@@ -569,3 +647,480 @@ class TestNodeModelMatch:
         assert len(johns_friends) == 2
         assert all(isinstance(x, Person) for x in johns_friends)
         assert set([x.name for x in johns_friends]) == {'Peter', 'Bob'}
+
+
+class TestModelFiltering:
+    def test_equality_filtering(self, graph, test_base):
+        """Test basic equality filtering using keyword arguments"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=30).merge()
+
+        # Test filtering with equality
+        result = Person.match(name='John')
+        assert len(result) == 1
+        assert result[0].name == 'John'
+        assert result[0].age == 30
+
+        # Test filtering with multiple equality conditions
+        result = Person.match(age=30)
+        assert len(result) == 2
+        assert {p.name for p in result} == {'John', 'Sarah'}
+
+    def test_complex_filtering_with_filter_op(self, graph, test_base):
+        """Test filtering using FilterOp for complex conditions"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test greater than filter
+        result = Person.match(FilterOp("age", ">", 30))
+        assert len(result) == 1
+        assert result[0].name == 'Peter'
+
+        # Test less than filter
+        result = Person.match(FilterOp("age", "<", 30))
+        assert len(result) == 1
+        assert result[0].name == 'Sarah'
+
+        # Test multiple conditions combined
+        result = Person.match(FilterOp("age", ">=", 25), FilterOp("age", "<=", 30))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'John', 'Sarah'}
+
+    def test_field_reference_filtering(self, graph, test_base):
+        """Test filtering using FieldReference for better ergonomics"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test greater than filter with field reference
+        result = Person.match(Person.field("age").gt(30))
+        assert len(result) == 1
+        assert result[0].name == 'Peter'
+
+        # Test less than filter with field reference
+        result = Person.match(Person.field("age").lt(30))
+        assert len(result) == 1
+        assert result[0].name == 'Sarah'
+
+        # Test multiple conditions with field reference
+        result = Person.match(Person.field("age").gte(25), Person.field("age").lte(30))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'John', 'Sarah'}
+
+    def test_field_reference_with_equality_filters(self, graph, test_base):
+        """Test combining field reference with equality filters"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30, city='New York').merge()
+        Person(name='Peter', age=40, city='London').merge()
+        Person(name='Sarah', age=35, city='New York').merge()
+        Person(name='Mike', age=25, city='London').merge()
+
+        # Test combining field reference with equality filter
+        result = Person.match(Person.field("age").gt(30), city='New York')
+        assert len(result) == 1
+        assert result[0].name == 'Sarah'
+
+        # Test multiple field references and equality filter
+        result = Person.match(
+            Person.field("age").gte(30),
+            Person.field("age").lt(40),
+            city='New York'
+        )
+        assert len(result) == 2
+        assert {p.name for p in result} == {'John', 'Sarah'}
+
+    def test_string_operations_filtering(self, graph, test_base):
+        """Test string operations filtering with field reference"""
+
+        class Product(test_base.NodeModel):
+            name: str
+            description: str
+
+            _labels = ['Product']
+            _merge_keys = ['name']
+
+        # Create test data
+        Product(name='Laptop', description='Fast computing device').merge()
+        Product(name='Tablet', description='Portable touchscreen device').merge()
+        Product(name='Smartphone', description='Mobile phone with apps').merge()
+        Product(name='Smart TV', description='Television with internet connection').merge()
+
+        # Test starts_with
+        result = Product.match(Product.field("name").starts_with("Smart"))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'Smartphone', 'Smart TV'}
+
+        # Test ends_with
+        result = Product.match(Product.field("description").ends_with("device"))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'Laptop', 'Tablet'}
+
+        # Test contains
+        result = Product.match(Product.field("description").contains("touch"))
+        assert len(result) == 1
+        assert result[0].name == 'Tablet'
+
+    def test_date_filtering(self, graph, test_base):
+        """Test filtering with date fields using field reference"""
+
+        class Event(test_base.NodeModel):
+            title: str
+            scheduled_date: datetime
+
+            _labels = ['Event']
+            _merge_keys = ['title']
+
+        # Create test data with different dates
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday = today - timedelta(days=1)
+        tomorrow = today + timedelta(days=1)
+        next_week = today + timedelta(days=7)
+
+        Event(title='Current Sprint', scheduled_date=today).merge()
+        Event(title='Future Conference', scheduled_date=tomorrow).merge()
+        Event(title='Project Deadline', scheduled_date=next_week).merge()
+        Event(title='Past Meeting', scheduled_date=yesterday).merge()
+
+        # Test date greater than filter
+        future_events = Event.match(Event.field("scheduled_date").gt(today))
+        assert len(future_events) == 2
+        assert {e.title for e in future_events} == {'Future Conference', 'Project Deadline'}
+
+        # Test date less than filter
+        past_events = Event.match(Event.field("scheduled_date").lt(today))
+        assert len(past_events) == 1
+        assert past_events[0].title == 'Past Meeting'
+
+        # Test date range filtering
+        near_future_events = Event.match(
+            Event.field("scheduled_date").gt(today),
+            Event.field("scheduled_date").lt(next_week)
+        )
+        assert len(near_future_events) == 1
+        assert near_future_events[0].title == 'Future Conference'
+
+        # Test date equality filtering
+        today_events = Event.match(Event.field("scheduled_date").eq(today))
+        assert len(today_events) == 1
+        assert today_events[0].title == 'Current Sprint'
+
+    def test_invalid_field_reference(self, test_base):
+        """Test that using an invalid field name raises an error"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        with pytest.raises(ValueError, match="Field 'invalid_field' is not defined in Person"):
+            Person.field("invalid_field")
+
+
+class TestMatchWithCypherQuery:
+    def test_basic_cypher_query(self, graph, test_base):
+        """Test basic Cypher query functionality"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test simple Cypher query
+        query = """
+        MATCH (n:Person)
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query))
+        assert len(result) == 3
+        assert {p.name for p in result} == {'John', 'Peter', 'Sarah'}
+        assert all(isinstance(p, Person) for p in result)
+
+    def test_cypher_query_with_where_clause(self, graph, test_base):
+        """Test Cypher query with WHERE clause"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test Cypher query with WHERE clause
+        query = """
+        MATCH (n:Person)
+        WHERE n.age > 30
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query))
+        assert len(result) == 1
+        assert result[0].name == 'Peter'
+        assert result[0].age == 40
+
+    def test_cypher_query_with_parameters(self, graph, test_base):
+        """Test Cypher query with parameters"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test Cypher query with parameters
+        query = """
+        MATCH (n:Person)
+        WHERE n.age > $min_age
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query, params={"min_age": 25}))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'John', 'Peter'}
+        assert all(p.age > 25 for p in result)
+
+    def test_cypher_query_with_relationships(self, graph, test_base):
+        """Test Cypher query with relationships"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(test_base.NodeModel):
+            name: str
+
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        # Create test data
+        john = Person(name='John', age=30)
+        peter = Person(name='Peter', age=40)
+        sarah = Person(name='Sarah', age=25)
+
+        london = City(name='London')
+        berlin = City(name='Berlin')
+
+        john.friends.add(peter)
+        peter.friends.add(sarah)
+
+        john.lives_in.add(london)
+        peter.lives_in.add(berlin)
+        sarah.lives_in.add(berlin)
+
+        john.merge()
+        peter.merge()
+        sarah.merge()
+
+        # Test query finding people who live in Berlin
+        query = """
+        MATCH (n:Person)-[:LIVES_IN]->(:City {name: $city_name})
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query, params={"city_name": "Berlin"}))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'Peter', 'Sarah'}
+
+        # Test query finding friends of friends
+        query = """
+        MATCH (n:Person)-[:FRIENDS]->()-[:FRIENDS]->()
+        RETURN DISTINCT n
+        """
+        result = Person.match(CypherQuery(query))
+        assert len(result) == 1
+        assert result[0].name == 'John'
+
+    def test_cypher_query_with_aggregation(self, graph, test_base):
+        """Test Cypher query with aggregation"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30, city='London').merge()
+        Person(name='Peter', age=40, city='Berlin').merge()
+        Person(name='Sarah', age=25, city='Berlin').merge()
+        Person(name='Mike', age=35, city='London').merge()
+
+        # Test query using aggregation to find cities with multiple people over 25
+        query = """
+        MATCH (n:Person)
+        WHERE n.age > $min_age
+        WITH n.city as city, count(*) as count
+        WHERE count > 1
+        MATCH (n:Person)
+        WHERE n.city = city
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query, params={"min_age": 25}))
+        assert len(result) == 2
+        assert {p.name for p in result} == {'John', 'Mike'}
+        assert all(p.city == 'London' for p in result)
+
+    def test_cypher_query_with_ordering(self, graph, test_base):
+        """Test Cypher query with ordering"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test query with ordering
+        query = """
+        MATCH (n:Person)
+        ORDER BY n.age DESC
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query))
+        assert len(result) == 3
+        assert [p.name for p in result] == ['Peter', 'John', 'Sarah']
+        assert [p.age for p in result] == [40, 30, 25]
+
+    def test_cypher_query_with_limit(self, graph, test_base):
+        """Test Cypher query with limit"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # Test query with limit
+        query = """
+        MATCH (n:Person)
+        ORDER BY n.age DESC
+        LIMIT 2
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query))
+        assert len(result) == 2
+        assert [p.name for p in result] == ['Peter', 'John']
+        assert [p.age for p in result] == [40, 30]
+
+    def test_cypher_query_precedence_over_filters(self, graph, test_base):
+        """Test that CypherQuery takes precedence over other filters"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+        Person(name='Sarah', age=25).merge()
+
+        # When CypherQuery is provided, other filters should be ignored
+        query = """
+        MATCH (n:Person)
+        WHERE n.age > 30
+        RETURN n
+        """
+
+        # The additional filter (name='John') should be ignored
+        result = Person.match(CypherQuery(query), name='John')
+        assert len(result) == 1
+        assert result[0].name == 'Peter'  # Not 'John'
+        assert result[0].age == 40
+
+    def test_invalid_cypher_query_variable(self, graph, test_base):
+        """Test that using an invalid variable name raises an error"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+
+        # Test query with invalid variable name
+        query = """
+        MATCH (person:Person)
+        RETURN person
+        """
+
+        with pytest.raises(ValueError, match="must return nodes with variable name 'n'"):
+            Person.match(CypherQuery(query))

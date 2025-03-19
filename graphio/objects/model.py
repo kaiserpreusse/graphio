@@ -22,6 +22,68 @@ def get_global_registry():
     return _GLOBAL_REGISTRY
 
 
+class CypherQuery:
+    """Helper class for executing raw Cypher queries in NodeModel.match()"""
+
+    def __init__(self, query, params=None, **kwargs):
+        self.query = query
+        self.params = params or {}
+        self.params.update(kwargs)
+
+
+class FilterOp:
+    """
+    Filter operation class for complex querying.
+
+    Supported operators: =, <>, >, <, >=, <=, STARTS WITH, ENDS WITH, CONTAINS
+    """
+    def __init__(self, field, operator, value):
+        """
+        Create a new filter operation.
+
+        :param field: The field name to filter on
+        :param operator: The operator (=, <>, >, <, >=, <=, etc.)
+        :param value: The value to compare against
+        """
+        self.field = field
+        self.operator = operator
+        self.value = value
+
+
+class FieldReference:
+    """Helper class for creating filter operations with better ergonomics"""
+
+    def __init__(self, field_name):
+        self.field_name = field_name
+
+    def gt(self, value):
+        return FilterOp(self.field_name, ">", value)
+
+    def lt(self, value):
+        return FilterOp(self.field_name, "<", value)
+
+    def gte(self, value):
+        return FilterOp(self.field_name, ">=", value)
+
+    def lte(self, value):
+        return FilterOp(self.field_name, "<=", value)
+
+    def eq(self, value):
+        return FilterOp(self.field_name, "=", value)
+
+    def ne(self, value):
+        return FilterOp(self.field_name, "<>", value)
+
+    def starts_with(self, value):
+        return FilterOp(self.field_name, "STARTS WITH", value)
+
+    def ends_with(self, value):
+        return FilterOp(self.field_name, "ENDS WITH", value)
+
+    def contains(self, value):
+        return FilterOp(self.field_name, "CONTAINS", value)
+
+
 class Registry:
     def __init__(self):
         self.default = []
@@ -185,7 +247,6 @@ def declarative_base():
             for model in registry:
                 if hasattr(model, 'create_index'):
                     model.create_index()
-
 
     # Create the node model class with all functionality from _NodeModel
     class NodeModel(Base, metaclass=CustomMeta):
@@ -405,33 +466,108 @@ def declarative_base():
             return ":" + ":".join(cls._labels)
 
         @classmethod
-        def match(cls, **kwargs) -> List['NodeModel']:
-            """
-            Match and return an instance of this NodeModel.
+        def field(cls, field_name):
+            """Create a field reference for filtering operations"""
+            if field_name not in cls.model_fields:
+                raise ValueError(f"Field '{field_name}' is not defined in {cls.__name__}")
+            return FieldReference(field_name)
 
-            :return: NodeModel
+        @classmethod
+        def match(cls, *filter_ops, **equality_filters) -> List['NodeModel']:
+            """
+            Match and return instances of this NodeModel with flexible filtering.
+
+            1. FilterOp objects
+            2. FieldReference objects (converted to FilterOp)
+            3. CypherQuery objects for raw Cypher
+            4. Keyword arguments for simple equality filtering
+
+            Usage:
+            # All nodes of a type
+            all_persons = Person.match()
+
+            # Equality filtering with keyword arguments
+            johns = Person.match(name="John")
+
+            # Comparison operations with FilterOp
+            adults = Person.match(FilterOp("age", ">", 30))
+
+            # Combined equality and comparison filtering
+            johns_over_30 = Person.match(FilterOp("age", ">", 30), name="John")
+
+            :param filter_ops: FilterOp objects for complex filtering
+            :param equality_filters: Keyword arguments for equality conditions
+            :return: List of NodeModel instances matching the conditions
             """
             if Base._driver is None:
                 raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-            # check if kwargs are valid model fields
-            for key in kwargs.keys():
+            # Cypher query first:
+            # Check if a CypherQuery is being used
+            for f in filter_ops:
+                if isinstance(f, CypherQuery):
+                    log.debug(f.query)
+                    log.debug(f.params)
+                    nodes = []
+
+                    with Base._driver.session() as session:
+                        result = session.run(f.query, f.params)
+                        for record in result:
+                            # Check if the record has a node with key 'n'
+                            if 'n' not in record.keys():
+                                raise ValueError(
+                                    f"Query must return nodes with variable name 'n'. Got keys: {record.keys()}")
+
+                            node = record.get('n')
+                            properties = dict(node.items())
+
+                            # remove properties that are ClassVars
+                            for key in cls.__dict__.keys():
+                                if key in properties.keys():
+                                    properties.pop(key)
+
+                            # Convert Neo4j types to Python types
+                            properties = convert_neo4j_types_to_python(properties)
+
+                            nodes.append(cls(**properties))
+
+                    return nodes
+
+            # Check if kwargs are valid model fields
+            for key in equality_filters.keys():
                 if key not in cls.model_fields:
-                    log.warning(f"Key '{key}' is not a valid model field. We try to match but the result will not"
+                    log.warning(f"Key '{key}' is not a valid model field. We try to match but the result will not "
                                 f"be accessible as a model instance attribute.")
 
-            query = f"""WITH $properties AS properties
-            MATCH (n{cls._label_match_string()})
-            """
-            if kwargs:
-                query += f"WHERE {where_clause_with_properties(kwargs, 'properties', node_variable='n')} \n"
-            query += "RETURN n"
+            query = f"""MATCH (n{cls._label_match_string()})"""
+
+            conditions = []
+            params = {}
+
+            # Process equality filters from kwargs
+            if equality_filters:
+                for field, value in equality_filters.items():
+                    param_name = f"{field}_eq"
+                    conditions.append(f"n.{field} = ${param_name}")
+                    params[param_name] = value
+
+            # Process FilterOp objects
+            for i, f in enumerate(filter_ops):
+                param_name = f"{f.field}_{i}"
+                conditions.append(f"n.{f.field} {f.operator} ${param_name}")
+                params[param_name] = f.value
+
+            if conditions:
+                query += f"\nWHERE {' AND '.join(conditions)}"
+
+            query += "\nRETURN n"
 
             log.debug(query)
+            log.debug(params)
             nodes = []
 
             with Base._driver.session() as session:
-                result = session.run(query, properties=kwargs)
+                result = session.run(query, params)
                 for record in result:
                     node = record['n']
                     properties = dict(node.items())
@@ -619,10 +755,33 @@ RETURN distinct target"""
             for record in result:
                 node = record['target']
                 properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
                 instances.append(
                     target_node(**properties)
                 )
         return instances
+
+    def delete(self, target = None):
+        """
+        Delete all relationships of this type between the source and target nodes.
+        """
+        base = self._get_base()
+        if not base:
+            raise ValueError("Could not determine Base class")
+
+        target_class = base.get_class_by_name(self.target)
+        driver = base.get_driver()
+
+        query = f"""WITH $properties AS properties, $target_properties AS target_properties
+        MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_class._label_match_string()})
+        WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')} \n"""
+        if target:
+            query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
+        query += "DELETE r"
+        log.debug(query)
+
+        with driver.session() as session:
+            session.run(query, properties=self._parent_instance.match_dict, target_properties=target.match_dict)
 
 
 class Graph(BaseModel):
