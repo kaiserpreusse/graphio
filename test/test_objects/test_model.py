@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timedelta
 
 from graphio.helper import run_query_return_results
-from graphio import Relationship, NodeSet, RelationshipSet, FilterOp, CypherQuery
+from graphio import Relationship, NodeSet, RelationshipSet, FilterOp, CypherQuery, RelField
 
 
 class TestRegistryMeta:
@@ -103,7 +103,7 @@ class TestNodeModelToDatasets:
         assert len(friends.relationships) == 10
 
 
-class TestNodeModel:
+class TestNodeModelCreateMerge:
 
     def test_unique_id_dict_basic(self, test_base):
         """Test that _unique_id_dict correctly returns dictionary of merge keys and values"""
@@ -251,7 +251,7 @@ class TestNodeModel:
         assert result == []
 
 
-class TestRelationshipOnNodeModel:
+class TestRelationshipCreateMerge:
 
     def test_relationship_on_instance(self, test_base):
         class Person(test_base.NodeModel):
@@ -696,7 +696,7 @@ class TestNodeModelMatch:
         assert set([x.name for x in johns_friends]) == {'Peter', 'Bob'}
 
 
-class TestModelFiltering:
+class TestNodeModelMatchFilterOps:
     def test_equality_filtering(self, graph, test_base):
         """Test basic equality filtering using keyword arguments"""
 
@@ -754,7 +754,7 @@ class TestModelFiltering:
         assert {p.name for p in result} == {'John', 'Sarah'}
 
 
-class TestMatchWithCypherQuery:
+class TestNodeModelMatchCypherQuery:
     def test_basic_cypher_query(self, graph, test_base):
         """Test basic Cypher query functionality"""
 
@@ -1024,7 +1024,7 @@ class TestMatchWithCypherQuery:
             Person.match(CypherQuery(query))
 
 
-class TestClassBasedFieldQueries:
+class TestNodeModelMatchClassAttributes:
     def test_equality_operator(self, graph, test_base):
         """Test basic equality filtering using field operators"""
 
@@ -1173,3 +1173,635 @@ class TestClassBasedFieldQueries:
         # This should raise an error because 'age' is not a field
         with pytest.raises(AttributeError):
             Person.match(Person.age == 30)
+
+    def test_date_equality_filtering(self, graph, test_base):
+        """Test date equality filtering"""
+        from datetime import date
+
+        class Event(test_base.NodeModel):
+            name: str
+            event_date: date
+
+            _labels = ['Event']
+            _merge_keys = ['name']
+
+        # Create test data with different dates
+        Event(name='Conference', event_date=date(2023, 6, 15)).merge()
+        Event(name='Workshop', event_date=date(2023, 7, 20)).merge()
+        Event(name='Meetup', event_date=date(2023, 6, 15)).merge()
+
+        # Test equality operator with dates
+        result = Event.match(Event.event_date == date(2023, 6, 15))
+        assert len(result) == 2
+        assert set(e.name for e in result) == {'Conference', 'Meetup'}
+
+        # Test another date
+        result = Event.match(Event.event_date == date(2023, 7, 20))
+        assert len(result) == 1
+        assert result[0].name == 'Workshop'
+
+    def test_date_comparison_operators(self, graph, test_base):
+        """Test comparison operators with dates"""
+        from datetime import date
+
+        class Event(test_base.NodeModel):
+            name: str
+            event_date: date
+
+            _labels = ['Event']
+            _merge_keys = ['name']
+
+        # Create test data with different dates
+        Event(name='Past', event_date=date(2022, 5, 10)).merge()
+        Event(name='Present', event_date=date(2023, 6, 15)).merge()
+        Event(name='Future', event_date=date(2024, 7, 20)).merge()
+
+        # Test greater than
+        result = Event.match(Event.event_date > date(2023, 1, 1))
+        assert len(result) == 2
+        assert set(e.name for e in result) == {'Present', 'Future'}
+
+        # Test less than
+        result = Event.match(Event.event_date < date(2023, 7, 1))
+        assert len(result) == 2
+        assert set(e.name for e in result) == {'Past', 'Present'}
+
+        # Test greater than or equal
+        result = Event.match(Event.event_date >= date(2023, 6, 15))
+        assert len(result) == 2
+        assert set(e.name for e in result) == {'Present', 'Future'}
+
+        # Test less than or equal
+        result = Event.match(Event.event_date <= date(2022, 5, 10))
+        assert len(result) == 1
+        assert result[0].name == 'Past'
+
+    def test_datetime_equality_filtering(self, graph, test_base):
+        """Test datetime equality filtering"""
+        from datetime import datetime
+
+        class LogEntry(test_base.NodeModel):
+            id: str
+            timestamp: datetime
+
+            _labels = ['LogEntry']
+            _merge_keys = ['id']
+
+        # Create test data
+        LogEntry(id='log1', timestamp=datetime(2023, 6, 15, 10, 30, 0)).merge()
+        LogEntry(id='log2', timestamp=datetime(2023, 6, 15, 14, 45, 0)).merge()
+        LogEntry(id='log3', timestamp=datetime(2023, 6, 16, 9, 15, 0)).merge()
+
+        # Test equality
+        result = LogEntry.match(LogEntry.timestamp == datetime(2023, 6, 15, 10, 30, 0))
+        assert len(result) == 1
+        assert result[0].id == 'log1'
+
+        # Test another equality
+        result = LogEntry.match(LogEntry.timestamp == datetime(2023, 6, 16, 9, 15, 0))
+        assert len(result) == 1
+        assert result[0].id == 'log3'
+
+    def test_datetime_comparison_operators(self, graph, test_base):
+        """Test comparison operators with datetimes"""
+        from datetime import datetime
+
+        class LogEntry(test_base.NodeModel):
+            id: str
+            timestamp: datetime
+
+            _labels = ['LogEntry']
+            _merge_keys = ['id']
+
+        # Create test data
+        LogEntry(id='morning', timestamp=datetime(2023, 6, 15, 9, 0, 0)).merge()
+        LogEntry(id='noon', timestamp=datetime(2023, 6, 15, 12, 0, 0)).merge()
+        LogEntry(id='evening', timestamp=datetime(2023, 6, 15, 18, 0, 0)).merge()
+
+        # Test greater than
+        result = LogEntry.match(LogEntry.timestamp > datetime(2023, 6, 15, 11, 0, 0))
+        assert len(result) == 2
+        assert set(e.id for e in result) == {'noon', 'evening'}
+
+        # Test less than
+        result = LogEntry.match(LogEntry.timestamp < datetime(2023, 6, 15, 12, 30, 0))
+        assert len(result) == 2
+        assert set(e.id for e in result) == {'morning', 'noon'}
+
+        # Test range query
+        result = LogEntry.match(
+            LogEntry.timestamp >= datetime(2023, 6, 15, 9, 0, 0),
+            LogEntry.timestamp <= datetime(2023, 6, 15, 12, 0, 0)
+        )
+        assert len(result) == 2
+        assert set(e.id for e in result) == {'morning', 'noon'}
+
+    def test_date_and_datetime_combined_filtering(self, graph, test_base):
+        """Test combining date/datetime with other properties"""
+        from datetime import date, datetime
+
+        class Appointment(test_base.NodeModel):
+            title: str
+            appointment_date: date
+            start_time: datetime
+            is_confirmed: bool
+
+            _labels = ['Appointment']
+            _merge_keys = ['title']
+
+        # Create test data
+        Appointment(
+            title='Dentist',
+            appointment_date=date(2023, 6, 15),
+            start_time=datetime(2023, 6, 15, 10, 0, 0),
+            is_confirmed=True
+        ).merge()
+
+        Appointment(
+            title='Doctor',
+            appointment_date=date(2023, 6, 15),
+            start_time=datetime(2023, 6, 15, 14, 0, 0),
+            is_confirmed=True
+        ).merge()
+
+        Appointment(
+            title='Interview',
+            appointment_date=date(2023, 6, 16),
+            start_time=datetime(2023, 6, 16, 11, 0, 0),
+            is_confirmed=False
+        ).merge()
+
+        # Test combining date equality with boolean condition
+        result = Appointment.match(
+            Appointment.appointment_date == date(2023, 6, 15),
+            Appointment.is_confirmed == True
+        )
+        assert len(result) == 2
+        assert set(a.title for a in result) == {'Dentist', 'Doctor'}
+
+        # Test combining date and time ranges
+        result = Appointment.match(
+            Appointment.appointment_date >= date(2023, 6, 15),
+            Appointment.start_time > datetime(2023, 6, 15, 12, 0, 0)
+        )
+        assert len(result) == 2
+        assert set(a.title for a in result) == {'Doctor', 'Interview'}
+
+
+class TestRelationshipMatch:
+    def test_relationship_equality_filtering(self, graph, test_base):
+        """Test filtering relationships with equality conditions"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+        dave = Person(name='Dave', age=60)
+
+        alice.friends.add(bob)
+        alice.friends.add(charlie)
+        alice.friends.add(dave)
+
+        alice.merge()
+
+        # Test simple equality filtering
+        result = alice.friends.match(age=50)
+        assert len(result) == 1
+        assert result[0].name == 'Charlie'
+
+        # Test with multiple matches
+        result = alice.friends.match(age=60)  # Should get Charlie and Dave
+        assert len(result) == 1
+        assert result[0].name == 'Dave'
+
+    def test_relationship_field_descriptor_filtering(self, graph, test_base):
+        """Test filtering relationships with field descriptors"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+        dave = Person(name='Dave', age=60)
+
+        alice.friends.add(bob)
+        alice.friends.add(charlie)
+        alice.friends.add(dave)
+
+        alice.merge()
+
+        # Test with field descriptors
+        result = alice.friends.match(Person.age > 45)
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Charlie', 'Dave'}
+
+        # Test with equality
+        result = alice.friends.match(Person.name == 'Bob')
+        assert len(result) == 1
+        assert result[0].name == 'Bob'
+        assert result[0].age == 40
+
+    def test_relationship_string_operations(self, graph, test_base):
+        """Test string operations on relationship filtering"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            department: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            colleagues: Relationship = Relationship('Person', 'WORKS_WITH', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', department='Engineering')
+        bob = Person(name='Bob', department='Product')
+        charlie = Person(name='Charlie', department='Engineering')
+        dave = Person(name='Dave', department='Sales')
+
+        alice.colleagues.add(bob)
+        alice.colleagues.add(charlie)
+        alice.colleagues.add(dave)
+
+        alice.merge()
+
+        # Test string operations
+        result = alice.colleagues.match(Person.department.starts_with('Eng'))
+        assert len(result) == 1
+        assert result[0].name == 'Charlie'
+
+        # Test contains
+        result = alice.colleagues.match(Person.name.contains('ob'))
+        assert len(result) == 1
+        assert result[0].name == 'Bob'
+
+    def test_relationship_multiple_conditions(self, graph, test_base):
+        """Test combining multiple filter conditions"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30, city='New York')
+        bob = Person(name='Bob', age=40, city='London')
+        charlie = Person(name='Charlie', age=35, city='London')
+        dave = Person(name='Dave', age=45, city='Berlin')
+
+        alice.friends.add(bob)
+        alice.friends.add(charlie)
+        alice.friends.add(dave)
+
+        alice.merge()
+
+        # Test multiple conditions
+        result = alice.friends.match(
+            Person.age > 30,
+            Person.city == 'London'
+        )
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Bob', 'Charlie'}
+
+        # Test combining different operators
+        result = alice.friends.match(
+            Person.age >= 40,
+            Person.name.starts_with('D')
+        )
+        assert len(result) == 1
+        assert result[0].name == 'Dave'
+
+    def test_relationship_no_matches(self, graph, test_base):
+        """Test relationship query with no matches"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+
+        alice.friends.add(bob)
+        alice.merge()
+
+        # Test with no matches
+        result = alice.friends.match(Person.age > 80)
+        assert len(result) == 0
+        assert result == []
+
+        # Test with impossible combination
+        result = alice.friends.match(Person.name == 'Bob', Person.age < 30)
+        assert len(result) == 0
+
+    def test_relationship_match_without_filters(self, graph, test_base):
+        """Test relationship match with no filters returns all related nodes"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+        charlie = Person(name='Charlie')
+
+        alice.friends.add(bob)
+        alice.friends.add(charlie)
+
+        alice.merge()
+
+        # Test without filters
+        result = alice.friends.match()
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Bob', 'Charlie'}
+
+
+class TestRelationshipPropertyFiltering:
+    def test_relationship_filter_with_equality(self, graph, test_base):
+        """Test filtering relationships by equality on relationship properties"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+        dave = Person(name='Dave', age=60)
+
+        # Add relationships with properties
+        alice.knows.add(bob, {'score': 85})
+        alice.knows.add(charlie, {'score': 90})
+        alice.knows.add(dave, {'score': 95})
+
+        alice.merge()
+
+        # Test filtering with equality
+        result = alice.knows.filter(score=90).match()
+        assert len(result) == 1
+        assert result[0].name == 'Charlie'
+        assert result[0].age == 50
+
+        # Test filtering with equality and node property
+        result = alice.knows.filter(score=95).match(Person.name == 'Dave')
+        assert len(result) == 1
+        assert result[0].name == 'Dave'
+        assert result[0].age == 60
+
+    def test_relationship_filter_with_relfield(self, graph, test_base):
+        """Test filtering relationships using RelField comparison operators"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+        dave = Person(name='Dave', age=60)
+
+        # Add relationships with properties
+        alice.knows.add(bob, {'score': 85, 'since': 2020})
+        alice.knows.add(charlie, {'score': 90, 'since': 2019})
+        alice.knows.add(dave, {'score': 95, 'since': 2018})
+
+        alice.merge()
+
+        # Test filtering with greater than
+        result = alice.knows.filter(RelField("score") > 85).match()
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Charlie', 'Dave'}
+
+        # Test filtering with less than
+        result = alice.knows.filter(RelField("score") < 95).match()
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Bob', 'Charlie'}
+
+        # Test filtering with greater than or equal
+        result = alice.knows.filter(RelField("score") >= 90).match()
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Charlie', 'Dave'}
+
+        # Test filtering with less than or equal
+        result = alice.knows.filter(RelField("score") <= 90).match()
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Bob', 'Charlie'}
+
+    def test_relationship_filter_combined_conditions(self, graph, test_base):
+        """Test combining multiple relationship property conditions"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+        dave = Person(name='Dave', age=60)
+
+        # Add relationships with multiple properties
+        alice.knows.add(bob, {'score': 85, 'since': 2020, 'type': 'friend'})
+        alice.knows.add(charlie, {'score': 90, 'since': 2019, 'type': 'colleague'})
+        alice.knows.add(dave, {'score': 95, 'since': 2018, 'type': 'friend'})
+
+        alice.merge()
+
+        # Test filtering with multiple relationship properties
+        result = alice.knows.filter(
+            RelField("score") > 85,
+            type="friend"
+        ).match()
+        assert len(result) == 1
+        assert result[0].name == 'Dave'
+
+        # Test relationship filter with node property filter
+        result = alice.knows.filter(
+            RelField("since") < 2020
+        ).match(
+            Person.age > 45
+        )
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Charlie', 'Dave'}
+
+    def test_relationship_filter_string_operations(self, graph, test_base):
+        """Test string operations on relationship properties"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+        charlie = Person(name='Charlie')
+        dave = Person(name='Dave')
+
+        # Add relationships with string properties
+        alice.knows.add(bob, {'category': 'family'})
+        alice.knows.add(charlie, {'category': 'friend'})
+        alice.knows.add(dave, {'category': 'coworker'})
+
+        alice.merge()
+
+        # Test starts_with
+        result = alice.knows.filter(
+            RelField("category").starts_with("f")
+        ).match()
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Bob', 'Charlie'}
+
+        # Test contains
+        result = alice.knows.filter(
+            RelField("category").contains("work")
+        ).match()
+        assert len(result) == 1
+        assert result[0].name == 'Dave'
+
+        # Test ends_with
+        result = alice.knows.filter(
+            RelField("category").ends_with("ly")
+        ).match()
+        assert len(result) == 1
+        assert result[0].name == 'Bob'
+
+    def test_relationship_filter_with_no_matches(self, graph, test_base):
+        """Test relationship filtering with no matches"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+
+        alice.knows.add(bob, {'score': 85})
+        alice.merge()
+
+        # Test filtering with impossible condition
+        result = alice.knows.filter(RelField("score") > 100).match()
+        assert len(result) == 0
+
+        # Test filtering with non-existent property
+        result = alice.knows.filter(non_existent="value").match()
+        assert len(result) == 0
+
+    def test_relationship_filter_chained_with_node_filter(self, graph, test_base):
+        """Test chaining relationship filters with node filters"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30, city='New York')
+        bob = Person(name='Bob', age=40, city='London')
+        charlie = Person(name='Charlie', age=50, city='London')
+        dave = Person(name='Dave', age=60, city='Berlin')
+
+        # Add relationships with properties
+        alice.knows.add(bob, {'score': 85, 'since': 2020})
+        alice.knows.add(charlie, {'score': 90, 'since': 2019})
+        alice.knows.add(dave, {'score': 95, 'since': 2018})
+
+        alice.merge()
+
+        # Test combining relationship filters with node filters
+        result = alice.knows.filter(
+            RelField("score") >= 90
+        ).match(
+            Person.city == 'London'
+        )
+        assert len(result) == 1
+        assert result[0].name == 'Charlie'
+
+        # Test with multiple node conditions
+        result = alice.knows.filter(
+            RelField("since") <= 2019
+        ).match(
+            Person.age > 45,
+            Person.city != 'New York'
+        )
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Charlie', 'Dave'}
+
+    def test_relationship_filter_inequality(self, graph, test_base):
+        """Test relationship filtering with inequality operators"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+        charlie = Person(name='Charlie')
+
+        # Add relationships with properties
+        alice.knows.add(bob, {'status': 'active'})
+        alice.knows.add(charlie, {'status': 'inactive'})
+
+        alice.merge()
+
+        # Test with inequality
+        result = alice.knows.filter(
+            RelField("status") != 'active'
+        ).match()
+        assert len(result) == 1
+        assert result[0].name == 'Charlie'

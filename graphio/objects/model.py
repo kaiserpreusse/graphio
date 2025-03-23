@@ -101,6 +101,38 @@ class QueryField:
         return FilterOp(self.field_name, "CONTAINS", value)
 
 
+class RelField:
+    """Helper class for creating filter operations on relationship properties"""
+    def __init__(self, field_name):
+        self.field_name = field_name
+
+    def __eq__(self, other):
+        return FilterOp(self.field_name, "=", other)
+
+    def __gt__(self, other):
+        return FilterOp(self.field_name, ">", other)
+
+    def __lt__(self, other):
+        return FilterOp(self.field_name, "<", other)
+
+    def __ge__(self, other):
+        return FilterOp(self.field_name, ">=", other)
+
+    def __le__(self, other):
+        return FilterOp(self.field_name, "<=", other)
+
+    def __ne__(self, other):
+        return FilterOp(self.field_name, "<>", other)
+
+    def starts_with(self, value):
+        return FilterOp(self.field_name, "STARTS WITH", value)
+
+    def ends_with(self, value):
+        return FilterOp(self.field_name, "ENDS WITH", value)
+
+    def contains(self, value):
+        return FilterOp(self.field_name, "CONTAINS", value)
+
 class Registry:
     def __init__(self):
         self.default = []
@@ -634,6 +666,7 @@ class Relationship(BaseModel):
 
     # Use PrivateAttr for non-model fields
     _parent_instance: Optional[Any] = PrivateAttr(default=None)
+    _rel_filters: Dict[str, Any] = PrivateAttr(default_factory=dict)
 
     # Add model_config for Pydantic v2
     model_config = {
@@ -742,7 +775,47 @@ class Relationship(BaseModel):
     def set(self):
         return self.dataset()
 
-    def match(self):
+    def filter(self, *filter_ops, **equality_filters):
+        """
+        Filter relationships based on relationship properties.
+
+        Usage:
+        Person.knows.filter(RelField("score") > 90).match(Person.age > 50)
+        Person.knows.filter(score="good").match(Person.age > 50)
+
+        :param filter_ops: FilterOp objects for complex filtering on relationship properties
+        :param equality_filters: Keyword arguments for equality conditions on relationship properties
+        :return: self (for method chaining)
+        """
+        # Create a new instance of the relationship with filters
+        rel_copy = self.__class__(
+            source=self.source,
+            rel_type=self.rel_type,
+            target=self.target
+        )
+        rel_copy._parent_instance = self._parent_instance
+        rel_copy.nodes = self.nodes.copy()
+
+        # Store relationship filters
+        rel_copy._rel_filters = {**getattr(self, '_rel_filters', {})}  # Copy existing filters
+
+        # Add equality filters from kwargs
+        for field, value in equality_filters.items():
+            rel_copy._rel_filters[field] = FilterOp(field, "=", value)
+
+        # Add FilterOp objects
+        for f in filter_ops:
+            if isinstance(f, FilterOp):
+                rel_copy._rel_filters[f.field] = f
+
+        return rel_copy
+
+    def match(self, *filter_ops, **equality_filters):
+        """
+        Match and return instances of the target node with filtering capabilities.
+
+        Supports filtering on both relationship properties and target node properties.
+        """
         # Get the base class to access driver and registry
         base = self._get_base()
         if not base:
@@ -751,16 +824,43 @@ class Relationship(BaseModel):
         target_node = base.get_class_by_name(self.target)
         driver = base.get_driver()
 
+        # Build the query
         query = f"""WITH $properties AS properties
-MATCH (source{self._parent_instance._label_match_string()})-[:{self.rel_type}]->(target{target_node._label_match_string()})
-WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}
-RETURN distinct target"""
-        log.debug(query)
+    MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_node._label_match_string()})
+    WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}"""
+
+        conditions = []
+        params = {"properties": self._parent_instance.match_dict}
+
+        # Add relationship property filters
+        rel_filters = getattr(self, '_rel_filters', {})
+        for i, (field, filter_op) in enumerate(rel_filters.items()):
+            param_name = f"rel_{field}_{i}"
+            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
+            params[param_name] = filter_op.value
+
+        # Process equality filters from kwargs for target nodes
+        for field, value in equality_filters.items():
+            param_name = f"{field}_eq"
+            conditions.append(f"target.{field} = ${param_name}")
+            params[param_name] = value
+
+        # Process FilterOp objects from field descriptors for target nodes
+        for i, f in enumerate(filter_ops):
+            param_name = f"{f.field}_{i}"
+            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        # Add conditions to the query if there are any
+        if conditions:
+            query += f"\nAND {' AND '.join(conditions)}"
+
+        query += "\nRETURN distinct target"
+
+        # Execute the query
         instances = []
         with driver.session() as session:
-            print(f"\n match parent instance {self._parent_instance.match_dict}")
-            result = session.run(query, properties=self._parent_instance.match_dict)
-
+            result = session.run(query, **params)
             for record in result:
                 node = record['target']
                 properties = dict(node.items())
