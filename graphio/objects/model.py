@@ -52,40 +52,6 @@ class FilterOp:
         self.value = value
 
 
-class FieldReference:
-    """Helper class for creating filter operations with better ergonomics"""
-
-    def __init__(self, field_name):
-        self.field_name = field_name
-
-    def gt(self, value):
-        return FilterOp(self.field_name, ">", value)
-
-    def lt(self, value):
-        return FilterOp(self.field_name, "<", value)
-
-    def gte(self, value):
-        return FilterOp(self.field_name, ">=", value)
-
-    def lte(self, value):
-        return FilterOp(self.field_name, "<=", value)
-
-    def eq(self, value):
-        return FilterOp(self.field_name, "=", value)
-
-    def ne(self, value):
-        return FilterOp(self.field_name, "<>", value)
-
-    def starts_with(self, value):
-        return FilterOp(self.field_name, "STARTS WITH", value)
-
-    def ends_with(self, value):
-        return FilterOp(self.field_name, "ENDS WITH", value)
-
-    def contains(self, value):
-        return FilterOp(self.field_name, "CONTAINS", value)
-
-
 class QueryFieldDescriptor:
     """Descriptor that allows class fields to be used directly in match conditions"""
 
@@ -522,13 +488,6 @@ def declarative_base():
             return ":" + ":".join(cls._labels)
 
         @classmethod
-        def field(cls, field_name):
-            """Create a field reference for filtering operations"""
-            if field_name not in cls.model_fields:
-                raise ValueError(f"Field '{field_name}' is not defined in {cls.__name__}")
-            return FieldReference(field_name)
-
-        @classmethod
         def match(cls, *filter_ops, **equality_filters) -> List['NodeModel']:
             """
             Match and return instances of this NodeModel with flexible filtering.
@@ -835,6 +794,8 @@ RETURN distinct target"""
             query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
         query += "DELETE r"
         log.debug(query)
+        print(f"parent instance {self._parent_instance}")
+        print(f"target: {self.target}")
 
         with driver.session() as session:
             session.run(query, properties=self._parent_instance.match_dict, target_properties=target.match_dict)
