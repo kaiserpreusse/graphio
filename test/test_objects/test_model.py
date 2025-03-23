@@ -753,155 +753,6 @@ class TestModelFiltering:
         assert len(result) == 2
         assert {p.name for p in result} == {'John', 'Sarah'}
 
-    def test_field_reference_filtering(self, graph, test_base):
-        """Test filtering using FieldReference for better ergonomics"""
-
-        class Person(test_base.NodeModel):
-            name: str
-            age: int
-
-            _labels = ['Person']
-            _merge_keys = ['name']
-
-        # Create test data
-        Person(name='John', age=30).merge()
-        Person(name='Peter', age=40).merge()
-        Person(name='Sarah', age=25).merge()
-
-        # Test greater than filter with field reference
-        result = Person.match(Person.field("age").gt(30))
-        assert len(result) == 1
-        assert result[0].name == 'Peter'
-
-        # Test less than filter with field reference
-        result = Person.match(Person.field("age").lt(30))
-        assert len(result) == 1
-        assert result[0].name == 'Sarah'
-
-        # Test multiple conditions with field reference
-        result = Person.match(Person.field("age").gte(25), Person.field("age").lte(30))
-        assert len(result) == 2
-        assert {p.name for p in result} == {'John', 'Sarah'}
-
-    def test_field_reference_with_equality_filters(self, graph, test_base):
-        """Test combining field reference with equality filters"""
-
-        class Person(test_base.NodeModel):
-            name: str
-            age: int
-            city: str
-
-            _labels = ['Person']
-            _merge_keys = ['name']
-
-        # Create test data
-        Person(name='John', age=30, city='New York').merge()
-        Person(name='Peter', age=40, city='London').merge()
-        Person(name='Sarah', age=35, city='New York').merge()
-        Person(name='Mike', age=25, city='London').merge()
-
-        # Test combining field reference with equality filter
-        result = Person.match(Person.field("age").gt(30), city='New York')
-        assert len(result) == 1
-        assert result[0].name == 'Sarah'
-
-        # Test multiple field references and equality filter
-        result = Person.match(
-            Person.field("age").gte(30),
-            Person.field("age").lt(40),
-            city='New York'
-        )
-        assert len(result) == 2
-        assert {p.name for p in result} == {'John', 'Sarah'}
-
-    def test_string_operations_filtering(self, graph, test_base):
-        """Test string operations filtering with field reference"""
-
-        class Product(test_base.NodeModel):
-            name: str
-            description: str
-
-            _labels = ['Product']
-            _merge_keys = ['name']
-
-        # Create test data
-        Product(name='Laptop', description='Fast computing device').merge()
-        Product(name='Tablet', description='Portable touchscreen device').merge()
-        Product(name='Smartphone', description='Mobile phone with apps').merge()
-        Product(name='Smart TV', description='Television with internet connection').merge()
-
-        # Test starts_with
-        result = Product.match(Product.field("name").starts_with("Smart"))
-        assert len(result) == 2
-        assert {p.name for p in result} == {'Smartphone', 'Smart TV'}
-
-        # Test ends_with
-        result = Product.match(Product.field("description").ends_with("device"))
-        assert len(result) == 2
-        assert {p.name for p in result} == {'Laptop', 'Tablet'}
-
-        # Test contains
-        result = Product.match(Product.field("description").contains("touch"))
-        assert len(result) == 1
-        assert result[0].name == 'Tablet'
-
-    def test_date_filtering(self, graph, test_base):
-        """Test filtering with date fields using field reference"""
-
-        class Event(test_base.NodeModel):
-            title: str
-            scheduled_date: datetime
-
-            _labels = ['Event']
-            _merge_keys = ['title']
-
-        # Create test data with different dates
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        yesterday = today - timedelta(days=1)
-        tomorrow = today + timedelta(days=1)
-        next_week = today + timedelta(days=7)
-
-        Event(title='Current Sprint', scheduled_date=today).merge()
-        Event(title='Future Conference', scheduled_date=tomorrow).merge()
-        Event(title='Project Deadline', scheduled_date=next_week).merge()
-        Event(title='Past Meeting', scheduled_date=yesterday).merge()
-
-        # Test date greater than filter
-        future_events = Event.match(Event.field("scheduled_date").gt(today))
-        assert len(future_events) == 2
-        assert {e.title for e in future_events} == {'Future Conference', 'Project Deadline'}
-
-        # Test date less than filter
-        past_events = Event.match(Event.field("scheduled_date").lt(today))
-        assert len(past_events) == 1
-        assert past_events[0].title == 'Past Meeting'
-
-        # Test date range filtering
-        near_future_events = Event.match(
-            Event.field("scheduled_date").gt(today),
-            Event.field("scheduled_date").lt(next_week)
-        )
-        assert len(near_future_events) == 1
-        assert near_future_events[0].title == 'Future Conference'
-
-        # Test date equality filtering
-        today_events = Event.match(Event.field("scheduled_date").eq(today))
-        assert len(today_events) == 1
-        assert today_events[0].title == 'Current Sprint'
-
-    def test_invalid_field_reference(self, test_base):
-        """Test that using an invalid field name raises an error"""
-
-        class Person(test_base.NodeModel):
-            name: str
-            age: int
-
-            _labels = ['Person']
-            _merge_keys = ['name']
-
-        with pytest.raises(ValueError, match="Field 'invalid_field' is not defined in Person"):
-            Person.field("invalid_field")
-
 
 class TestMatchWithCypherQuery:
     def test_basic_cypher_query(self, graph, test_base):
@@ -1171,3 +1022,154 @@ class TestMatchWithCypherQuery:
 
         with pytest.raises(ValueError, match="must return nodes with variable name 'n'"):
             Person.match(CypherQuery(query))
+
+
+class TestClassBasedFieldQueries:
+    def test_equality_operator(self, graph, test_base):
+        """Test basic equality filtering using field operators"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Peter', age=40).merge()
+
+        # Test equality operator
+        result = Person.match(Person.name == 'John')
+        assert len(result) == 1
+        assert result[0].name == 'John'
+
+        # Test with multiple results
+        more_people = ['Alice', 'Bob']
+        for name in more_people:
+            Person(name=name, age=30).merge()
+
+        result = Person.match(Person.age == 30)
+        assert len(result) == 3
+        assert set(p.name for p in result) == {'John', 'Alice', 'Bob'}
+
+    def test_comparison_operators(self, graph, test_base):
+        """Test comparison operators for numeric fields"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data with different ages
+        Person(name='Young', age=20).merge()
+        Person(name='Middle', age=40).merge()
+        Person(name='Old', age=60).merge()
+
+        # Test greater than
+        result = Person.match(Person.age > 50)
+        assert len(result) == 1
+        assert result[0].name == 'Old'
+
+        # Test less than
+        result = Person.match(Person.age < 30)
+        assert len(result) == 1
+        assert result[0].name == 'Young'
+
+        # Test greater than or equal
+        result = Person.match(Person.age >= 40)
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Middle', 'Old'}
+
+        # Test less than or equal
+        result = Person.match(Person.age <= 40)
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Young', 'Middle'}
+
+    def test_string_operations(self, graph, test_base):
+        """Test string operations with field references"""
+
+        class Product(test_base.NodeModel):
+            name: str
+
+            _labels = ['Product']
+            _merge_keys = ['name']
+
+        # Create test data
+        products = [
+            'iPhone', 'iPad', 'MacBook',
+            'Galaxy Phone', 'Galaxy Tab',
+            'ThinkPad'
+        ]
+
+        for p in products:
+            Product(name=p).merge()
+
+        # Test starts_with
+        result = Product.match(Product.name.starts_with('i'))
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'iPhone', 'iPad'}
+
+        # Test ends_with
+        result = Product.match(Product.name.ends_with('Pad'))
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'iPad', 'ThinkPad'}
+
+        # Test contains
+        result = Product.match(Product.name.contains('Galaxy'))
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'Galaxy Phone', 'Galaxy Tab'}
+
+    def test_multiple_conditions(self, graph, test_base):
+        """Test multiple filtering conditions combined"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        data = [
+            ('John', 30, 'New York'),
+            ('Peter', 40, 'London'),
+            ('Sarah', 35, 'New York'),
+            ('Mike', 25, 'London'),
+            ('Anna', 30, 'Berlin')
+        ]
+
+        for name, age, city in data:
+            Person(name=name, age=age, city=city).merge()
+
+        # Test combining field operators and methods
+        result = Person.match(
+            Person.age >= 30,
+            Person.city.contains('York')
+        )
+        assert len(result) == 2
+        assert set(p.name for p in result) == {'John', 'Sarah'}
+
+        # Test different combinations
+        result = Person.match(
+            Person.age < 35,
+            Person.name.starts_with('M')
+        )
+        assert len(result) == 1
+        assert result[0].name == 'Mike'
+
+    def test_invalid_field_error(self, test_base):
+        """Test that using an invalid field raises an error"""
+
+        class Person(test_base.NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # This should raise an error because 'age' is not a field
+        with pytest.raises(AttributeError):
+            Person.match(Person.age == 30)

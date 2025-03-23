@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 _GLOBAL_REGISTRY = None
 
+
 def get_global_registry():
     global _GLOBAL_REGISTRY
     if _GLOBAL_REGISTRY is None:
@@ -37,6 +38,7 @@ class FilterOp:
 
     Supported operators: =, <>, >, <, >=, <=, STARTS WITH, ENDS WITH, CONTAINS
     """
+
     def __init__(self, field, operator, value):
         """
         Create a new filter operation.
@@ -50,29 +52,44 @@ class FilterOp:
         self.value = value
 
 
-class FieldReference:
-    """Helper class for creating filter operations with better ergonomics"""
+class QueryFieldDescriptor:
+    """Descriptor that allows class fields to be used directly in match conditions"""
 
-    def __init__(self, field_name):
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            # Class access - return query helper object
+            return QueryField(self.name, owner)
+        # Instance access - pass through to normal attribute access
+        return instance.__dict__.get(self.name)
+
+
+class QueryField:
+    """Helper class for creating filter operations with class field reference syntax"""
+
+    def __init__(self, field_name, model_cls):
         self.field_name = field_name
+        self.model_cls = model_cls
 
-    def gt(self, value):
-        return FilterOp(self.field_name, ">", value)
+    def __eq__(self, other):
+        return FilterOp(self.field_name, "=", other)
 
-    def lt(self, value):
-        return FilterOp(self.field_name, "<", value)
+    def __gt__(self, other):
+        return FilterOp(self.field_name, ">", other)
 
-    def gte(self, value):
-        return FilterOp(self.field_name, ">=", value)
+    def __lt__(self, other):
+        return FilterOp(self.field_name, "<", other)
 
-    def lte(self, value):
-        return FilterOp(self.field_name, "<=", value)
+    def __ge__(self, other):
+        return FilterOp(self.field_name, ">=", other)
 
-    def eq(self, value):
-        return FilterOp(self.field_name, "=", value)
+    def __le__(self, other):
+        return FilterOp(self.field_name, "<=", other)
 
-    def ne(self, value):
-        return FilterOp(self.field_name, "<>", value)
+    def __ne__(self, other):
+        return FilterOp(self.field_name, "<>", other)
 
     def starts_with(self, value):
         return FilterOp(self.field_name, "STARTS WITH", value)
@@ -190,11 +207,15 @@ class CustomMeta(BaseModel.__class__):
         # First create the class using the normal mechanism
         cls = super().__new__(mcs, name, bases, attrs)
 
-        # Register any class that has the required NodeModel attributes
-        # regardless of inheritance chain
+        # Add field descriptors for all fields in model classes
+        if name not in ('Base', 'NodeModel', 'RelationshipModel'):
+            if hasattr(cls, 'model_fields'):
+                for field_name in cls.model_fields:
+                    setattr(cls, field_name, QueryFieldDescriptor(field_name))
+
+        # Register class (existing code)
         if name not in ('Base', 'NodeModel', 'RelationshipModel'):
             if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
-                # Always register with the global registry
                 registry = get_global_registry()
                 registry.add(cls)
 
@@ -206,6 +227,7 @@ def declarative_base():
     Create a declarative base for Neo4j model definitions.
     Similar to SQLAlchemy's declarative_base but works with Pydantic.
     """
+
     # Create the base class
     class Base(BaseModel, metaclass=CustomMeta):
         _driver = None
@@ -466,13 +488,6 @@ def declarative_base():
             return ":" + ":".join(cls._labels)
 
         @classmethod
-        def field(cls, field_name):
-            """Create a field reference for filtering operations"""
-            if field_name not in cls.model_fields:
-                raise ValueError(f"Field '{field_name}' is not defined in {cls.__name__}")
-            return FieldReference(field_name)
-
-        @classmethod
         def match(cls, *filter_ops, **equality_filters) -> List['NodeModel']:
             """
             Match and return instances of this NodeModel with flexible filtering.
@@ -521,15 +536,9 @@ def declarative_base():
                             node = record.get('n')
                             properties = dict(node.items())
 
-                            # remove properties that are ClassVars
-                            for key in cls.__dict__.keys():
-                                if key in properties.keys():
-                                    properties.pop(key)
-
                             # Convert Neo4j types to Python types
                             properties = convert_neo4j_types_to_python(properties)
-
-                            nodes.append(cls(**properties))
+                            nodes.append(cls.model_construct(**properties))
 
                     return nodes
 
@@ -761,7 +770,7 @@ RETURN distinct target"""
                 )
         return instances
 
-    def delete(self, target = None):
+    def delete(self, target=None):
         """
         Delete all relationships of this type between the source and target nodes.
         """
