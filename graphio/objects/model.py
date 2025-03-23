@@ -536,15 +536,9 @@ def declarative_base():
                             node = record.get('n')
                             properties = dict(node.items())
 
-                            # remove properties that are ClassVars
-                            for key in cls.__dict__.keys():
-                                if key in properties.keys():
-                                    properties.pop(key)
-
                             # Convert Neo4j types to Python types
                             properties = convert_neo4j_types_to_python(properties)
-
-                            nodes.append(cls(**properties))
+                            nodes.append(cls.model_construct(**properties))
 
                     return nodes
 
