@@ -492,6 +492,53 @@ class TestRelationshipOnNodeModel:
         result = run_query_return_results(graph, "MATCH ()-[r:LIVES_IN]->() RETURN r")
         assert len(result) == 0
 
+
+    def test_delete_all_relationships_assert_other_relationships_still_exist(self, graph, test_base):
+        class Person(test_base.NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        class City(test_base.NodeModel):
+            name: str
+
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        peter = Person(name='Peter')
+        berlin = City(name='Berlin')
+        bob = Person(name='Bob')
+
+        peter.lives_in.add(berlin)
+        peter.friends.add(bob)
+
+        peter.create()
+
+        # assert data is in DB
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:LIVES_IN]->(m:City) RETURN n, r, m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Berlin'
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:FRIENDS]->(m:Person) RETURN n, r, m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Bob'
+
+        peter.lives_in.delete()
+        result = run_query_return_results(graph, "MATCH ()-[r:LIVES_IN]->() RETURN r")
+        assert len(result) == 0
+
+        result = run_query_return_results(graph, 'MATCH (n:Person)-[r:FRIENDS]->(m:Person) RETURN n, r, m')
+        assert len(result) == 1
+        assert result[0][0]['name'] == 'Peter'
+        assert result[0][2]['name'] == 'Bob'
+
+
     def test_delete_specific_relationships(self, graph, test_base):
         class Person(test_base.NodeModel):
             name: str

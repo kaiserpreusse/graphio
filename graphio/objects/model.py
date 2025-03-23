@@ -768,20 +768,41 @@ RETURN distinct target"""
         base = self._get_base()
         if not base:
             raise ValueError("Could not determine Base class")
-
-        target_class = base.get_class_by_name(self.target)
         driver = base.get_driver()
+        target_class = base.get_class_by_name(self.target)
 
-        query = f"""WITH $properties AS properties, $target_properties AS target_properties
-        MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_class._label_match_string()})
-        WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')} \n"""
+        # if target instance is provided, delete only the relationship between the source and target
         if target:
-            query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
-        query += "DELETE r"
-        log.debug(query)
 
-        with driver.session() as session:
-            session.run(query, properties=self._parent_instance.match_dict, target_properties=target.match_dict)
+            query = f"""WITH $properties AS properties, $target_properties AS target_properties
+            MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_class._label_match_string()})
+            WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')} \n"""
+            if target:
+                query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
+            query += "DELETE r"
+            log.debug(query)
+            print(f"Query: {query}")
+            print(f"parent instance: {self._parent_instance}")
+            print(f"parent instance match: {self._parent_instance.match_dict}")
+            print(f"target instance: {target}")
+            print(f"target instance match: {target.match_dict}")
+
+            with driver.session() as session:
+                session.run(query, properties=self._parent_instance.match_dict, target_properties=target.match_dict)
+
+        else:
+            query = f"""WITH $properties AS properties
+            MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_class._label_match_string()})
+            WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}
+            DELETE r
+            """
+            log.debug(query)
+            print(f"Query: {query}")
+            print(f"parent instance: {self._parent_instance}")
+            print(f"parent instance match: {self._parent_instance.match_dict}")
+
+            with driver.session() as session:
+                session.run(query, properties=self._parent_instance.match_dict)
 
 
 class Graph(BaseModel):
