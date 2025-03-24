@@ -254,6 +254,220 @@ class CustomMeta(BaseModel.__class__):
         return cls
 
 
+class NodeQueryBuilder:
+    """Builder class for node queries with deferred execution."""
+
+    def __init__(self, node_class, filter_ops=None, equality_filters=None):
+        self.node_class = node_class
+        self.filter_ops = filter_ops or []
+        self.equality_filters = equality_filters or {}
+
+    def all(self):
+        """Execute the query and return all results."""
+        if self.node_class._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+
+        # Handle CypherQuery if present
+        for f in self.filter_ops:
+            if isinstance(f, CypherQuery):
+                return self._execute_cypher_query(f)
+
+        # Build and execute regular query
+        query = f"""MATCH (n{self.node_class._label_match_string()})"""
+        conditions = []
+        params = {}
+
+        # Process equality filters from kwargs
+        for field, value in self.equality_filters.items():
+            param_name = f"{field}_eq"
+            conditions.append(f"n.{field} = ${param_name}")
+            params[param_name] = value
+
+        # Process FilterOp objects
+        for i, f in enumerate(self.filter_ops):
+            param_name = f"{f.field}_{i}"
+            conditions.append(f"n.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        if conditions:
+            query += f"\nWHERE {' AND '.join(conditions)}"
+
+        query += "\nRETURN n"
+
+        # Execute the query
+        nodes = []
+        with self.node_class._driver.session() as session:
+            result = session.run(query, params)
+            for record in result:
+                node = record['n']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                nodes.append(self.node_class(**properties))
+
+        return nodes
+
+    def first(self):
+        """Execute the query with LIMIT 1."""
+        if self.node_class._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+
+        # Handle CypherQuery if present
+        for f in self.filter_ops:
+            if isinstance(f, CypherQuery):
+                # TODO: For custom CypherQuery objects, we should ideally add LIMIT 1
+                # For now, just execute the same code as all() but return only first result
+                log.warning(f"Using CypherQuery in first() method needs a LIMIT 1 in the query. ")
+                results = self._execute_cypher_query(f)
+                return results[0] if results else None
+
+        # Build query (same as in all() method)
+        query = f"""MATCH (n{self.node_class._label_match_string()})"""
+        conditions = []
+        params = {}
+
+        # Process equality filters
+        for field, value in self.equality_filters.items():
+            param_name = f"{field}_eq"
+            conditions.append(f"n.{field} = ${param_name}")
+            params[param_name] = value
+
+        # Process FilterOp objects
+        for i, f in enumerate(self.filter_ops):
+            param_name = f"{f.field}_{i}"
+            conditions.append(f"n.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        if conditions:
+            query += f"\nWHERE {' AND '.join(conditions)}"
+
+        # Add LIMIT 1 to only return a single node
+        query += "\nRETURN n LIMIT 1"
+
+        # Execute the query
+        with self.node_class._driver.session() as session:
+            result = session.run(query, params)
+            record = result.single()  # Get only one record
+            if record and 'n' in record.keys():
+                node = record['n']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                return self.node_class(**properties)
+
+        return None
+
+    def _execute_cypher_query(self, cypher_query):
+        """Execute a CypherQuery and return results."""
+        nodes = []
+        with self.node_class._driver.session() as session:
+            result = session.run(cypher_query.query, cypher_query.params)
+            for record in result:
+                if 'n' not in record.keys():
+                    raise ValueError(f"Query must return nodes with variable name 'n'. Got keys: {record.keys()}")
+
+                node = record['n']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                nodes.append(self.node_class(**properties))
+
+        return nodes
+
+
+class InstanceRelationshipQueryBuilder:
+    """Builder class for instance-level relationship queries with deferred execution."""
+
+    def __init__(self, parent_instance, rel_type, target_class, rel_filters=None,
+                 node_filters=None, node_equality_filters=None):
+        self.parent_instance = parent_instance
+        self.rel_type = rel_type
+        self.target_class = target_class
+        self.rel_filters = rel_filters or {}
+        self.node_filters = node_filters or []
+        self.node_equality_filters = node_equality_filters or {}
+
+    def _build_query(self, limit=None):
+        """Build the Cypher query with optional LIMIT clause."""
+        base = self._get_base()
+
+        query = f"""WITH $properties AS properties
+        MATCH (source{self.parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
+        WHERE {where_clause_with_properties(self.parent_instance.match_dict, 'properties', node_variable='source')}"""
+
+        conditions = []
+        params = {"properties": self.parent_instance.match_dict}
+
+        # Add relationship property filters
+        for i, (field, filter_op) in enumerate(self.rel_filters.items()):
+            param_name = f"rel_{field}_{i}"
+            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
+            params[param_name] = filter_op.value
+
+        # Add node property filters
+        for field, value in self.node_equality_filters.items():
+            param_name = f"{field}_eq"
+            conditions.append(f"target.{field} = ${param_name}")
+            params[param_name] = value
+
+        for i, f in enumerate(self.node_filters):
+            param_name = f"{f.field}_{i}"
+            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        if conditions:
+            query += f"\nAND {' AND '.join(conditions)}"
+
+        query += "\nRETURN DISTINCT target"
+
+        if limit is not None:
+            query += f" LIMIT {limit}"
+
+        return query, params
+
+    def all(self):
+        """Execute the query and return all target nodes."""
+        base = self._get_base()
+        driver = base.get_driver()
+
+        query, params = self._build_query()
+
+        # Execute the query
+        instances = []
+        with driver.session() as session:
+            result = session.run(query, **params)
+            for record in result:
+                node = record['target']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                instances.append(self.target_class(**properties))
+
+        return instances
+
+    def first(self):
+        """Execute the query and return only the first target node."""
+        base = self._get_base()
+        driver = base.get_driver()
+
+        query, params = self._build_query(limit=1)
+
+        # Execute the query
+        with driver.session() as session:
+            result = session.run(query, **params)
+            record = result.single()
+            if record and 'target' in record:
+                node = record['target']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                return self.target_class(**properties)
+
+        return None
+
+    def _get_base(self):
+        """Helper method to get the Base class from the parent instance."""
+        for base_class in self.parent_instance.__class__.__mro__:
+            if hasattr(base_class, 'get_registry') and hasattr(base_class, 'NodeModel'):
+                return base_class
+        raise ValueError("Could not determine Base class")
+
+
 def declarative_base():
     """
     Create a declarative base for Neo4j model definitions.
@@ -520,107 +734,36 @@ def declarative_base():
             return ":" + ":".join(cls._labels)
 
         @classmethod
-        def match(cls, *filter_ops, **equality_filters) -> List['NodeModel']:
+        def match(cls, *filter_ops, **equality_filters):
             """
-            Match and return instances of this NodeModel with flexible filtering.
-
-            1. FilterOp objects
-            2. FieldReference objects (converted to FilterOp)
-            3. CypherQuery objects for raw Cypher
-            4. Keyword arguments for simple equality filtering
+            Match nodes using a query builder pattern with deferred execution.
 
             Usage:
             # All nodes of a type
-            all_persons = Person.match()
+            all_persons = Person.match().all()
 
-            # Equality filtering with keyword arguments
-            johns = Person.match(name="John")
+            # First node only
+            first_person = Person.match(name="John").first()
 
-            # Comparison operations with FilterOp
-            adults = Person.match(FilterOp("age", ">", 30))
+            # Complex filtering
+            adults = Person.match(FilterOp("age", ">", 30)).all()
 
-            # Combined equality and comparison filtering
-            johns_over_30 = Person.match(FilterOp("age", ">", 30), name="John")
-
-            :param filter_ops: FilterOp objects for complex filtering
+            :param filter_ops: FilterOp objects or CypherQuery for complex filtering
             :param equality_filters: Keyword arguments for equality conditions
-            :return: List of NodeModel instances matching the conditions
+            :return: NodeQueryBuilder that can be executed with .all() or .first()
             """
-            if Base._driver is None:
+            # Check if driver is set (optional, since execution is deferred)
+            if cls._driver is None:
                 raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-
-            # Cypher query first:
-            # Check if a CypherQuery is being used
-            for f in filter_ops:
-                if isinstance(f, CypherQuery):
-                    log.debug(f.query)
-                    log.debug(f.params)
-                    nodes = []
-
-                    with Base._driver.session() as session:
-                        result = session.run(f.query, f.params)
-                        for record in result:
-                            # Check if the record has a node with key 'n'
-                            if 'n' not in record.keys():
-                                raise ValueError(
-                                    f"Query must return nodes with variable name 'n'. Got keys: {record.keys()}")
-
-                            node = record.get('n')
-                            properties = dict(node.items())
-
-                            # Convert Neo4j types to Python types
-                            properties = convert_neo4j_types_to_python(properties)
-                            nodes.append(cls.model_construct(**properties))
-
-                    return nodes
 
             # Check if kwargs are valid model fields
             for key in equality_filters.keys():
                 if key not in cls.model_fields:
-                    log.warning(f"Key '{key}' is not a valid model field. We try to match but the result will not "
+                    log.warning(f"Key '{key}' is not a valid model field. The result will not "
                                 f"be accessible as a model instance attribute.")
 
-            query = f"""MATCH (n{cls._label_match_string()})"""
-
-            conditions = []
-            params = {}
-
-            # Process equality filters from kwargs
-            if equality_filters:
-                for field, value in equality_filters.items():
-                    param_name = f"{field}_eq"
-                    conditions.append(f"n.{field} = ${param_name}")
-                    params[param_name] = value
-
-            # Process FilterOp objects
-            for i, f in enumerate(filter_ops):
-                param_name = f"{f.field}_{i}"
-                conditions.append(f"n.{f.field} {f.operator} ${param_name}")
-                params[param_name] = f.value
-
-            if conditions:
-                query += f"\nWHERE {' AND '.join(conditions)}"
-
-            query += "\nRETURN n"
-
-            log.debug(query)
-            log.debug(params)
-            nodes = []
-
-            with Base._driver.session() as session:
-                result = session.run(query, params)
-                for record in result:
-                    node = record['n']
-                    properties = dict(node.items())
-
-                    # Convert Neo4j types to Python types
-                    properties = convert_neo4j_types_to_python(properties)
-
-                    nodes.append(
-                        cls(**properties)
-                    )
-
-            return nodes
+            # Return a query builder instead of executing directly
+            return NodeQueryBuilder(cls, filter_ops, equality_filters)
 
         def delete(self):
             if Base._driver is None:
@@ -813,62 +956,31 @@ class Relationship(BaseModel):
     def match(self, *filter_ops, **equality_filters):
         """
         Match and return instances of the target node with filtering capabilities.
+        Returns a query builder for deferred execution.
 
-        Supports filtering on both relationship properties and target node properties.
+        Usage:
+        # Get all related nodes
+        all_friends = person.knows.match().all()
+
+        # Get the first related node that matches criteria
+        best_friend = person.knows.filter(score=100).match(name="Bob").first()
         """
         # Get the base class to access driver and registry
         base = self._get_base()
         if not base:
             raise ValueError("Could not determine Base class")
 
-        target_node = base.get_class_by_name(self.target)
-        driver = base.get_driver()
+        target_class = base.get_class_by_name(self.target)
 
-        # Build the query
-        query = f"""WITH $properties AS properties
-    MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_node._label_match_string()})
-    WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}"""
-
-        conditions = []
-        params = {"properties": self._parent_instance.match_dict}
-
-        # Add relationship property filters
-        rel_filters = getattr(self, '_rel_filters', {})
-        for i, (field, filter_op) in enumerate(rel_filters.items()):
-            param_name = f"rel_{field}_{i}"
-            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
-            params[param_name] = filter_op.value
-
-        # Process equality filters from kwargs for target nodes
-        for field, value in equality_filters.items():
-            param_name = f"{field}_eq"
-            conditions.append(f"target.{field} = ${param_name}")
-            params[param_name] = value
-
-        # Process FilterOp objects from field descriptors for target nodes
-        for i, f in enumerate(filter_ops):
-            param_name = f"{f.field}_{i}"
-            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
-
-        # Add conditions to the query if there are any
-        if conditions:
-            query += f"\nAND {' AND '.join(conditions)}"
-
-        query += "\nRETURN distinct target"
-
-        # Execute the query
-        instances = []
-        with driver.session() as session:
-            result = session.run(query, **params)
-            for record in result:
-                node = record['target']
-                properties = dict(node.items())
-                properties = convert_neo4j_types_to_python(properties)
-                instances.append(
-                    target_node(**properties)
-                )
-        return instances
+        # Return a query builder instead of executing directly
+        return InstanceRelationshipQueryBuilder(
+            parent_instance=self._parent_instance,
+            rel_type=self.rel_type,
+            target_class=target_class,
+            rel_filters=getattr(self, '_rel_filters', {}),
+            node_filters=filter_ops,
+            node_equality_filters=equality_filters
+        )
 
     def delete(self, target=None):
         """

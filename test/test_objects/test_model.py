@@ -596,12 +596,12 @@ class TestNodeModelMatch:
         peter = Person(name='Peter')
         peter.merge()
 
-        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
+        result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m ORDER BY m.name ASC')
 
         assert result[0][0]['name'] == 'John'
         assert result[1][0]['name'] == 'Peter'
 
-        result = Person.match()
+        result = Person.match().all()
         assert len(result) == 2
         assert all(isinstance(x, Person) for x in result)
 
@@ -617,7 +617,7 @@ class TestNodeModelMatch:
         result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
         assert result[0][0]['name'] == 'John'
 
-        result = Person.match(name='John')
+        result = Person.match(name='John').all()
 
         assert all([x.name == 'John' for x in result])
         assert all(isinstance(x, Person) for x in result)
@@ -636,7 +636,7 @@ class TestNodeModelMatch:
         peter = Person(name='Peter', age=40)
         peter.merge()
 
-        result = Person.match(name='John', age=30)
+        result = Person.match(name='John', age=30).all()
 
         assert all([x.name == 'John' for x in result])
         assert all([x.age == 30 for x in result])
@@ -650,7 +650,7 @@ class TestNodeModelMatch:
             _labels = ['Person']
             _merge_keys = ['name']
 
-        result = Person.match(name='John')
+        result = Person.match(name='John').all()
 
         assert result == []
 
@@ -664,7 +664,7 @@ class TestNodeModelMatch:
         john = Person(name='John', age=30)
         john.merge()
 
-        result = Person.match(name='John', age=30)
+        result = Person.match(name='John', age=30).all()
 
         assert all([x.name == 'John' for x in result])
         assert all([x.age == 30 for x in result])
@@ -689,7 +689,7 @@ class TestNodeModelMatch:
 
         john.create()
 
-        johns_friends = john.friends.match()
+        johns_friends = john.friends.match().all()
 
         assert len(johns_friends) == 2
         assert all(isinstance(x, Person) for x in johns_friends)
@@ -713,13 +713,13 @@ class TestNodeModelMatchFilterOps:
         Person(name='Sarah', age=30).merge()
 
         # Test filtering with equality
-        result = Person.match(name='John')
+        result = Person.match(name='John').all()
         assert len(result) == 1
         assert result[0].name == 'John'
         assert result[0].age == 30
 
         # Test filtering with multiple equality conditions
-        result = Person.match(age=30)
+        result = Person.match(age=30).all()
         assert len(result) == 2
         assert {p.name for p in result} == {'John', 'Sarah'}
 
@@ -739,17 +739,17 @@ class TestNodeModelMatchFilterOps:
         Person(name='Sarah', age=25).merge()
 
         # Test greater than filter
-        result = Person.match(FilterOp("age", ">", 30))
+        result = Person.match(FilterOp("age", ">", 30)).all()
         assert len(result) == 1
         assert result[0].name == 'Peter'
 
         # Test less than filter
-        result = Person.match(FilterOp("age", "<", 30))
+        result = Person.match(FilterOp("age", "<", 30)).all()
         assert len(result) == 1
         assert result[0].name == 'Sarah'
 
         # Test multiple conditions combined
-        result = Person.match(FilterOp("age", ">=", 25), FilterOp("age", "<=", 30))
+        result = Person.match(FilterOp("age", ">=", 25), FilterOp("age", "<=", 30)).all()
         assert len(result) == 2
         assert {p.name for p in result} == {'John', 'Sarah'}
 
@@ -775,7 +775,7 @@ class TestNodeModelMatchCypherQuery:
         MATCH (n:Person)
         RETURN n
         """
-        result = Person.match(CypherQuery(query))
+        result = Person.match(CypherQuery(query)).all()
         assert len(result) == 3
         assert {p.name for p in result} == {'John', 'Peter', 'Sarah'}
         assert all(isinstance(p, Person) for p in result)
@@ -801,7 +801,7 @@ class TestNodeModelMatchCypherQuery:
         WHERE n.age > 30
         RETURN n
         """
-        result = Person.match(CypherQuery(query))
+        result = Person.match(CypherQuery(query)).all()
         assert len(result) == 1
         assert result[0].name == 'Peter'
         assert result[0].age == 40
@@ -827,7 +827,7 @@ class TestNodeModelMatchCypherQuery:
         WHERE n.age > $min_age
         RETURN n
         """
-        result = Person.match(CypherQuery(query, params={"min_age": 25}))
+        result = Person.match(CypherQuery(query, params={"min_age": 25})).all()
         assert len(result) == 2
         assert {p.name for p in result} == {'John', 'Peter'}
         assert all(p.age > 25 for p in result)
@@ -875,7 +875,7 @@ class TestNodeModelMatchCypherQuery:
         MATCH (n:Person)-[:LIVES_IN]->(:City {name: $city_name})
         RETURN n
         """
-        result = Person.match(CypherQuery(query, params={"city_name": "Berlin"}))
+        result = Person.match(CypherQuery(query, params={"city_name": "Berlin"})).all()
         assert len(result) == 2
         assert {p.name for p in result} == {'Peter', 'Sarah'}
 
@@ -884,7 +884,7 @@ class TestNodeModelMatchCypherQuery:
         MATCH (n:Person)-[:FRIENDS]->()-[:FRIENDS]->()
         RETURN DISTINCT n
         """
-        result = Person.match(CypherQuery(query))
+        result = Person.match(CypherQuery(query)).all()
         assert len(result) == 1
         assert result[0].name == 'John'
 
@@ -915,7 +915,7 @@ class TestNodeModelMatchCypherQuery:
         WHERE n.city = city
         RETURN n
         """
-        result = Person.match(CypherQuery(query, params={"min_age": 25}))
+        result = Person.match(CypherQuery(query, params={"min_age": 25})).all()
         assert len(result) == 2
         assert {p.name for p in result} == {'John', 'Mike'}
         assert all(p.city == 'London' for p in result)
@@ -941,7 +941,7 @@ class TestNodeModelMatchCypherQuery:
         ORDER BY n.age DESC
         RETURN n
         """
-        result = Person.match(CypherQuery(query))
+        result = Person.match(CypherQuery(query)).all()
         assert len(result) == 3
         assert [p.name for p in result] == ['Peter', 'John', 'Sarah']
         assert [p.age for p in result] == [40, 30, 25]
@@ -968,7 +968,7 @@ class TestNodeModelMatchCypherQuery:
         LIMIT 2
         RETURN n
         """
-        result = Person.match(CypherQuery(query))
+        result = Person.match(CypherQuery(query)).all()
         assert len(result) == 2
         assert [p.name for p in result] == ['Peter', 'John']
         assert [p.age for p in result] == [40, 30]
@@ -996,7 +996,7 @@ class TestNodeModelMatchCypherQuery:
         """
 
         # The additional filter (name='John') should be ignored
-        result = Person.match(CypherQuery(query), name='John')
+        result = Person.match(CypherQuery(query), name='John').all()
         assert len(result) == 1
         assert result[0].name == 'Peter'  # Not 'John'
         assert result[0].age == 40
@@ -1021,7 +1021,7 @@ class TestNodeModelMatchCypherQuery:
         """
 
         with pytest.raises(ValueError, match="must return nodes with variable name 'n'"):
-            Person.match(CypherQuery(query))
+            Person.match(CypherQuery(query)).all()
 
 
 class TestNodeModelMatchClassAttributes:
@@ -1040,7 +1040,7 @@ class TestNodeModelMatchClassAttributes:
         Person(name='Peter', age=40).merge()
 
         # Test equality operator
-        result = Person.match(Person.name == 'John')
+        result = Person.match(Person.name == 'John').all()
         assert len(result) == 1
         assert result[0].name == 'John'
 
@@ -1049,7 +1049,7 @@ class TestNodeModelMatchClassAttributes:
         for name in more_people:
             Person(name=name, age=30).merge()
 
-        result = Person.match(Person.age == 30)
+        result = Person.match(Person.age == 30).all()
         assert len(result) == 3
         assert set(p.name for p in result) == {'John', 'Alice', 'Bob'}
 
@@ -1069,22 +1069,22 @@ class TestNodeModelMatchClassAttributes:
         Person(name='Old', age=60).merge()
 
         # Test greater than
-        result = Person.match(Person.age > 50)
+        result = Person.match(Person.age > 50).all()
         assert len(result) == 1
         assert result[0].name == 'Old'
 
         # Test less than
-        result = Person.match(Person.age < 30)
+        result = Person.match(Person.age < 30).all()
         assert len(result) == 1
         assert result[0].name == 'Young'
 
         # Test greater than or equal
-        result = Person.match(Person.age >= 40)
+        result = Person.match(Person.age >= 40).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Middle', 'Old'}
 
         # Test less than or equal
-        result = Person.match(Person.age <= 40)
+        result = Person.match(Person.age <= 40).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Young', 'Middle'}
 
@@ -1108,17 +1108,17 @@ class TestNodeModelMatchClassAttributes:
             Product(name=p).merge()
 
         # Test starts_with
-        result = Product.match(Product.name.starts_with('i'))
+        result = Product.match(Product.name.starts_with('i')).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'iPhone', 'iPad'}
 
         # Test ends_with
-        result = Product.match(Product.name.ends_with('Pad'))
+        result = Product.match(Product.name.ends_with('Pad')).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'iPad', 'ThinkPad'}
 
         # Test contains
-        result = Product.match(Product.name.contains('Galaxy'))
+        result = Product.match(Product.name.contains('Galaxy')).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Galaxy Phone', 'Galaxy Tab'}
 
@@ -1149,7 +1149,7 @@ class TestNodeModelMatchClassAttributes:
         result = Person.match(
             Person.age >= 30,
             Person.city.contains('York')
-        )
+        ).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'John', 'Sarah'}
 
@@ -1157,7 +1157,7 @@ class TestNodeModelMatchClassAttributes:
         result = Person.match(
             Person.age < 35,
             Person.name.starts_with('M')
-        )
+        ).all()
         assert len(result) == 1
         assert result[0].name == 'Mike'
 
@@ -1172,7 +1172,7 @@ class TestNodeModelMatchClassAttributes:
 
         # This should raise an error because 'age' is not a field
         with pytest.raises(AttributeError):
-            Person.match(Person.age == 30)
+            Person.match(Person.age == 30).all()
 
     def test_date_equality_filtering(self, graph, test_base):
         """Test date equality filtering"""
@@ -1191,12 +1191,12 @@ class TestNodeModelMatchClassAttributes:
         Event(name='Meetup', event_date=date(2023, 6, 15)).merge()
 
         # Test equality operator with dates
-        result = Event.match(Event.event_date == date(2023, 6, 15))
+        result = Event.match(Event.event_date == date(2023, 6, 15)).all()
         assert len(result) == 2
         assert set(e.name for e in result) == {'Conference', 'Meetup'}
 
         # Test another date
-        result = Event.match(Event.event_date == date(2023, 7, 20))
+        result = Event.match(Event.event_date == date(2023, 7, 20)).all()
         assert len(result) == 1
         assert result[0].name == 'Workshop'
 
@@ -1217,22 +1217,22 @@ class TestNodeModelMatchClassAttributes:
         Event(name='Future', event_date=date(2024, 7, 20)).merge()
 
         # Test greater than
-        result = Event.match(Event.event_date > date(2023, 1, 1))
+        result = Event.match(Event.event_date > date(2023, 1, 1)).all()
         assert len(result) == 2
         assert set(e.name for e in result) == {'Present', 'Future'}
 
         # Test less than
-        result = Event.match(Event.event_date < date(2023, 7, 1))
+        result = Event.match(Event.event_date < date(2023, 7, 1)).all()
         assert len(result) == 2
         assert set(e.name for e in result) == {'Past', 'Present'}
 
         # Test greater than or equal
-        result = Event.match(Event.event_date >= date(2023, 6, 15))
+        result = Event.match(Event.event_date >= date(2023, 6, 15)).all()
         assert len(result) == 2
         assert set(e.name for e in result) == {'Present', 'Future'}
 
         # Test less than or equal
-        result = Event.match(Event.event_date <= date(2022, 5, 10))
+        result = Event.match(Event.event_date <= date(2022, 5, 10)).all()
         assert len(result) == 1
         assert result[0].name == 'Past'
 
@@ -1253,12 +1253,12 @@ class TestNodeModelMatchClassAttributes:
         LogEntry(id='log3', timestamp=datetime(2023, 6, 16, 9, 15, 0)).merge()
 
         # Test equality
-        result = LogEntry.match(LogEntry.timestamp == datetime(2023, 6, 15, 10, 30, 0))
+        result = LogEntry.match(LogEntry.timestamp == datetime(2023, 6, 15, 10, 30, 0)).all()
         assert len(result) == 1
         assert result[0].id == 'log1'
 
         # Test another equality
-        result = LogEntry.match(LogEntry.timestamp == datetime(2023, 6, 16, 9, 15, 0))
+        result = LogEntry.match(LogEntry.timestamp == datetime(2023, 6, 16, 9, 15, 0)).all()
         assert len(result) == 1
         assert result[0].id == 'log3'
 
@@ -1279,12 +1279,12 @@ class TestNodeModelMatchClassAttributes:
         LogEntry(id='evening', timestamp=datetime(2023, 6, 15, 18, 0, 0)).merge()
 
         # Test greater than
-        result = LogEntry.match(LogEntry.timestamp > datetime(2023, 6, 15, 11, 0, 0))
+        result = LogEntry.match(LogEntry.timestamp > datetime(2023, 6, 15, 11, 0, 0)).all()
         assert len(result) == 2
         assert set(e.id for e in result) == {'noon', 'evening'}
 
         # Test less than
-        result = LogEntry.match(LogEntry.timestamp < datetime(2023, 6, 15, 12, 30, 0))
+        result = LogEntry.match(LogEntry.timestamp < datetime(2023, 6, 15, 12, 30, 0)).all()
         assert len(result) == 2
         assert set(e.id for e in result) == {'morning', 'noon'}
 
@@ -1292,7 +1292,7 @@ class TestNodeModelMatchClassAttributes:
         result = LogEntry.match(
             LogEntry.timestamp >= datetime(2023, 6, 15, 9, 0, 0),
             LogEntry.timestamp <= datetime(2023, 6, 15, 12, 0, 0)
-        )
+        ).all()
         assert len(result) == 2
         assert set(e.id for e in result) == {'morning', 'noon'}
 
@@ -1335,7 +1335,7 @@ class TestNodeModelMatchClassAttributes:
         result = Appointment.match(
             Appointment.appointment_date == date(2023, 6, 15),
             Appointment.is_confirmed == True
-        )
+        ).all()
         assert len(result) == 2
         assert set(a.title for a in result) == {'Dentist', 'Doctor'}
 
@@ -1343,7 +1343,7 @@ class TestNodeModelMatchClassAttributes:
         result = Appointment.match(
             Appointment.appointment_date >= date(2023, 6, 15),
             Appointment.start_time > datetime(2023, 6, 15, 12, 0, 0)
-        )
+        ).all()
         assert len(result) == 2
         assert set(a.title for a in result) == {'Doctor', 'Interview'}
 
@@ -1373,12 +1373,12 @@ class TestRelationshipMatch:
         alice.merge()
 
         # Test simple equality filtering
-        result = alice.friends.match(age=50)
+        result = alice.friends.match(age=50).all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
 
         # Test with multiple matches
-        result = alice.friends.match(age=60)  # Should get Charlie and Dave
+        result = alice.friends.match(age=60).all()  # Should get Charlie and Dave
         assert len(result) == 1
         assert result[0].name == 'Dave'
 
@@ -1406,12 +1406,12 @@ class TestRelationshipMatch:
         alice.merge()
 
         # Test with field descriptors
-        result = alice.friends.match(Person.age > 45)
+        result = alice.friends.match(Person.age > 45).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Charlie', 'Dave'}
 
         # Test with equality
-        result = alice.friends.match(Person.name == 'Bob')
+        result = alice.friends.match(Person.name == 'Bob').all()
         assert len(result) == 1
         assert result[0].name == 'Bob'
         assert result[0].age == 40
@@ -1440,12 +1440,12 @@ class TestRelationshipMatch:
         alice.merge()
 
         # Test string operations
-        result = alice.colleagues.match(Person.department.starts_with('Eng'))
+        result = alice.colleagues.match(Person.department.starts_with('Eng')).all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
 
         # Test contains
-        result = alice.colleagues.match(Person.name.contains('ob'))
+        result = alice.colleagues.match(Person.name.contains('ob')).all()
         assert len(result) == 1
         assert result[0].name == 'Bob'
 
@@ -1477,7 +1477,7 @@ class TestRelationshipMatch:
         result = alice.friends.match(
             Person.age > 30,
             Person.city == 'London'
-        )
+        ).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Bob', 'Charlie'}
 
@@ -1485,7 +1485,7 @@ class TestRelationshipMatch:
         result = alice.friends.match(
             Person.age >= 40,
             Person.name.starts_with('D')
-        )
+        ).all()
         assert len(result) == 1
         assert result[0].name == 'Dave'
 
@@ -1508,12 +1508,12 @@ class TestRelationshipMatch:
         alice.merge()
 
         # Test with no matches
-        result = alice.friends.match(Person.age > 80)
+        result = alice.friends.match(Person.age > 80).all()
         assert len(result) == 0
         assert result == []
 
         # Test with impossible combination
-        result = alice.friends.match(Person.name == 'Bob', Person.age < 30)
+        result = alice.friends.match(Person.name == 'Bob', Person.age < 30).all()
         assert len(result) == 0
 
     def test_relationship_match_without_filters(self, graph, test_base):
@@ -1537,7 +1537,7 @@ class TestRelationshipMatch:
         alice.merge()
 
         # Test without filters
-        result = alice.friends.match()
+        result = alice.friends.match().all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Bob', 'Charlie'}
 
@@ -1568,13 +1568,13 @@ class TestRelationshipPropertyFiltering:
         alice.merge()
 
         # Test filtering with equality
-        result = alice.knows.filter(score=90).match()
+        result = alice.knows.filter(score=90).match().all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
         assert result[0].age == 50
 
         # Test filtering with equality and node property
-        result = alice.knows.filter(score=95).match(Person.name == 'Dave')
+        result = alice.knows.filter(score=95).match(Person.name == 'Dave').all()
         assert len(result) == 1
         assert result[0].name == 'Dave'
         assert result[0].age == 60
@@ -1604,22 +1604,22 @@ class TestRelationshipPropertyFiltering:
         alice.merge()
 
         # Test filtering with greater than
-        result = alice.knows.filter(RelField("score") > 85).match()
+        result = alice.knows.filter(RelField("score") > 85).match().all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Charlie', 'Dave'}
 
         # Test filtering with less than
-        result = alice.knows.filter(RelField("score") < 95).match()
+        result = alice.knows.filter(RelField("score") < 95).match().all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Bob', 'Charlie'}
 
         # Test filtering with greater than or equal
-        result = alice.knows.filter(RelField("score") >= 90).match()
+        result = alice.knows.filter(RelField("score") >= 90).match().all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Charlie', 'Dave'}
 
         # Test filtering with less than or equal
-        result = alice.knows.filter(RelField("score") <= 90).match()
+        result = alice.knows.filter(RelField("score") <= 90).match().all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Bob', 'Charlie'}
 
@@ -1651,7 +1651,7 @@ class TestRelationshipPropertyFiltering:
         result = alice.knows.filter(
             RelField("score") > 85,
             type="friend"
-        ).match()
+        ).match().all()
         assert len(result) == 1
         assert result[0].name == 'Dave'
 
@@ -1660,7 +1660,7 @@ class TestRelationshipPropertyFiltering:
             RelField("since") < 2020
         ).match(
             Person.age > 45
-        )
+        ).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Charlie', 'Dave'}
 
@@ -1690,21 +1690,21 @@ class TestRelationshipPropertyFiltering:
         # Test starts_with
         result = alice.knows.filter(
             RelField("category").starts_with("f")
-        ).match()
+        ).match().all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Bob', 'Charlie'}
 
         # Test contains
         result = alice.knows.filter(
             RelField("category").contains("work")
-        ).match()
+        ).match().all()
         assert len(result) == 1
         assert result[0].name == 'Dave'
 
         # Test ends_with
         result = alice.knows.filter(
             RelField("category").ends_with("ly")
-        ).match()
+        ).match().all()
         assert len(result) == 1
         assert result[0].name == 'Bob'
 
@@ -1727,11 +1727,11 @@ class TestRelationshipPropertyFiltering:
         alice.merge()
 
         # Test filtering with impossible condition
-        result = alice.knows.filter(RelField("score") > 100).match()
+        result = alice.knows.filter(RelField("score") > 100).match().all()
         assert len(result) == 0
 
         # Test filtering with non-existent property
-        result = alice.knows.filter(non_existent="value").match()
+        result = alice.knows.filter(non_existent="value").match().all()
         assert len(result) == 0
 
     def test_relationship_filter_chained_with_node_filter(self, graph, test_base):
@@ -1764,7 +1764,7 @@ class TestRelationshipPropertyFiltering:
             RelField("score") >= 90
         ).match(
             Person.city == 'London'
-        )
+        ).all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
 
@@ -1774,7 +1774,7 @@ class TestRelationshipPropertyFiltering:
         ).match(
             Person.age > 45,
             Person.city != 'New York'
-        )
+        ).all()
         assert len(result) == 2
         assert set(p.name for p in result) == {'Charlie', 'Dave'}
 
@@ -1802,6 +1802,127 @@ class TestRelationshipPropertyFiltering:
         # Test with inequality
         result = alice.knows.filter(
             RelField("status") != 'active'
-        ).match()
+        ).match().all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
+
+
+class TestNodeModelMatchFirst:
+    def test_first_returns_only_one_node(self, test_base, graph):
+        """Test that first() returns only one node when multiple would match"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data - multiple matching nodes
+        Person(name='John', age=30).merge()
+        Person(name='Sarah', age=30).merge()
+        Person(name='Peter', age=30).merge()
+
+        # Should return just one person with age 30
+        result = Person.match(age=30).first()
+
+        # Assert we got a single Person instance
+        assert isinstance(result, Person)
+        assert result.age == 30
+
+        # All people have the same age, so any one could be returned
+        assert result.name in ['John', 'Sarah', 'Peter']
+
+    def test_first_returns_none_when_no_matches(self, test_base, graph):
+        """Test that first() returns None when no nodes match"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+
+        # Should return None for a non-matching query
+        result = Person.match(name='NonExistent').first()
+
+        # Assert we got None
+        assert result is None
+
+    def test_first_with_filter_conditions(self, test_base, graph):
+        """Test that first() works with filter conditions"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Sarah', age=25).merge()
+        Person(name='Peter', age=40).merge()
+
+        # Filter with specific condition
+        result = Person.match(FilterOp("age", ">", 30)).first()
+
+        # Should return Peter
+        assert isinstance(result, Person)
+        assert result.name == 'Peter'
+        assert result.age == 40
+
+    def test_first_with_class_attributes(self, test_base, graph):
+        """Test that first() works with class attribute filtering"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Sarah', age=25).merge()
+        Person(name='Peter', age=40).merge()
+
+        # Use class attribute for filtering
+        result = Person.match(Person.name == 'Sarah').first()
+
+        # Should return Sarah
+        assert isinstance(result, Person)
+        assert result.name == 'Sarah'
+        assert result.age == 25
+
+    def test_first_with_cypher_query(self, test_base, graph):
+        """Test that first() works with custom Cypher queries"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Create test data
+        Person(name='John', age=30).merge()
+        Person(name='Sarah', age=25).merge()
+        Person(name='Peter', age=40).merge()
+
+        # Use custom Cypher query
+        query = """
+        MATCH (n:Person)
+        WHERE n.age > $min_age
+        ORDER BY n.age ASC
+        RETURN n
+        """
+        result = Person.match(CypherQuery(query, params={"min_age": 25})).first()
+
+        # Should return John (lowest age above 25)
+        assert isinstance(result, Person)
+        assert result.name == 'John'
+        assert result.age == 30
