@@ -262,6 +262,21 @@ class NodeQueryBuilder:
         self.filter_ops = filter_ops or []
         self.equality_filters = equality_filters or {}
 
+    def __getattr__(self, name):
+        """Allow access to relationships like Person.match().knows"""
+        # Check if this is a relationship defined on the class
+        if hasattr(self.node_class, '_relationships') and name in self.node_class._relationships:
+            # Return a relationship query builder
+            relationship = self.node_class._relationships[name]
+            return ChainedRelationshipQueryBuilder(
+                self.node_class,
+                relationship.rel_type,
+                relationship.target,
+                self.filter_ops,
+                self.equality_filters
+            )
+        raise AttributeError(f"'{self.node_class.__name__}' has no relationship '{name}'")
+
     def all(self):
         """Execute the query and return all results."""
         if self.node_class._driver is None:
@@ -310,7 +325,6 @@ class NodeQueryBuilder:
         """Execute the query with LIMIT 1."""
         if self.node_class._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-
         # Handle CypherQuery if present
         for f in self.filter_ops:
             if isinstance(f, CypherQuery):
@@ -370,6 +384,164 @@ class NodeQueryBuilder:
                 nodes.append(self.node_class(**properties))
 
         return nodes
+
+
+class ChainedRelationshipQueryBuilder:
+    """Builder class for chained relationship queries."""
+
+    def __init__(self, source_class, rel_type, target_class_name,
+                 source_filters, source_equality_filters):
+        self.source_class = source_class
+        self.rel_type = rel_type
+        self.target_class_name = target_class_name
+        self.source_filters = source_filters
+        self.source_equality_filters = source_equality_filters
+        self.rel_filters = {}
+
+    def filter(self, *filter_ops, **equality_filters):
+        """Filter relationships based on relationship properties."""
+        new_builder = ChainedRelationshipQueryBuilder(
+            self.source_class,
+            self.rel_type,
+            self.target_class_name,
+            self.source_filters,
+            self.source_equality_filters
+        )
+        new_builder.rel_filters = self.rel_filters.copy()
+
+        # Add equality filters
+        for field, value in equality_filters.items():
+            new_builder.rel_filters[field] = FilterOp(field, "=", value)
+
+        # Add FilterOp objects
+        for f in filter_ops:
+            if isinstance(f, FilterOp):
+                new_builder.rel_filters[f.field] = f
+
+        return new_builder
+
+    def match(self, *filter_ops, **equality_filters):
+        """Match nodes related to nodes of this class."""
+        # Get the target class
+        target_class = None
+        for base_class in self.source_class.__mro__:
+            if hasattr(base_class, 'get_registry') and hasattr(base_class, 'NodeModel'):
+                base = base_class
+                target_class = base.get_class_by_name(self.target_class_name)
+                if target_class:
+                    break
+
+        if not target_class:
+            raise ValueError(f"Could not find target class {self.target_class_name}")
+
+        return ChainedRelationshipMatchBuilder(
+            self.source_class,
+            self.rel_type,
+            target_class,
+            self.source_filters,
+            self.source_equality_filters,
+            self.rel_filters,
+            filter_ops,
+            equality_filters
+        )
+
+
+class ChainedRelationshipMatchBuilder:
+    """Builder class for executing chained relationship queries."""
+
+    def __init__(self, source_class, rel_type, target_class,
+                 source_filters, source_equality_filters,
+                 rel_filters, target_filters=None, target_equality_filters=None):
+        self.source_class = source_class
+        self.rel_type = rel_type
+        self.target_class = target_class
+        self.source_filters = source_filters
+        self.source_equality_filters = source_equality_filters
+        self.rel_filters = rel_filters or {}
+        self.target_filters = target_filters or []
+        self.target_equality_filters = target_equality_filters or {}
+
+    def _build_query(self, limit=None):
+        """Build a Cypher query with all filters applied."""
+        query = f"""
+        MATCH (source{self.source_class._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
+        """
+
+        conditions = []
+        params = {}
+
+        # Source node filters
+        for field, value in self.source_equality_filters.items():
+            param_name = f"source_{field}_eq"
+            conditions.append(f"source.{field} = ${param_name}")
+            params[param_name] = value
+
+        for i, f in enumerate(self.source_filters):
+            param_name = f"source_{f.field}_{i}"
+            conditions.append(f"source.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        # Relationship filters
+        for i, (field, filter_op) in enumerate(self.rel_filters.items()):
+            param_name = f"rel_{field}_{i}"
+            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
+            params[param_name] = filter_op.value
+
+        # Target node filters
+        for field, value in self.target_equality_filters.items():
+            param_name = f"target_{field}_eq"
+            conditions.append(f"target.{field} = ${param_name}")
+            params[param_name] = value
+
+        for i, f in enumerate(self.target_filters):
+            param_name = f"target_{f.field}_{i}"
+            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        if conditions:
+            query += f"WHERE {' AND '.join(conditions)}\n"
+
+        query += "RETURN DISTINCT target"
+
+        if limit is not None:
+            query += f" LIMIT {limit}"
+
+        return query, params
+
+    def all(self):
+        """Execute the query and return all targets."""
+        driver = self.source_class.get_driver()
+
+        query, params = self._build_query()
+
+        # Execute the query
+        results = []
+        with driver.session() as session:
+            result = session.run(query, params)
+            for record in result:
+                node = record['target']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                results.append(self.target_class(**properties))
+
+        return results
+
+    def first(self):
+        """Execute the query and return the first target."""
+        driver = self.source_class.get_driver()
+        query, params = self._build_query(limit=1)
+
+        # Execute the query
+        with driver.session() as session:
+            result = session.run(query, params)
+            record = result.single()
+            if record and 'target' in record.keys():
+                node = record['target']
+                properties = dict(node.items())
+                properties = convert_neo4j_types_to_python(properties)
+                return self.target_class(**properties)
+
+        return None
 
 
 class InstanceRelationshipQueryBuilder:
@@ -1002,11 +1174,6 @@ class Relationship(BaseModel):
                 query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
             query += "DELETE r"
             log.debug(query)
-            print(f"Query: {query}")
-            print(f"parent instance: {self._parent_instance}")
-            print(f"parent instance match: {self._parent_instance.match_dict}")
-            print(f"target instance: {target}")
-            print(f"target instance match: {target.match_dict}")
 
             with driver.session() as session:
                 session.run(query, properties=self._parent_instance.match_dict, target_properties=target.match_dict)
@@ -1018,9 +1185,6 @@ class Relationship(BaseModel):
             DELETE r
             """
             log.debug(query)
-            print(f"Query: {query}")
-            print(f"parent instance: {self._parent_instance}")
-            print(f"parent instance match: {self._parent_instance.match_dict}")
 
             with driver.session() as session:
                 session.run(query, properties=self._parent_instance.match_dict)

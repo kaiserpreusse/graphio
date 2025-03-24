@@ -1926,3 +1926,219 @@ class TestNodeModelMatchFirst:
         assert isinstance(result, Person)
         assert result.name == 'John'
         assert result.age == 30
+
+
+class TestClassLevelRelationshipMatch:
+    def test_basic_class_level_relationship_match(self, test_base, graph):
+        """Test basic class-level relationship matching"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30, city='New York')
+        bob = Person(name='Bob', age=40, city='London')
+        charlie = Person(name='Charlie', age=50, city='London')
+
+        # Add relationships
+        alice.knows.add(bob)
+        alice.knows.add(charlie)
+        bob.knows.add(charlie)
+
+        # Merge all nodes and relationships
+        alice.merge()
+        bob.merge()
+        charlie.merge()
+
+        # test with raw Cypher query if we have 3 relationships
+        query = """
+        MATCH (n:Person)-[r:KNOWS]->(m:Person)
+        RETURN count(r) as count
+        """
+        result = run_query_return_results(graph, query)
+        print(result)
+        assert len(result) == 1
+        assert result[0]['count'] == 3
+
+        # Test class-level relationship matching
+        all_friends = Person.match().knows.match().all()
+
+        # Should find all target notes (bob and charlie)
+        assert len(all_friends) == 2
+        names = sorted([p.name for p in all_friends])
+        assert names == ['Bob', 'Charlie']
+
+    def test_relationship_filtering(self, test_base, graph):
+        """Test filtering on relationship properties"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+
+        # Add relationships with properties
+        alice.knows.add(bob, {'score': 85})
+        alice.knows.add(charlie, {'score': 95})
+
+        # Merge all nodes and relationships
+        alice.merge()
+        bob.merge()
+        charlie.merge()
+
+        # Test filtering on relationship properties
+        high_score_friends = Person.match().knows.filter(RelField("score") > 90).match().all()
+
+        assert len(high_score_friends) == 1
+        assert high_score_friends[0].name == 'Charlie'
+
+    def test_source_node_filtering(self, test_base, graph):
+        """Test filtering on source node properties"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+        dave = Person(name='Dave', age=35)
+
+        # Add relationships
+        alice.knows.add(bob)
+        alice.knows.add(charlie)
+        bob.knows.add(dave)
+        charlie.knows.add(dave)
+
+        # Merge all nodes and relationships
+        alice.merge()
+        bob.merge()
+        charlie.merge()
+        dave.merge()
+
+        # Test filtering on source node
+        young_peoples_friends = Person.match(Person.age < 40).knows.match().all()
+
+        # Should find friends of young people (Alice)
+        assert len(young_peoples_friends) == 2
+        names = sorted([p.name for p in young_peoples_friends])
+        assert names == ['Bob', 'Charlie']  # Alice knows Bob and Charlie
+
+    def test_combined_filtering(self, test_base, graph):
+        """Test filtering on source, relationship, and target properties"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            city: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30, city='New York')
+        bob = Person(name='Bob', age=40, city='London')
+        charlie = Person(name='Charlie', age=50, city='London')
+        dave = Person(name='Dave', age=35, city='Berlin')
+        eve = Person(name='Eve', age=45, city='Paris')
+
+        # Add relationships with properties
+        alice.knows.add(bob, {'score': 85})
+        alice.knows.add(charlie, {'score': 95})
+        bob.knows.add(dave, {'score': 90})
+        bob.knows.add(eve, {'score': 75})
+
+        # Merge all nodes and relationships
+        alice.merge()
+        bob.merge()
+        charlie.merge()
+        dave.merge()
+        eve.merge()
+
+        # Test complex filtering combining source, relationship and target filters
+        result = Person.match(
+            Person.city == 'New York'
+        ).knows.filter(
+            RelField("score") >= 90
+        ).match(
+            Person.age > 45
+        ).all()
+
+        assert len(result) == 1
+        assert result[0].name == 'Charlie'
+
+    def test_first_method(self, test_base, graph):
+        """Test first() method with class-level relationship queries"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+
+        # Add relationships
+        alice.knows.add(bob)
+        alice.knows.add(charlie)
+
+        # Merge all nodes and relationships
+        alice.merge()
+        bob.merge()
+        charlie.merge()
+
+        # Test first() with filters
+        first_older_friend = Person.match().knows.match(Person.age > 45).first()
+        assert first_older_friend is not None
+        assert first_older_friend.name == 'Charlie'
+
+    def test_no_results(self, test_base, graph):
+        """Test behavior when no results match the query"""
+
+        class Person(test_base.NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Create test data but no relationships
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+
+        # Merge nodes only
+        alice.merge()
+        bob.merge()
+
+        # Test with no relationships
+        friends = Person.match().knows.match().all()
+        assert len(friends) == 0
+
+        # Test first() with no relationships
+        first_friend = Person.match().knows.match().first()
+        assert first_friend is None
