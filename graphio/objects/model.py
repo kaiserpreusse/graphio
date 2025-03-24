@@ -3,7 +3,7 @@ import sys
 import pkgutil
 import inspect
 import logging
-from typing import List, ClassVar, Dict, Any, Optional, Type, Union, Set, Tuple
+from typing import List, ClassVar, Dict, Any, Optional, Type, Union, Set, Tuple, TypeVar, Generic
 
 from pydantic import BaseModel, PrivateAttr
 
@@ -12,6 +12,9 @@ from graphio.queries import where_clause_with_properties
 from graphio.helper import convert_neo4j_types_to_python
 
 log = logging.getLogger(__name__)
+
+# Type variables for better typing
+T = TypeVar('T', bound='NodeModel')
 
 _GLOBAL_REGISTRY = None
 
@@ -422,15 +425,9 @@ class ChainedRelationshipQueryBuilder:
 
     def match(self, *filter_ops, **equality_filters):
         """Match nodes related to nodes of this class."""
-        # Get the target class
-        target_class = None
-        for base_class in self.source_class.__mro__:
-            if hasattr(base_class, 'get_registry') and hasattr(base_class, 'NodeModel'):
-                base = base_class
-                target_class = base.get_class_by_name(self.target_class_name)
-                if target_class:
-                    break
-
+        # Get the target class directly from Base
+        from graphio.objects.model import Base
+        target_class = Base.get_class_by_name(self.target_class_name)
         if not target_class:
             raise ValueError(f"Could not find target class {self.target_class_name}")
 
@@ -633,344 +630,290 @@ class InstanceRelationshipQueryBuilder:
         return None
 
     def _get_base(self):
-        """Helper method to get the Base class from the parent instance."""
-        for base_class in self.parent_instance.__class__.__mro__:
-            if hasattr(base_class, 'get_registry') and hasattr(base_class, 'NodeModel'):
-                return base_class
-        raise ValueError("Could not determine Base class")
+        """Helper method to get the Base class."""
+        from graphio.objects.model import Base
+        return Base
 
 
-def declarative_base():
-    """
-    Create a declarative base for Neo4j model definitions.
-    Similar to SQLAlchemy's declarative_base but works with Pydantic.
-    """
+class Base(BaseModel, metaclass=CustomMeta):
+    """Static base class for all Neo4j ORM models"""
+    _driver = None
 
-    # Create the base class
-    class Base(BaseModel, metaclass=CustomMeta):
-        _driver = None
+    @classmethod
+    def discover_models(cls):
+        """Scan modules to discover model classes"""
+        cls.get_registry().auto_discover()
+        return cls
 
-        @classmethod
-        def discover_models(cls):
-            """Scan modules to discover model classes"""
-            cls.get_registry().auto_discover()
-            return cls
+    @classmethod
+    def get_registry(cls):
+        return get_global_registry()
 
-        @classmethod
-        def get_registry(cls):
-            return get_global_registry()
+    @classmethod
+    def set_driver(cls, driver):
+        cls._driver = driver
+        return cls
 
-        @classmethod
-        def set_driver(cls, driver):
-            cls._driver = driver
-            return cls
+    @classmethod
+    def get_driver(cls):
+        if cls._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        return cls._driver
 
-        @classmethod
-        def get_driver(cls):
-            if cls._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            return cls._driver
+    @classmethod
+    def get_class_by_name(cls, name):
+        """Get a model class by its name"""
+        registry = cls.get_registry()
+        for subclass in registry:
+            if subclass.__name__ == name:
+                return subclass
+        return None
 
-        @classmethod
-        def get_class_by_name(cls, name):
-            """Get a model class by its name"""
-            registry = cls.get_registry()
-            for subclass in registry:
-                if subclass.__name__ == name:
-                    return subclass
-            return None
+    @classmethod
+    def model_create_index(cls):
+        """Create indexes for all models"""
+        registry = cls.get_registry()
+        for model in registry:
+            if hasattr(model, 'create_index'):
+                model.create_index()
 
-        @classmethod
-        def model_create_index(cls):
-            """Create indexes for all models"""
-            registry = cls.get_registry()
-            for model in registry:
-                if hasattr(model, 'create_index'):
-                    model.create_index()
 
-    # Create the node model class with all functionality from _NodeModel
-    class NodeModel(Base, metaclass=CustomMeta):
-        """Base class for Neo4j node models"""
-        _default_props: ClassVar[Dict] = {}
-        _preserve: ClassVar[List[str]] = None
-        _append_props: ClassVar[List[str]] = None
-        _additional_labels: ClassVar[List[str]] = None
-        _labels: ClassVar[List[str]] = []
-        _merge_keys: ClassVar[List[str]] = []
+class NodeModel(Base, metaclass=CustomMeta):
+    """Base class for Neo4j node models"""
+    _default_props: ClassVar[Dict] = {}
+    _preserve: ClassVar[List[str]] = None
+    _append_props: ClassVar[List[str]] = None
+    _additional_labels: ClassVar[List[str]] = None
+    _labels: ClassVar[List[str]] = []
+    _merge_keys: ClassVar[List[str]] = []
+    _relationships: ClassVar[Dict[str, 'Relationship']] = {}
 
-        class Config:
-            extra = 'allow'
+    class Config:
+        extra = 'allow'
 
-        def __init__(self, **data):
-            super().__init__(**data)
-            for k, v in data.items():
-                setattr(self, k, v)
+    def __init__(self, **data):
+        super().__init__(**data)
+        for k, v in data.items():
+            setattr(self, k, v)
+        self._validate_merge_keys()
 
-            self._validate_merge_keys()
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
 
-        @classmethod
-        def __init_subclass__(cls, **kwargs):
-            super().__init_subclass__(**kwargs)
+        # Collect relationships into a class variable
+        cls._relationships = {}
+        for name, value in cls.__dict__.items():
+            if isinstance(value, Relationship):
+                cls._relationships[name] = value
 
-            # Collect relationships into a class variable
-            cls._relationships = {}
-            for name, value in cls.__dict__.items():
-                if isinstance(value, Relationship):
-                    cls._relationships[name] = value
+                # Optionally add ClassVar annotation if using type hints
+                if '__annotations__' in cls.__dict__:
+                    cls.__annotations__[name] = ClassVar[Relationship]
 
-                    # Optionally add ClassVar annotation if using type hints
-                    if '__annotations__' in cls.__dict__:
-                        cls.__annotations__[name] = ClassVar[Relationship]
+    def _validate_merge_keys(self):
+        for key in self.__class__._merge_keys:
+            if key not in self.model_fields:
+                raise ValueError(f"Merge key '{key}' is not a valid model field.")
 
-        def _validate_merge_keys(self):
-            for key in self.__class__._merge_keys:
-                if key not in self.model_fields:
-                    raise ValueError(f"Merge key '{key}' is not a valid model field.")
+    @property
+    def _additional_properties(self) -> dict:
+        extra_fields = {}
+        for extra_field in self.model_fields_set:
+            if extra_field not in self.model_fields:
+                extra_fields[extra_field] = getattr(self, extra_field)
+        return extra_fields
 
-        @property
-        def _additional_properties(self) -> dict:
-            extra_fields = {}
-            for extra_field in self.model_fields_set:
-                if extra_field not in self.model_fields:
-                    extra_fields[extra_field] = getattr(self, extra_field)
-            return extra_fields
+    @property
+    def _all_properties(self) -> dict:
+        # get all properties that are not relationships
+        properties = {}
+        for field in self.model_fields:
+            attr = getattr(self, field)
+            if not isinstance(attr, Relationship):
+                properties[field] = getattr(self, field)
 
-        @property
-        def _all_properties(self) -> dict:
-            # get all properties that are not relationships
-            properties = {}
-            for field in self.model_fields:
-                attr = getattr(self, field)
-                if not isinstance(attr, Relationship):
-                    properties[field] = getattr(self, field)
+        properties.update(self._additional_properties)
+        return properties
 
-            properties.update(self._additional_properties)
-            return properties
+    @classmethod
+    def nodeset(cls):
+        """Create a NodeSet from this Node."""
+        labels = cls._labels
+        merge_keys = cls._merge_keys
+        default_props = cls._default_props
+        preserve = cls._preserve
+        append_props = cls._append_props
+        additional_labels = cls._additional_labels
 
-        @classmethod
-        def nodeset(cls):
-            """
-            Create a NodeSet from this Node.
+        return NodeSet(labels=labels, merge_keys=merge_keys, default_props=default_props,
+                       preserve=preserve, append_props=append_props, additional_labels=additional_labels)
 
-            :return: NodeSet
-            """
-            labels = cls._labels
-            merge_keys = cls._merge_keys
-            default_props = cls._default_props
-            preserve = cls._preserve
-            append_props = cls._append_props
-            additional_labels = cls._additional_labels
+    @classmethod
+    def dataset(cls):
+        return cls.nodeset()
 
-            return NodeSet(labels=labels, merge_keys=merge_keys, default_props=default_props,
-                           preserve=preserve, append_props=append_props, additional_labels=additional_labels)
+    @classmethod
+    def create_index(cls):
+        cls.nodeset().create_index(Base._driver)
 
-        @classmethod
-        def dataset(cls):
-            return cls.nodeset()
+    @property
+    def relationships(self) -> List['Relationship']:
+        # get all attributes of this class that are instances of Relationship
+        relationship_objects = []
+        for attr_name, attr_value in self.__dict__.items():
+            if attr_name != 'relationships':
+                if isinstance(attr_value, Relationship):
+                    relationship_objects.append(attr_value)
+        return relationship_objects
 
-        @classmethod
-        def create_index(cls):
-            cls.nodeset().create_index(Base._driver)
+    @property
+    def match_dict(self) -> dict:
+        # Get merge keys directly from class.__dict__
+        merge_keys = self.__class__.__dict__.get('_merge_keys', [])
 
-        @property
-        def relationships(self) -> List['Relationship']:
-            # get all attributes of this class that are instances of Relationship
-            relationship_objects = []
-            for attr_name, attr_value in self.__dict__.items():
-                if attr_name != 'relationships':
-                    if isinstance(attr_value, Relationship):
-                        relationship_objects.append(attr_value)
-            return relationship_objects
+        # Build result dictionary
+        result = {}
+        for key in merge_keys:
+            if hasattr(self, key):
+                result[key] = getattr(self, key)
+        return result
 
-        @property
-        def match_dict(self) -> dict:
-            # Get merge keys directly from class.__dict__
-            merge_keys = self.__class__.__dict__.get('_merge_keys', [])
+    @property
+    def _unique_id_dict(self) -> dict:
+        """Return a dictionary of the merge keys and values to identify this node uniquely."""
+        result = {}
+        for k in self.__class__.__dict__.get('_merge_keys', []):
+            if hasattr(self, k):
+                result[k] = getattr(self, k)
+        return result
 
-            # Build result dictionary
-            result = {}
-            for key in merge_keys:
-                if hasattr(self, key):
-                    result[key] = getattr(self, key)
-            return result
+    def create_target_nodes(self):
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    other_node.create()
 
-        @property
-        def _unique_id_dict(self) -> dict:
-            """
-            Return a dictionary of the merge keys and values to identify this node uniquely.
-
-            :return: dict with merge keys and values
-            """
-            result = {}
-            for k in self.__class__.__dict__.get('_merge_keys', []):
-                if hasattr(self, k):
-                    result[k] = getattr(self, k)
-            return result
-
-        def create_target_nodes(self):
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            for rel in self.relationships:
-                if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
-                    for other_node, properties in rel.nodes:
-                        other_node.create()
-
-        def create_relationships(self) -> None:
-            """
-            Create relationships for this node.
-            """
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            for rel in self.relationships:
-                # relationships
-                if self.__class__.__name__ == rel.source:
-                    for other_node, properties in rel.nodes:
-                        relset = rel.dataset()
-                        relset.add_relationship(self.match_dict, other_node.match_dict, properties)
-                        relset.create(Base._driver)
-                elif self.__class__.__name__ == rel.target:
-                    for other_node, properties in rel.nodes:
-                        relset = rel.dataset()
-                        relset.add_relationship(other_node.match_dict, self.match_dict, properties)
-                        relset.create(Base._driver)
-
-        def create_node(self):
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            ns = self.nodeset()
-
-            ns.add_node(self._all_properties)
-            ns.create(Base._driver)
-
-        def create(self):
-            """
-            A full create on a node including relationships and target nodes.
-
-            In most cases it's better to use a container class that manages the
-            creation of all nodes and relationships. In principle, this method
-            walks down a chain of nodes but that's difficult to handle from code.
-            """
-            self.create_node()
-            self.create_target_nodes()
-            self.create_relationships()
-
-        def merge_target_nodes(self):
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            for rel in self.relationships:
-                if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
-                    for other_node, properties in rel.nodes:
-                        other_node.merge()
-
-        def merge_relationships(self) -> None:
-            """
-            Merge relationships for this node.
-            """
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            for rel in self.relationships:
-                # relationships
-                if self.__class__.__name__ == rel.source:
+    def create_relationships(self) -> None:
+        """Create relationships for this node."""
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            # relationships
+            if self.__class__.__name__ == rel.source:
+                for other_node, properties in rel.nodes:
                     relset = rel.dataset()
-                    for other_node, properties in rel.nodes:
-                        relset.add_relationship(self.match_dict, other_node.match_dict, properties)
-                    relset.merge(Base._driver)
-                elif self.__class__.__name__ == rel.target:
+                    relset.add_relationship(self.match_dict, other_node.match_dict, properties)
+                    relset.create(Base._driver)
+            elif self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
                     relset = rel.dataset()
-                    for other_node, properties in rel.nodes:
-                        relset.add_relationship(other_node.match_dict, self.match_dict, properties)
-                    relset.merge(Base._driver)
+                    relset.add_relationship(other_node.match_dict, self.match_dict, properties)
+                    relset.create(Base._driver)
 
-        def merge_node(self):
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-            ns = self.nodeset()
+    def create_node(self):
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        ns = self.nodeset()
 
-            ns.add_node(self._all_properties)
-            ns.merge(Base._driver)
+        ns.add_node(self._all_properties)
+        ns.create(Base._driver)
 
-        def merge(self):
-            """
-            A full merge on a node including relationships and target nodes.
+    def create(self):
+        """A full create on a node including relationships and target nodes."""
+        self.create_node()
+        self.create_target_nodes()
+        self.create_relationships()
 
-            In most cases it's better to use a container class that manages the
-            creation of all nodes and relationships. In principle, this method
-            walks down a chain of nodes but that's difficult to handle from code.
-            """
-            self.merge_node()
-            self.merge_target_nodes()
-            self.merge_relationships()
+    def merge_target_nodes(self):
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
+                for other_node, properties in rel.nodes:
+                    other_node.merge()
 
-        @classmethod
-        def _label_match_string(cls):
-            return ":" + ":".join(cls._labels)
+    def merge_relationships(self) -> None:
+        """Merge relationships for this node."""
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        for rel in self.relationships:
+            # relationships
+            if self.__class__.__name__ == rel.source:
+                relset = rel.dataset()
+                for other_node, properties in rel.nodes:
+                    relset.add_relationship(self.match_dict, other_node.match_dict, properties)
+                relset.merge(Base._driver)
+            elif self.__class__.__name__ == rel.target:
+                relset = rel.dataset()
+                for other_node, properties in rel.nodes:
+                    relset.add_relationship(other_node.match_dict, self.match_dict, properties)
+                relset.merge(Base._driver)
 
-        @classmethod
-        def match(cls, *filter_ops, **equality_filters):
-            """
-            Match nodes using a query builder pattern with deferred execution.
+    def merge_node(self):
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+        ns = self.nodeset()
 
-            Usage:
-            # All nodes of a type
-            all_persons = Person.match().all()
+        ns.add_node(self._all_properties)
+        ns.merge(Base._driver)
 
-            # First node only
-            first_person = Person.match(name="John").first()
+    def merge(self):
+        """A full merge on a node including relationships and target nodes."""
+        self.merge_node()
+        self.merge_target_nodes()
+        self.merge_relationships()
 
-            # Complex filtering
-            adults = Person.match(FilterOp("age", ">", 30)).all()
+    @classmethod
+    def _label_match_string(cls):
+        return ":" + ":".join(cls._labels)
 
-            :param filter_ops: FilterOp objects or CypherQuery for complex filtering
-            :param equality_filters: Keyword arguments for equality conditions
-            :return: NodeQueryBuilder that can be executed with .all() or .first()
-            """
-            # Check if driver is set (optional, since execution is deferred)
-            if cls._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+    @classmethod
+    def match(cls, *filter_ops, **equality_filters) -> 'NodeQueryBuilder[T]':
+        """Match nodes using a query builder pattern with deferred execution."""
+        # Check if driver is set
+        if cls._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-            # Check if kwargs are valid model fields
-            for key in equality_filters.keys():
-                if key not in cls.model_fields:
-                    log.warning(f"Key '{key}' is not a valid model field. The result will not "
-                                f"be accessible as a model instance attribute.")
+        # Check if kwargs are valid model fields
+        for key in equality_filters.keys():
+            if key not in cls.model_fields:
+                log.warning(f"Key '{key}' is not a valid model field. The result will not "
+                            f"be accessible as a model instance attribute.")
 
-            # Return a query builder instead of executing directly
-            return NodeQueryBuilder(cls, filter_ops, equality_filters)
+        # Return a query builder instead of executing directly
+        return NodeQueryBuilder(cls, filter_ops, equality_filters)
 
-        def delete(self):
-            if Base._driver is None:
-                raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+    def delete(self):
+        if Base._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-            query = f"""WITH $properties AS properties 
-            MATCH (n{self._label_match_string()})
-            WHERE {where_clause_with_properties(self.match_dict, 'properties', node_variable='n')}
-            DETACH DELETE n
-            """
+        query = f"""WITH $properties AS properties
+        MATCH (n{self._label_match_string()})
+        WHERE {where_clause_with_properties(self.match_dict, 'properties', node_variable='n')}
+        DETACH DELETE n
+        """
 
-            log.debug(query)
-            log.debug(self._unique_id_dict)
+        log.debug(query)
+        log.debug(self._unique_id_dict)
 
-            with Base._driver.session() as session:
-                session.run(query, properties=self._unique_id_dict)
+        with Base._driver.session() as session:
+            session.run(query, properties=self._unique_id_dict)
 
-    # Create the minimal relationship model class
-    class RelationshipModel(Base, metaclass=CustomMeta):
-        """Base class for Neo4j relationship models"""
-        source: ClassVar[str]
-        target: ClassVar[str]
-        rel_type: ClassVar[str]
-        default_props: ClassVar[Dict[str, Any]] = {}
 
-        @classmethod
-        def create_index(cls):
-            # Will be implemented later
-            pass
+class RelationshipModel(Base, metaclass=CustomMeta):
+    """Base class for Neo4j relationship models"""
+    source: ClassVar[str]
+    target: ClassVar[str]
+    rel_type: ClassVar[str]
+    default_props: ClassVar[Dict[str, Any]] = {}
 
-    # Add the model classes to the Base class
-    Base.NodeModel = NodeModel
-    Base.RelationshipModel = RelationshipModel
-
-    return Base
+    @classmethod
+    def create_index(cls):
+        # Will be implemented later
+        pass
 
 
 class Relationship(BaseModel):
@@ -1036,53 +979,9 @@ class Relationship(BaseModel):
         )
 
     def _get_base(self):
-        """Helper method to get the Base class"""
-        # First try through parent instance if available
-        if self._parent_instance is not None:
-            for base_class in self._parent_instance.__class__.__mro__:
-                if hasattr(base_class, 'get_registry') and hasattr(base_class, 'NodeModel'):
-                    return base_class
-
-        # If we can't find it through the parent, use the global registry directly
-        from graphio.objects.model import get_global_registry
-
-        # Create a dynamic Base object that uses the global registry
-        class DynamicBase:
-            @staticmethod
-            def get_registry():
-                return get_global_registry()
-
-            @staticmethod
-            def get_driver():
-                # Try to find a driver from loaded modules
-                import sys
-                for module_name, module in sys.modules.items():
-                    if hasattr(module, 'Base') and hasattr(module.Base, 'get_driver'):
-                        return module.Base.get_driver()
-                # If not found, try to get from test environment
-                import inspect
-                frame = inspect.currentframe()
-                try:
-                    while frame:
-                        if 'graph' in frame.f_locals:
-                            return frame.f_locals['graph']
-                        frame = frame.f_back
-                finally:
-                    del frame
-
-                raise ValueError("Could not find driver")
-
-            @staticmethod
-            def get_class_by_name(name):
-                registry = DynamicBase.get_registry()
-                for cls in registry:
-                    if cls.__name__ == name:
-                        return cls
-                return None
-
-        # Add NodeModel attribute to satisfy checks
-        DynamicBase.NodeModel = True
-        return DynamicBase
+        """Helper method to get the Base class."""
+        from graphio.objects.model import Base
+        return Base
 
     def relationshipset(self):
         return self.dataset()

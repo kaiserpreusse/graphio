@@ -64,8 +64,9 @@ def test_base():
     """
     Creates a clean Base class for testing.
     """
-    from graphio.objects.model import declarative_base
-    Base = declarative_base()
+    from graphio.objects.model import Base
+    # Reset any class attributes that might carry over between tests
+    Base._driver = None
     return Base
 
 
@@ -104,9 +105,7 @@ def set_driver(graph, test_base):
     Pytest fixture to set the driver for the Base model.
     This fixture automatically sets the driver for each test, then resets it.
     """
-    from graphio.objects.model import get_global_registry
-
-    # Use the test_base fixture directly which creates and returns a Base class
+    # test_base now returns the static Base class
     Base = test_base
     Base.set_driver(graph)
     yield

@@ -3,13 +3,13 @@ import random
 from datetime import datetime, timedelta
 
 from graphio.helper import run_query_return_results
-from graphio import Relationship, NodeSet, RelationshipSet, FilterOp, CypherQuery, RelField
+from graphio import Relationship, NodeSet, RelationshipSet, FilterOp, CypherQuery, RelField, NodeModel
 
 
 class TestRegistryMeta:
     def test_registry_meta(self, test_base):
         # Define a class using the Base from the test_base fixture
-        class MyNode(test_base.NodeModel):
+        class MyNode(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -28,7 +28,7 @@ class TestRegistryMeta:
 
 class TestCreateIndex:
     def test_create_index(self, graph, test_base):
-        class TestNode(test_base.NodeModel):
+        class TestNode(NodeModel):
             name: str
             age: int
 
@@ -63,7 +63,7 @@ class TestNodeModelToDatasets:
         Test if we can add data to a nodeset from a nodemodel
         """
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -84,7 +84,7 @@ class TestNodeModelToDatasets:
         Test if we can add data to a relationshipset from a nodemodel
         """
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -108,7 +108,7 @@ class TestNodeModelCreateMerge:
     def test_unique_id_dict_basic(self, test_base):
         """Test that _unique_id_dict correctly returns dictionary of merge keys and values"""
 
-        class User(test_base.NodeModel):
+        class User(NodeModel):
             _labels = ["User"]
             _merge_keys = ["username"]
             username: str
@@ -123,7 +123,7 @@ class TestNodeModelCreateMerge:
     def test_unique_id_dict_with_inheritance(self, test_base):
         """Test that _unique_id_dict works with class inheritance"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             _labels = ["Person"]
             _merge_keys = ["id"]
             id: str
@@ -144,7 +144,7 @@ class TestNodeModelCreateMerge:
 
     def test_merge_keys_validation(self, test_base):
         with pytest.raises(ValueError, match="Merge key 'invalid_key' is not a valid model field."):
-            class InvalidNodeModel(test_base.NodeModel):
+            class InvalidNodeModel(NodeModel):
                 name: str
                 age: int
                 _merge_keys = ['invalid_key']
@@ -152,7 +152,7 @@ class TestNodeModelCreateMerge:
             InvalidNodeModel(name="example", age=30)
 
     def test_match_dict_on_class(self, test_base):
-        class MyNode(test_base.NodeModel):
+        class MyNode(NodeModel):
             name: str
             something: str
             _labels = ['Person']
@@ -162,7 +162,7 @@ class TestNodeModelCreateMerge:
         assert node_model.match_dict == {'name': 'John'}
 
     def test_model_create(self, test_base, graph):
-        class TestNode(test_base.NodeModel):
+        class TestNode(NodeModel):
             id: str
             name: str
 
@@ -189,7 +189,7 @@ class TestNodeModelCreateMerge:
         assert results[1]['n']['id'] == 'test'
 
     def test_model_create_with_additional_properties(self, test_base, graph):
-        class TestNode(test_base.NodeModel):
+        class TestNode(NodeModel):
             id: str
             name: str
 
@@ -207,7 +207,7 @@ class TestNodeModelCreateMerge:
         assert results[0]['n']['foo'] == 'bar'
 
     def test_merge_node(self, test_base, graph):
-        class TestNode(test_base.NodeModel):
+        class TestNode(NodeModel):
             id: str
             name: str
 
@@ -233,7 +233,7 @@ class TestNodeModelCreateMerge:
         assert results[0]['n']['id'] == 'test'
 
     def test_node_delete(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -254,7 +254,7 @@ class TestNodeModelCreateMerge:
 class TestRelationshipCreateMerge:
 
     def test_relationship_on_instance(self, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -275,14 +275,14 @@ class TestRelationshipCreateMerge:
         In the beginning there was an issue that too many relationships were created.
         """
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
 
             lives_in: Relationship = Relationship('Person', 'FRIENDS', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
             _labels = ['City']
             _merge_keys = ['name']
@@ -313,7 +313,7 @@ class TestRelationshipCreateMerge:
 
 
     def test_relationship_iterator(self, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -334,7 +334,7 @@ class TestRelationshipCreateMerge:
             assert x.target == 'Person'
 
     def test_create_node_with_relationship(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -342,7 +342,7 @@ class TestRelationshipCreateMerge:
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
 
             _labels = ['City']
@@ -390,21 +390,21 @@ class TestRelationshipCreateMerge:
             assert result[i][2]['name'] == 'Berlin'
 
     def test_create_node_with_relationship_chain(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
             _labels = ['City']
             _merge_keys = ['name']
 
             located_in: Relationship = Relationship('City', 'LOCATED_IN', 'Country')
 
-        class Country(test_base.NodeModel):
+        class Country(NodeModel):
             name: str
             _labels = ['Country']
             _merge_keys = ['name']
@@ -428,7 +428,7 @@ class TestRelationshipCreateMerge:
         assert result[0][4]['name'] == 'Germany'
 
     def test_merge_node_with_relationship(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -436,7 +436,7 @@ class TestRelationshipCreateMerge:
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
 
             _labels = ['City']
@@ -461,7 +461,7 @@ class TestRelationshipCreateMerge:
         assert result[0][2]['name'] == 'Berlin'
 
     def test_delete_all_relationships(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -469,7 +469,7 @@ class TestRelationshipCreateMerge:
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
 
             _labels = ['City']
@@ -494,7 +494,7 @@ class TestRelationshipCreateMerge:
 
 
     def test_delete_all_relationships_assert_other_relationships_still_exist(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -503,7 +503,7 @@ class TestRelationshipCreateMerge:
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
             friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
 
             _labels = ['City']
@@ -540,7 +540,7 @@ class TestRelationshipCreateMerge:
 
 
     def test_delete_specific_relationships(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -548,7 +548,7 @@ class TestRelationshipCreateMerge:
 
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
 
             _labels = ['City']
@@ -586,7 +586,7 @@ class TestRelationshipCreateMerge:
 class TestNodeModelMatch:
 
     def test_node_match_without_properties(self, test_base, graph):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -606,7 +606,7 @@ class TestNodeModelMatch:
         assert all(isinstance(x, Person) for x in result)
 
     def test_node_match(self, test_base, graph):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -623,7 +623,7 @@ class TestNodeModelMatch:
         assert all(isinstance(x, Person) for x in result)
 
     def test_node_match_multiple_properties(self, test_base, graph):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -643,7 +643,7 @@ class TestNodeModelMatch:
         assert all(isinstance(x, Person) for x in result)
 
     def test_node_match_no_data(self, test_base, graph):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -655,7 +655,7 @@ class TestNodeModelMatch:
         assert result == []
 
     def test_node_match_with_addtional_properties(self, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -672,7 +672,7 @@ class TestNodeModelMatch:
 
 
     def test_matching_relationships(self, graph, test_base):
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -700,7 +700,7 @@ class TestNodeModelMatchFilterOps:
     def test_equality_filtering(self, graph, test_base):
         """Test basic equality filtering using keyword arguments"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -726,7 +726,7 @@ class TestNodeModelMatchFilterOps:
     def test_complex_filtering_with_filter_op(self, graph, test_base):
         """Test filtering using FilterOp for complex conditions"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -758,7 +758,7 @@ class TestNodeModelMatchCypherQuery:
     def test_basic_cypher_query(self, graph, test_base):
         """Test basic Cypher query functionality"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -783,7 +783,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_with_where_clause(self, graph, test_base):
         """Test Cypher query with WHERE clause"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -809,7 +809,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_with_parameters(self, graph, test_base):
         """Test Cypher query with parameters"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -835,7 +835,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_with_relationships(self, graph, test_base):
         """Test Cypher query with relationships"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -845,7 +845,7 @@ class TestNodeModelMatchCypherQuery:
             friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
             lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
 
-        class City(test_base.NodeModel):
+        class City(NodeModel):
             name: str
 
             _labels = ['City']
@@ -891,7 +891,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_with_aggregation(self, graph, test_base):
         """Test Cypher query with aggregation"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             city: str
@@ -923,7 +923,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_with_ordering(self, graph, test_base):
         """Test Cypher query with ordering"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -949,7 +949,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_with_limit(self, graph, test_base):
         """Test Cypher query with limit"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -976,7 +976,7 @@ class TestNodeModelMatchCypherQuery:
     def test_cypher_query_precedence_over_filters(self, graph, test_base):
         """Test that CypherQuery takes precedence over other filters"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1004,7 +1004,7 @@ class TestNodeModelMatchCypherQuery:
     def test_invalid_cypher_query_variable(self, graph, test_base):
         """Test that using an invalid variable name raises an error"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1028,7 +1028,7 @@ class TestNodeModelMatchClassAttributes:
     def test_equality_operator(self, graph, test_base):
         """Test basic equality filtering using field operators"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1056,7 +1056,7 @@ class TestNodeModelMatchClassAttributes:
     def test_comparison_operators(self, graph, test_base):
         """Test comparison operators for numeric fields"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1091,7 +1091,7 @@ class TestNodeModelMatchClassAttributes:
     def test_string_operations(self, graph, test_base):
         """Test string operations with field references"""
 
-        class Product(test_base.NodeModel):
+        class Product(NodeModel):
             name: str
 
             _labels = ['Product']
@@ -1125,7 +1125,7 @@ class TestNodeModelMatchClassAttributes:
     def test_multiple_conditions(self, graph, test_base):
         """Test multiple filtering conditions combined"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             city: str
@@ -1164,7 +1164,7 @@ class TestNodeModelMatchClassAttributes:
     def test_invalid_field_error(self, test_base):
         """Test that using an invalid field raises an error"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
 
             _labels = ['Person']
@@ -1178,7 +1178,7 @@ class TestNodeModelMatchClassAttributes:
         """Test date equality filtering"""
         from datetime import date
 
-        class Event(test_base.NodeModel):
+        class Event(NodeModel):
             name: str
             event_date: date
 
@@ -1204,7 +1204,7 @@ class TestNodeModelMatchClassAttributes:
         """Test comparison operators with dates"""
         from datetime import date
 
-        class Event(test_base.NodeModel):
+        class Event(NodeModel):
             name: str
             event_date: date
 
@@ -1240,7 +1240,7 @@ class TestNodeModelMatchClassAttributes:
         """Test datetime equality filtering"""
         from datetime import datetime
 
-        class LogEntry(test_base.NodeModel):
+        class LogEntry(NodeModel):
             id: str
             timestamp: datetime
 
@@ -1266,7 +1266,7 @@ class TestNodeModelMatchClassAttributes:
         """Test comparison operators with datetimes"""
         from datetime import datetime
 
-        class LogEntry(test_base.NodeModel):
+        class LogEntry(NodeModel):
             id: str
             timestamp: datetime
 
@@ -1300,7 +1300,7 @@ class TestNodeModelMatchClassAttributes:
         """Test combining date/datetime with other properties"""
         from datetime import date, datetime
 
-        class Appointment(test_base.NodeModel):
+        class Appointment(NodeModel):
             title: str
             appointment_date: date
             start_time: datetime
@@ -1352,7 +1352,7 @@ class TestRelationshipMatch:
     def test_relationship_equality_filtering(self, graph, test_base):
         """Test filtering relationships with equality conditions"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1385,7 +1385,7 @@ class TestRelationshipMatch:
     def test_relationship_field_descriptor_filtering(self, graph, test_base):
         """Test filtering relationships with field descriptors"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1419,7 +1419,7 @@ class TestRelationshipMatch:
     def test_relationship_string_operations(self, graph, test_base):
         """Test string operations on relationship filtering"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             department: str
             _labels = ['Person']
@@ -1452,7 +1452,7 @@ class TestRelationshipMatch:
     def test_relationship_multiple_conditions(self, graph, test_base):
         """Test combining multiple filter conditions"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             city: str
@@ -1492,7 +1492,7 @@ class TestRelationshipMatch:
     def test_relationship_no_matches(self, graph, test_base):
         """Test relationship query with no matches"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1519,7 +1519,7 @@ class TestRelationshipMatch:
     def test_relationship_match_without_filters(self, graph, test_base):
         """Test relationship match with no filters returns all related nodes"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -1546,7 +1546,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_with_equality(self, graph, test_base):
         """Test filtering relationships by equality on relationship properties"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1582,7 +1582,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_with_relfield(self, graph, test_base):
         """Test filtering relationships using RelField comparison operators"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1626,7 +1626,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_combined_conditions(self, graph, test_base):
         """Test combining multiple relationship property conditions"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1667,7 +1667,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_string_operations(self, graph, test_base):
         """Test string operations on relationship properties"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -1711,7 +1711,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_with_no_matches(self, graph, test_base):
         """Test relationship filtering with no matches"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -1737,7 +1737,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_chained_with_node_filter(self, graph, test_base):
         """Test chaining relationship filters with node filters"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             city: str
@@ -1781,7 +1781,7 @@ class TestRelationshipPropertyFiltering:
     def test_relationship_filter_inequality(self, graph, test_base):
         """Test relationship filtering with inequality operators"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             _labels = ['Person']
             _merge_keys = ['name']
@@ -1811,7 +1811,7 @@ class TestNodeModelMatchFirst:
     def test_first_returns_only_one_node(self, test_base, graph):
         """Test that first() returns only one node when multiple would match"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1836,7 +1836,7 @@ class TestNodeModelMatchFirst:
     def test_first_returns_none_when_no_matches(self, test_base, graph):
         """Test that first() returns None when no nodes match"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1855,7 +1855,7 @@ class TestNodeModelMatchFirst:
     def test_first_with_filter_conditions(self, test_base, graph):
         """Test that first() works with filter conditions"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1878,7 +1878,7 @@ class TestNodeModelMatchFirst:
     def test_first_with_class_attributes(self, test_base, graph):
         """Test that first() works with class attribute filtering"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1901,7 +1901,7 @@ class TestNodeModelMatchFirst:
     def test_first_with_cypher_query(self, test_base, graph):
         """Test that first() works with custom Cypher queries"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
 
@@ -1932,7 +1932,7 @@ class TestClassLevelRelationshipMatch:
     def test_basic_class_level_relationship_match(self, test_base, graph):
         """Test basic class-level relationship matching"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             city: str
@@ -1977,7 +1977,7 @@ class TestClassLevelRelationshipMatch:
     def test_relationship_filtering(self, test_base, graph):
         """Test filtering on relationship properties"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -2008,7 +2008,7 @@ class TestClassLevelRelationshipMatch:
     def test_source_node_filtering(self, test_base, graph):
         """Test filtering on source node properties"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -2045,7 +2045,7 @@ class TestClassLevelRelationshipMatch:
     def test_combined_filtering(self, test_base, graph):
         """Test filtering on source, relationship, and target properties"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             city: str
@@ -2089,7 +2089,7 @@ class TestClassLevelRelationshipMatch:
     def test_first_method(self, test_base, graph):
         """Test first() method with class-level relationship queries"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']
@@ -2119,7 +2119,7 @@ class TestClassLevelRelationshipMatch:
     def test_no_results(self, test_base, graph):
         """Test behavior when no results match the query"""
 
-        class Person(test_base.NodeModel):
+        class Person(NodeModel):
             name: str
             age: int
             _labels = ['Person']

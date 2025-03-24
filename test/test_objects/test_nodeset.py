@@ -4,6 +4,7 @@ import json
 from hypothesis import given, strategies as st
 
 from graphio.objects.nodeset import NodeSet
+from graphio import NodeModel
 
 from graphio.helper import run_query_return_results
 
@@ -23,7 +24,7 @@ def small_nodeset(request, test_base) -> NodeSet:
         yield ns
 
     elif request.param == "NodelNode":
-        class MyNode(test_base.NodeModel):
+        class MyNode(NodeModel):
             uuid: str
             _labels = ['Test']
             _merge_keys = ['uuid']
