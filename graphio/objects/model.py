@@ -616,12 +616,15 @@ class InstanceRelationshipQueryBuilder:
         driver = base.get_driver()
 
         query, params = self._build_query(limit=1)
+        print(f"In first() method in InstanceRelationshipQueryBuilder")
+        print(query)
+        print(params)
 
         # Execute the query
         with driver.session() as session:
             result = session.run(query, **params)
             record = result.single()
-            if record and 'target' in record:
+            if record and 'target' in record.keys():
                 node = record['target']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)

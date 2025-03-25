@@ -1541,6 +1541,50 @@ class TestRelationshipMatch:
         assert len(result) == 2
         assert set(p.name for p in result) == {'Bob', 'Charlie'}
 
+    def test_relationship_first_match(self, graph, test_base):
+        class Person(NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+        charlie = Person(name='Charlie', age=50)
+
+        alice.friends.add(bob)
+        alice.friends.add(charlie)
+
+        alice.merge()
+
+        # Test first match
+        first_friend = alice.friends.match().first()
+        assert first_friend is not None
+        assert first_friend.name in {'Bob', 'Charlie'}
+
+    def test_relationship_first_no_match(self, graph, test_base):
+        class Person(NodeModel):
+            name: str
+            age: int
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+
+        # Create test data
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=40)
+
+        alice.merge()
+        bob.merge()
+
+        # Test first match with no relationships
+        first_friend = alice.friends.match().first()
+        assert first_friend is None
+
 
 class TestRelationshipPropertyFiltering:
     def test_relationship_filter_with_equality(self, graph, test_base):
