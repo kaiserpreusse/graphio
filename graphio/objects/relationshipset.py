@@ -441,9 +441,17 @@ class RelationshipSet:
         # iterate over chunks of rels
         q = rels_create_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
                                 self.end_node_properties, self.rel_type)
-        for batch in chunks(self.relationships, size=batch_size):
-            query_parameters = rels_params_from_objects(batch)
-            run_query_return_results(graph, q, database=database, source=self.uuid, **query_parameters)
+
+        # Define transaction function once
+        def create_batch(tx, batch_params):
+            result = tx.run(q, **batch_params)
+            result.consume()
+            return []
+
+        with graph.session(database=database) as session:
+            for batch in chunks(self.relationships, size=batch_size):
+                query_parameters = rels_params_from_objects(batch)
+                session.execute_write(create_batch, query_parameters)
 
     def merge(self, graph, database=None, batch_size=None):
         """
@@ -456,9 +464,17 @@ class RelationshipSet:
         # iterate over chunks of rels
         q = rels_merge_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
                                self.end_node_properties, self.rel_type)
-        for batch in chunks(self.relationships, size=batch_size):
-            query_parameters = rels_params_from_objects(batch)
-            run_query_return_results(graph, q, database=database, source=self.uuid, **query_parameters)
+
+        # Define transaction function once
+        def merge_batch(tx, batch_params):
+            result = tx.run(q, **batch_params)
+            result.consume()
+            return []
+
+        with graph.session(database=database) as session:
+            for batch in chunks(self.relationships, size=batch_size):
+                query_parameters = rels_params_from_objects(batch)
+                session.execute_write(merge_batch, query_parameters)
 
     def create_index(self, graph, database=None):
         """
