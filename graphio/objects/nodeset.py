@@ -46,9 +46,6 @@ class NodeSet:
         self.uuid = str(uuid4())
 
         self.nodes = []
-        # a node index with merge_key_id -> [positions in nodes list]
-        # this works for both unique and non-unique settings
-        self.node_index = defaultdict(list)
 
     def __str__(self):
         return f"<NodeSet ({self.labels}; {self.merge_keys})>"
@@ -76,31 +73,8 @@ class NodeSet:
 
         self.nodes.append(node_props)
 
-        if self.indexed:
-            self.node_index[self._merge_key_id(properties)].append(len(self.nodes) - 1)
-
     def add_nodes(self, list_of_properties):
         for properties in list_of_properties:
-            self.add_node(properties)
-
-    def update_node(self, properties: dict):
-        """
-        Update an existing node by overwriting all properties.
-
-        Note that this requires `NodeSet(..., indexed=True)` which is not the default!
-
-        :param properties: Node property dictionary.
-        """
-        if not self.indexed:
-            raise TypeError("Update only works on an indexed NodeSet.")
-
-        node_merge_key_id = self._merge_key_id(properties)
-        if node_merge_key_id in self.node_index:
-            # this function should work for single and multiple nodes
-            for node_list_index in self.node_index[node_merge_key_id]:
-                self.nodes[node_list_index].update(properties)
-        # if the node does not exist it is created
-        else:
             self.add_node(properties)
 
     def add_unique(self, properties):

@@ -128,38 +128,6 @@ class TestNodeSetInstances:
             ns.add_node(i)
 
 
-class TestNodeIndexOnNodeSet:
-
-    def test_index_creation(self):
-        ns = NodeSet(['Test'], ['name', 'id'], indexed=True)
-        for i in range(1, 101):
-            # add node twice to index
-            ns.add_node({'name': str(i), 'id': i})
-            ns.add_node({'name': str(i), 'id': i})
-        # assert that the positions match as expected
-        for i in range(1, 101):
-            index = (str(i), i)
-            assert index in ns.node_index
-            assert ns.node_index[index] == [(i-1)*2, ((i-1)*2)+1]
-
-
-class TestNodeSetNodeUpdate:
-    """
-    Test the function to update existing nodes in a NodeSet.
-    """
-    def test_error_on_non_indexed(self):
-        ns = NodeSet(['Test'], ['name'])
-        with pytest.raises(TypeError):
-            ns.update_node({'name': 'Peter', 'age': 60, 'city': 'Munich'})
-
-    def test_update_nodes(self):
-        ns = NodeSet(['Test'], ['name'], indexed=True)
-        ns.add_node({'name': 'Peter', 'age': 50})
-        ns.update_node({'name': 'Peter', 'age': 60, 'city': 'Munich'})
-        assert len(ns.nodes) == 1
-        assert ns.nodes[0] == {'name': 'Peter', 'age': 60, 'city': 'Munich'}
-
-
 class TestDefaultProps:
 
     def test_default_props(self):
