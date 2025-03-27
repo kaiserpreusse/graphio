@@ -7,6 +7,7 @@ import gzip
 from collections import defaultdict
 from typing import Set, List, Union
 
+from neo4j import Driver, DEFAULT_DATABASE
 
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
 from graphio.queries import nodes_merge_factory, nodes_create_factory
@@ -115,7 +116,7 @@ class NodeSet:
 
         compare_values = frozenset([properties[key] for key in self.merge_keys])
 
-        for other_node_properties in self.node_properties():
+        for other_node_properties in self.nodes:
             this_values = frozenset([other_node_properties[key] for key in self.merge_keys])
             if this_values == compare_values:
                 return None
@@ -334,7 +335,7 @@ class NodeSet:
         with open(path, 'wt') as f:
             json.dump(self.to_dict(), f, indent=4)
 
-    def create(self, graph, database: str = None, batch_size=None):
+    def create(self, graph: Driver, database: str = DEFAULT_DATABASE, batch_size=None):
         """
         Create all nodes from NodeSet.
         """
@@ -345,8 +346,15 @@ class NodeSet:
 
         q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels)
 
-        for batch in chunks(self.nodes, size=batch_size):
-            run_query_return_results(graph, q, database=database, props=list(batch), source=self.uuid)
+        # Define transaction function once
+        def create_batch(tx, batch_props):
+            result = tx.run(q, props=batch_props)
+            result.consume()
+            return []
+
+        with graph.session(database=database) as session:
+            for batch in chunks(self.nodes, size=batch_size):
+                session.execute_write(create_batch, list(batch))
 
     def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None, database=None):
         """
@@ -376,16 +384,16 @@ class NodeSet:
         q = nodes_merge_factory(self.labels, self.merge_keys, array_props=self.append_props, preserve=self.preserve,
                                 property_parameter='props', additional_labels=self.additional_labels)
 
-        for batch in chunks(self.node_properties(), size=batch_size):
-            run_query_return_results(graph, q, database=database, props=list(batch), append_props=self.append_props,
-                                     preserve=self.preserve, source=self.uuid)
+        # Define transaction function once
+        def merge_batch(tx, batch_props):
+            result = tx.run(q, props=batch_props, append_props=self.append_props,
+                            preserve=self.preserve)
+            result.consume()
+            return []
 
-    def node_properties(self):
-        """
-        Yield properties of the nodes in this set. Used for create function.
-        """
-        for n in self.nodes:
-            yield dict(n)
+        with graph.session(database=database) as session:
+            for batch in chunks(self.nodes, size=batch_size):
+                session.execute_write(merge_batch, list(batch))
 
     def all_property_keys(self) -> Set[str]:
         """
@@ -396,7 +404,7 @@ class NodeSet:
         all_props = set()
 
         # collect properties
-        for props in self.node_properties():
+        for props in self.nodes:
             for k in props:
                 all_props.add(k)
 
