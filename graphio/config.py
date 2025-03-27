@@ -1,5 +1,5 @@
 
 class Config:
-    BATCHSIZE = 1000
+    BATCHSIZE = 10000
 
 config = Config()
