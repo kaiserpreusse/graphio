@@ -5,6 +5,7 @@ import inspect
 import logging
 from typing import List, ClassVar, Dict, Any, Optional, Type, Union, Set, Tuple, TypeVar, Generic
 
+from neo4j import Driver
 from pydantic import BaseModel, PrivateAttr
 
 from graphio import NodeSet, RelationshipSet
@@ -311,7 +312,7 @@ class NodeQueryBuilder:
             query += f"\nWHERE {' AND '.join(conditions)}"
 
         query += "\nRETURN n"
-
+        log.debug(query)
         # Execute the query
         nodes = []
         with self.node_class._driver.session() as session:
@@ -653,12 +654,12 @@ class Base(BaseModel, metaclass=CustomMeta):
         return get_global_registry()
 
     @classmethod
-    def set_driver(cls, driver):
+    def set_driver(cls, driver: Driver):
         cls._driver = driver
         return cls
 
     @classmethod
-    def get_driver(cls):
+    def get_driver(cls) -> Driver:
         if cls._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
         return cls._driver
