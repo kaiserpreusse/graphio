@@ -25,8 +25,8 @@ nav:
   - Getting Started:
       - Overview: getting_started/index.md
   - Details:
+      - OGM: details/ogm.md
       - Data Sets: details/datasets.md
-      - ORM: details/orm.md
   - API Documentation:
       - NodeSet: api_reference/nodeset.md
       - RelationshipSet: api_reference/relationshipset.md
