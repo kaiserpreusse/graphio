@@ -42,7 +42,7 @@ class Person(NodeModel):
     
     name: str
     
-    likes = Relationship('Person', 'LIKES', 'Movie')
+    likes: Relationship = Relationship('Person', 'LIKES', 'Movie')
 
 class Movie(NodeModel):
     labels = ['Movie']
