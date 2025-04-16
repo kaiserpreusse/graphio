@@ -2,11 +2,83 @@
 
 Graphio can be used in two ways:
 
-1. Define `NodeSet` and `RelationshipSet` objects and load them to Neo4j
-2. Define a data model which is then used to load data into Neo4j
+1. Use the OGM to define a data model and interact with Neo4j
+2. Define `NodeSet` and `RelationshipSet` objects and load them to Neo4j
 
-The [first method](#use-datasets) is more suitable for quick data loading or testing of new data models
-, while the [second method](#use-object-model) is useful for complex data models and applications.
+The [datesets](#use-datasets) are more suitable for quick data loading or testing of new data models
+, while the [OGM](#use-the-ogm) is useful for complex data models and applications.
+
+
+
+## Use the OGM
+
+With the OGM, you define a data model and use it to load and retrieve data from Neo4j.
+
+From the data model, you can either use instances of the model to 
+individual nodes and relationships or create `NodeSet` and `RelationshipSet` 
+objects to load larger amounts of data. 
+
+
+### Example
+
+Here's an example of how to define a data model for a social network.
+
+#### Define data model
+
+```python
+from graphio import NodeModel, Relationship, Base
+from Neo4j import GraphDatabase
+
+# get the Neo4j driver
+driver = GraphDatabase.driver('neo4j://localhost:7687', 
+                              auth=('neo4j', 'password'))
+
+# set the driver for the OGM
+Base.set_driver(driver)
+
+class Person(NodeModel):
+    _labels = ['Person']
+    _merge_keys = ['name']
+    
+    name: str
+    
+    likes = Relationship('Person', 'LIKES', 'Movie')
+
+class Movie(NodeModel):
+    labels = ['Movie']
+    merge_keys = ['title']
+```
+Relations are defined as attributes of the node model. The `Relationship` class takes the source 
+node label, the relationship type, and the target node label as arguments.
+
+#### Create indexes
+You can create indexes for the data model using the `Base` class. This will create indexes for all node models.
+```python
+Base.model_create_index()
+```
+
+#### Create individual nodes and relationships
+Instances of the model can be used to create individual nodes and relationships. 
+
+
+```python
+
+alice = Person(name='Alice')
+matrix = Movie(title='Matrix')
+alice.likes(matrix)
+
+alice.create()
+```
+
+
+#### Query data
+
+```python
+peter = Person.match(Person.name == 'Peter').first()
+
+peters_movies = peter.likes.match().all()
+
+```
 
 ## Use datasets
 
@@ -88,60 +160,3 @@ Next to `.create()` Graphio also offers a `.merge()` operation on `NodeSet` and 
     If the nodes do not exist, they will not be created.
 
 
-## Use object model
-
-The second method is to define a data model and use it to load data into Neo4j.
-
-From the data model, you can either use instances of the model to 
-individual nodes and relationships or create `NodeSet` and `RelationshipSet` 
-objects to load large amounts of data. 
-
-!!! Note
-    Graphio is __not a full object relational mapper (ORM)__. It does not provide a bi-directional mapping between model objects and Neo4j.
-    The object model is meant to define the structure of the data and 
-    to consistently use the data model for multiple data loading operations in a larger application.
-
-### Example
-
-Here's an example of how to define a data model for a social network.
-
-#### Define data model
-
-```python
-from graphio import NodeModel, Relationship, Graph, model_initialize
-
-class Person(NodeModel):
-    labels = ['Person']
-    merge_keys = ['name']
-    
-    likes = Relationship('Person', 'LIKES', 'Movie')
-
-class Movie(NodeModel):
-    labels = ['Movie']
-    merge_keys = ['title']
-```
-Relations are defined as attributes of the node model. The `Relationship` class takes the source 
-node label, the relationship type, and the target node label as arguments.
-
-When the model is defined in a separate module, it has be initialized first:
-
-```python
-model_initialize('path.to.module')
-```
-
-#### Create individual nodes and relationships
-Instances of the model can be used to create individual nodes and relationships. This is not very efficient and Graphio does not take care of 
-batches, indexes or other optimizations.
-
-It is useful for testing or small data sets or loading small amounts of data.
-
-```python
-
-alice = Person(name='Alice')
-matrix = Movie(title='Matrix')
-alice.likes(matrix)
-
-graph = Graph(driver)
-
-graph.create(alice, matrix)
-```

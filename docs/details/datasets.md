@@ -159,28 +159,3 @@ nodeset = NodeSet(
     ['Person'], ['name'], preserve=['country'], array_props=['source']
 )
 ```
-
-## Grouping Datasets with Containers
-
-The `Container` class is used to group multiple `NodeSet` and `RelationshipSet` objects:
-
-```python
-from graphio import Container
-
-my_data = Container()
-
-my_data.add(people)
-my_data.add(person_likes_food)
-```
-
-### Iterating Over a Container
-
-You can loop through `NodeSet` and `RelationshipSet` objects in a `Container`:
-
-```python
-for nodeset in my_data.nodesets:
-    nodeset.create(driver)
-```
-
-!!! note
-    Containers are especially useful for managing large datasets or resolving dependencies between them.
