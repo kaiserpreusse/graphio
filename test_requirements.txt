@@ -1,5 +1,2 @@
 pytest
-coverage
-sphinx
-sphinx_rtd_theme
 hypothesis
