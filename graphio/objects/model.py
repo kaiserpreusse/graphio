@@ -543,49 +543,112 @@ class ChainedRelationshipMatchBuilder:
 
 
 class InstanceRelationshipQueryBuilder:
-    """Builder class for instance-level relationship queries with deferred execution."""
+    """Builder class for instance-level relationship queries with deferred execution.
+
+    This builder now also supports chaining multiple relationship hops. Each
+    instance can reference a previous hop via ``previous``. The first hop is
+    created from ``Relationship.match()`` and subsequent hops are created via
+    attribute access on an existing builder instance.
+    """
 
     def __init__(self, parent_instance, rel_type, target_class, rel_filters=None,
-                 node_filters=None, node_equality_filters=None):
+                 node_filters=None, node_equality_filters=None, previous=None):
         self.parent_instance = parent_instance
         self.rel_type = rel_type
         self.target_class = target_class
         self.rel_filters = rel_filters or {}
         self.node_filters = node_filters or []
         self.node_equality_filters = node_equality_filters or {}
+        self.previous = previous  # previous hop for multi hop queries
+
+    def __getattr__(self, name):
+        """Allow chaining additional relationships on the target class."""
+        if hasattr(self.target_class, '_relationships') and name in self.target_class._relationships:
+            relationship = self.target_class._relationships[name]
+
+            class _RelAccessor:
+                def __init__(self, prev_builder, relationship):
+                    self.prev_builder = prev_builder
+                    self.relationship = relationship
+                    self._rel_filters = {}
+
+                def filter(self, *filter_ops, **equality_filters):
+                    new_obj = _RelAccessor(self.prev_builder, self.relationship)
+                    new_obj._rel_filters = self._rel_filters.copy()
+                    for field, value in equality_filters.items():
+                        new_obj._rel_filters[field] = FilterOp(field, "=", value)
+                    for f in filter_ops:
+                        if isinstance(f, FilterOp):
+                            new_obj._rel_filters[f.field] = f
+                    return new_obj
+
+                def match(self, *filter_ops, **equality_filters):
+                    base = self.prev_builder._get_base()
+                    target_cls = base.get_class_by_name(self.relationship.target)
+                    return InstanceRelationshipQueryBuilder(
+                        parent_instance=self.prev_builder.parent_instance,
+                        rel_type=self.relationship.rel_type,
+                        target_class=target_cls,
+                        rel_filters=self._rel_filters,
+                        node_filters=filter_ops,
+                        node_equality_filters=equality_filters,
+                        previous=self.prev_builder,
+                    )
+
+            return _RelAccessor(self, relationship)
+        raise AttributeError(f"'{self.target_class.__name__}' has no relationship '{name}'")
+
+    def _collect_segments(self):
+        """Collect all relationship hops leading to this builder."""
+        segments = []
+        current = self
+        while current is not None:
+            segments.append(current)
+            current = current.previous
+        segments.reverse()
+        return segments
 
     def _build_query(self, limit=None):
-        """Build the Cypher query with optional LIMIT clause."""
+        """Build the Cypher query for all hops with optional LIMIT clause."""
         base = self._get_base()
 
-        query = f"""WITH $properties AS properties
-        MATCH (source{self.parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
-        WHERE {where_clause_with_properties(self.parent_instance.match_dict, 'properties', node_variable='source')}"""
+        segments = self._collect_segments()
+
+        start_instance = segments[0].parent_instance
+
+        pattern = f"(source{start_instance._label_match_string()})"
+        for idx, seg in enumerate(segments):
+            pattern += f"-[r{idx}:{seg.rel_type}]->(n{idx}{seg.target_class._label_match_string()})"
 
         conditions = []
-        params = {"properties": self.parent_instance.match_dict}
+        params = {"properties": start_instance.match_dict}
 
-        # Add relationship property filters
-        for i, (field, filter_op) in enumerate(self.rel_filters.items()):
-            param_name = f"rel_{field}_{i}"
-            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
-            params[param_name] = filter_op.value
+        # Gather filters for each segment
+        for idx, seg in enumerate(segments):
+            for i, (field, filter_op) in enumerate(seg.rel_filters.items()):
+                param_name = f"rel{idx}_{field}_{i}"
+                conditions.append(f"r{idx}.{filter_op.field} {filter_op.operator} ${param_name}")
+                params[param_name] = filter_op.value
 
-        # Add node property filters
-        for field, value in self.node_equality_filters.items():
-            param_name = f"{field}_eq"
-            conditions.append(f"target.{field} = ${param_name}")
-            params[param_name] = value
+            for field, value in seg.node_equality_filters.items():
+                param_name = f"n{idx}_{field}_eq"
+                conditions.append(f"n{idx}.{field} = ${param_name}")
+                params[param_name] = value
 
-        for i, f in enumerate(self.node_filters):
-            param_name = f"{f.field}_{i}"
-            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
+            for i, f in enumerate(seg.node_filters):
+                param_name = f"n{idx}_{f.field}_{i}"
+                conditions.append(f"n{idx}.{f.field} {f.operator} ${param_name}")
+                params[param_name] = f.value
+
+        source_where = where_clause_with_properties(start_instance.match_dict, 'properties', node_variable='source')
+
+        query = f"WITH $properties AS properties\nMATCH {pattern}\nWHERE {source_where}"
 
         if conditions:
             query += f"\nAND {' AND '.join(conditions)}"
 
-        query += "\nRETURN DISTINCT target"
+        final_var = f"n{len(segments)-1}"
+        query += f"\nRETURN DISTINCT {final_var}"
 
         if limit is not None:
             query += f" LIMIT {limit}"
@@ -617,9 +680,6 @@ class InstanceRelationshipQueryBuilder:
         driver = base.get_driver()
 
         query, params = self._build_query(limit=1)
-        print(f"In first() method in InstanceRelationshipQueryBuilder")
-        print(query)
-        print(params)
 
         # Execute the query
         with driver.session() as session:

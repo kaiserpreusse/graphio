@@ -2186,3 +2186,34 @@ class TestClassLevelRelationshipMatch:
         # Test first() with no relationships
         first_friend = Person.match().knows.match().first()
         assert first_friend is None
+
+
+class TestMultiHopRelationshipMatch:
+    def test_two_hop_instance_match(self, test_base, graph):
+        class Person(NodeModel):
+            name: str
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(NodeModel):
+            name: str
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        peter = Person(name='Peter')
+        john = Person(name='John')
+        berlin = City(name='Berlin')
+
+        peter.friends.add(john)
+        john.lives_in.add(berlin)
+
+        peter.create()
+
+        result = peter.friends.match().lives_in.match().all()
+
+        assert len(result) == 1
+        assert isinstance(result[0], City)
+        assert result[0].name == 'Berlin'
