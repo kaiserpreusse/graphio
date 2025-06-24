@@ -543,49 +543,104 @@ class ChainedRelationshipMatchBuilder:
 
 
 class InstanceRelationshipQueryBuilder:
-    """Builder class for instance-level relationship queries with deferred execution."""
+    """Builder class for instance-level relationship queries with support for multi-hop traversals."""
 
-    def __init__(self, parent_instance, rel_type, target_class, rel_filters=None,
-                 node_filters=None, node_equality_filters=None):
+    def __init__(self, parent_instance, rel_type=None, target_class=None, rel_filters=None,
+                 node_filters=None, node_equality_filters=None, hops=None):
         self.parent_instance = parent_instance
-        self.rel_type = rel_type
-        self.target_class = target_class
-        self.rel_filters = rel_filters or {}
-        self.node_filters = node_filters or []
-        self.node_equality_filters = node_equality_filters or {}
+
+        # A list of hops describing the traversed relationships. Each hop is a
+        # dictionary containing the relationship type, the target class and any
+        # filters applied on the relationship or target node.
+        if hops is not None:
+            self.hops = hops
+        else:
+            self.hops = [{
+                'rel_type': rel_type,
+                'target_class': target_class,
+                'rel_filters': rel_filters or {},
+                'node_filters': node_filters or [],
+                'node_equality_filters': node_equality_filters or {},
+            }]
+
+    def __getattr__(self, name):
+        """Allow chaining relationships on the current target class."""
+        last_target = self.hops[-1]['target_class']
+        if hasattr(last_target, '_relationships') and name in last_target._relationships:
+            rel = last_target._relationships[name]
+            base = self._get_base()
+            target_cls = base.get_class_by_name(rel.target)
+            new_hop = {
+                'rel_type': rel.rel_type,
+                'target_class': target_cls,
+                'rel_filters': {},
+                'node_filters': [],
+                'node_equality_filters': {},
+            }
+            return InstanceRelationshipQueryBuilder(
+                self.parent_instance,
+                hops=self.hops + [new_hop]
+            )
+        raise AttributeError(f"'{last_target.__name__}' has no relationship '{name}'")
+
+    def filter(self, *filter_ops, **equality_filters):
+        """Apply filters on the last relationship in the chain."""
+        hop = self.hops[-1]
+        for field, value in equality_filters.items():
+            hop['rel_filters'][field] = FilterOp(field, "=", value)
+        for f in filter_ops:
+            if isinstance(f, FilterOp):
+                hop['rel_filters'][f.field] = f
+        return self
+
+    def match(self, *filter_ops, **equality_filters):
+        """Apply filters on the target node of the last relationship."""
+        hop = self.hops[-1]
+        hop['node_filters'].extend(filter_ops)
+        hop['node_equality_filters'].update(equality_filters)
+        return self
 
     def _build_query(self, limit=None):
         """Build the Cypher query with optional LIMIT clause."""
         base = self._get_base()
 
-        query = f"""WITH $properties AS properties
-        MATCH (source{self.parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
-        WHERE {where_clause_with_properties(self.parent_instance.match_dict, 'properties', node_variable='source')}"""
+        query = f"WITH $properties AS properties\n"
+        query += f"MATCH (n0{self.parent_instance._label_match_string()})"
 
-        conditions = []
+        # Build the relationship chain
+        for i, hop in enumerate(self.hops):
+            label_str = hop['target_class']._label_match_string()
+            query += f"-[r{i}:{hop['rel_type']}]->(n{i+1}{label_str})"
+
+        query += "\nWHERE " + where_clause_with_properties(
+            self.parent_instance.match_dict, 'properties', node_variable='n0')
+
         params = {"properties": self.parent_instance.match_dict}
+        conditions = []
 
-        # Add relationship property filters
-        for i, (field, filter_op) in enumerate(self.rel_filters.items()):
-            param_name = f"rel_{field}_{i}"
-            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
-            params[param_name] = filter_op.value
+        for i, hop in enumerate(self.hops):
+            # Relationship property filters
+            for j, (field, filter_op) in enumerate(hop['rel_filters'].items()):
+                param_name = f"rel{i}_{field}_{j}"
+                conditions.append(f"r{i}.{filter_op.field} {filter_op.operator} ${param_name}")
+                params[param_name] = filter_op.value
 
-        # Add node property filters
-        for field, value in self.node_equality_filters.items():
-            param_name = f"{field}_eq"
-            conditions.append(f"target.{field} = ${param_name}")
-            params[param_name] = value
+            # Node equality filters
+            for field, value in hop['node_equality_filters'].items():
+                param_name = f"n{i+1}_{field}_eq"
+                conditions.append(f"n{i+1}.{field} = ${param_name}")
+                params[param_name] = value
 
-        for i, f in enumerate(self.node_filters):
-            param_name = f"{f.field}_{i}"
-            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
+            # Node filter operations
+            for j, f in enumerate(hop['node_filters']):
+                param_name = f"n{i+1}_{f.field}_{j}"
+                conditions.append(f"n{i+1}.{f.field} {f.operator} ${param_name}")
+                params[param_name] = f.value
 
         if conditions:
-            query += f"\nAND {' AND '.join(conditions)}"
+            query += " AND " + ' AND '.join(conditions)
 
-        query += "\nRETURN DISTINCT target"
+        query += f"\nRETURN DISTINCT n{len(self.hops)}"
 
         if limit is not None:
             query += f" LIMIT {limit}"
@@ -598,7 +653,7 @@ class InstanceRelationshipQueryBuilder:
         driver = base.get_driver()
 
         query, params = self._build_query()
-
+        
         # Execute the query
         instances = []
         with driver.session() as session:
@@ -607,7 +662,7 @@ class InstanceRelationshipQueryBuilder:
                 node = record['target']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                instances.append(self.target_class(**properties))
+                instances.append(self.hops[-1]['target_class'](**properties))
 
         return instances
 
@@ -629,7 +684,7 @@ class InstanceRelationshipQueryBuilder:
                 node = record['target']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                return self.target_class(**properties)
+                return self.hops[-1]['target_class'](**properties)
 
         return None
 
@@ -1048,13 +1103,16 @@ class Relationship(BaseModel):
         target_class = base.get_class_by_name(self.target)
 
         # Return a query builder instead of executing directly
+        hop = {
+            'rel_type': self.rel_type,
+            'target_class': target_class,
+            'rel_filters': getattr(self, '_rel_filters', {}),
+            'node_filters': list(filter_ops),
+            'node_equality_filters': equality_filters,
+        }
         return InstanceRelationshipQueryBuilder(
             parent_instance=self._parent_instance,
-            rel_type=self.rel_type,
-            target_class=target_class,
-            rel_filters=getattr(self, '_rel_filters', {}),
-            node_filters=filter_ops,
-            node_equality_filters=equality_filters
+            hops=[hop]
         )
 
     def delete(self, target=None):

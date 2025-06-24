@@ -2186,3 +2186,44 @@ class TestClassLevelRelationshipMatch:
         # Test first() with no relationships
         first_friend = Person.match().knows.match().first()
         assert first_friend is None
+
+
+class TestMultiHopQueries:
+    def test_instance_two_hop_match(self, graph, test_base):
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+            lives_in: Relationship = Relationship('Person', 'LIVES_IN', 'City')
+
+        class City(NodeModel):
+            name: str
+
+            _labels = ['City']
+            _merge_keys = ['name']
+
+        peter = Person(name='Peter')
+        john = Person(name='John')
+        jane = Person(name='Jane')
+
+        berlin = City(name='Berlin')
+        london = City(name='London')
+
+        peter.friends.add(john)
+        peter.friends.add(jane)
+        john.lives_in.add(berlin)
+        jane.lives_in.add(london)
+
+        peter.merge()
+        john.merge()
+        jane.merge()
+        berlin.merge()
+        london.merge()
+
+        cities = peter.friends.match().lives_in().match().all()
+
+        assert len(cities) == 2
+        assert {c.name for c in cities} == {'Berlin', 'London'}
