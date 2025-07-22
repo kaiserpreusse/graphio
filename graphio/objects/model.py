@@ -522,15 +522,6 @@ class NodeModel(Base, metaclass=CustomMeta):
                 result[key] = getattr(self, key)
         return result
 
-    @property
-    def _unique_id_dict(self) -> dict:
-        """Return a dictionary of the merge keys and values to identify this node uniquely."""
-        result = {}
-        for k in self.__class__.__dict__.get('_merge_keys', []):
-            if hasattr(self, k):
-                result[k] = getattr(self, k)
-        return result
-
     def create_target_nodes(self):
         if Base._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
@@ -637,10 +628,10 @@ class NodeModel(Base, metaclass=CustomMeta):
         """
 
         log.debug(query)
-        log.debug(self._unique_id_dict)
+        log.debug(self.match_dict)
 
         with Base._driver.session() as session:
-            session.run(query, properties=self._unique_id_dict)
+            session.run(query, properties=self.match_dict)
 
 
 class Relationship(BaseModel):

@@ -104,7 +104,7 @@ class TestNodeModelToDatasets:
 class TestNodeModelCreateMerge:
 
     def test_unique_id_dict_basic(self, test_base):
-        """Test that _unique_id_dict correctly returns dictionary of merge keys and values"""
+        """Test that match_dict correctly returns dictionary of merge keys and values"""
 
         class User(NodeModel):
             _labels = ["User"]
@@ -114,12 +114,12 @@ class TestNodeModelCreateMerge:
 
         user = User(username="alice", age=30)
 
-        # Test that _unique_id_dict returns the correct dictionary
-        assert user._unique_id_dict == {"username": "alice"}
-        assert "age" not in user._unique_id_dict
+        # Test that match_dict returns the correct dictionary
+        assert user.match_dict == {"username": "alice"}
+        assert "age" not in user.match_dict
 
     def test_unique_id_dict_with_inheritance(self, test_base):
-        """Test that _unique_id_dict works with class inheritance"""
+        """Test that match_dict works with class inheritance"""
 
         class Person(NodeModel):
             _labels = ["Person"]
@@ -136,9 +136,9 @@ class TestNodeModelCreateMerge:
         employee = Employee(id="p123", employee_id="e456", name="Bob", department="Engineering")
 
         # Test that inherited merge keys are correctly included
-        assert employee._unique_id_dict == {"id": "p123", "employee_id": "e456"}
-        assert "name" not in employee._unique_id_dict
-        assert "department" not in employee._unique_id_dict
+        assert employee.match_dict == {"id": "p123", "employee_id": "e456"}
+        assert "name" not in employee.match_dict
+        assert "department" not in employee.match_dict
 
     def test_merge_keys_validation(self, test_base):
         with pytest.raises(ValueError, match="Merge key 'invalid_key' is not a valid model field."):
