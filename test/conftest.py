@@ -79,15 +79,15 @@ def reset_registry():
     """
     Pytest fixture to reset the registry between tests.
     """
-    from graphio.objects.model import _GLOBAL_REGISTRY, Registry
+    from graphio.objects.model import _MODEL_REGISTRY
     # Store original registry state
-    original = _GLOBAL_REGISTRY
+    original = _MODEL_REGISTRY.copy()
     # Reset for test
-    import graphio.objects.model
-    graphio.objects.model._GLOBAL_REGISTRY = None
+    _MODEL_REGISTRY.clear()
     yield
     # Restore original registry
-    graphio.objects.model._GLOBAL_REGISTRY = original
+    _MODEL_REGISTRY.clear()
+    _MODEL_REGISTRY.update(original)
 
 
 @pytest.fixture()

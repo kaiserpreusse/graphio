@@ -1,7 +1,3 @@
-import importlib
-import sys
-import pkgutil
-import inspect
 import logging
 from typing import List, ClassVar, Dict, Any, Optional, Type, Union, Set, Tuple, TypeVar, Generic
 
@@ -17,14 +13,8 @@ log = logging.getLogger(__name__)
 # Type variables for better typing
 T = TypeVar('T', bound='NodeModel')
 
-_GLOBAL_REGISTRY = None
-
-
-def get_global_registry():
-    global _GLOBAL_REGISTRY
-    if _GLOBAL_REGISTRY is None:
-        _GLOBAL_REGISTRY = Registry()
-    return _GLOBAL_REGISTRY
+# Simple model registry - replaces complex Registry class
+_MODEL_REGISTRY = {}
 
 
 class CypherQuery:
@@ -137,105 +127,6 @@ class RelField:
     def contains(self, value):
         return FilterOp(self.field_name, "CONTAINS", value)
 
-class Registry:
-    def __init__(self):
-        self.default = []
-        self._is_initialized = False
-
-    def __iter__(self):
-        return iter(self.default)
-
-    def add(self, cls):
-        # Check if the class is already in the registry by class object (not just name)
-        if cls not in self.default:
-            self.default.append(cls)
-            return True
-        return False
-
-    def auto_discover(self):
-        """Auto-discover all model classes in the caller's module and related modules"""
-        if self._is_initialized:
-            return
-
-        # Get the frame that called this method
-        frame = inspect.currentframe().f_back.f_back
-        module = inspect.getmodule(frame)
-
-        if not module:
-            return
-
-        module_name = module.__name__
-
-        # Track all modules we've scanned
-        scanned_modules = set()
-
-        # Scan the caller's module first
-        self._scan_module_for_models(module, scanned_modules)
-
-        # Import common related modules
-        try:
-            # Try to import a 'model' or 'models' module in the same package
-            package_name = module.__name__.split('.')[0]
-            for related_name in ['model', 'models']:
-                try:
-                    related_module = importlib.import_module(f"{package_name}.{related_name}")
-                    self._scan_module_for_models(related_module, scanned_modules)
-                except ImportError:
-                    try:
-                        # Try as a direct import
-                        related_module = importlib.import_module(related_name)
-                        self._scan_module_for_models(related_module, scanned_modules)
-                    except ImportError:
-                        pass
-
-            # Import the package itself if it's not already imported
-            try:
-                package = importlib.import_module(package_name)
-                self._scan_module_for_models(package, scanned_modules)
-            except ImportError:
-                pass
-
-            # If it's a package, import all submodules
-            if hasattr(sys.modules[module_name], '__path__'):
-                pkg = sys.modules[module_name]
-                for _, name, is_pkg in pkgutil.iter_modules(pkg.__path__, pkg.__name__ + '.'):
-                    try:
-                        imported_module = importlib.import_module(name)
-                        self._scan_module_for_models(imported_module, scanned_modules)
-                    except ImportError as e:
-                        log.warning(f"Could not import {name}: {e}")
-        except (KeyError, AttributeError) as e:
-            log.warning(f"Error during module discovery: {e}")
-
-        self._is_initialized = True
-
-    def _scan_module_for_models(self, module, scanned_modules=None):
-        """Scan a module for model classes and add them to the registry"""
-        if scanned_modules is None:
-            scanned_modules = set()
-
-        if module.__name__ in scanned_modules:
-            return
-
-        scanned_modules.add(module.__name__)
-
-        # Find and register all classes with _labels and _merge_keys
-        for name, obj in inspect.getmembers(module):
-            if inspect.isclass(obj) and hasattr(obj, '_labels') and hasattr(obj, '_merge_keys'):
-                # Get reference to the Base class through the MRO
-                base_class = None
-                for parent in obj.__mro__:
-                    if hasattr(parent, 'get_registry') and hasattr(parent, 'NodeModel'):
-                        base_class = parent
-                        break
-
-                if base_class:
-                    # Use Base's registry directly
-                    registry = base_class.get_registry()
-                    registry.add(obj)
-                else:
-                    # Fall back to adding directly to this registry
-                    self.add(obj)
 
 
 class CustomMeta(BaseModel.__class__):
@@ -249,11 +140,10 @@ class CustomMeta(BaseModel.__class__):
                 for field_name in cls.model_fields:
                     setattr(cls, field_name, QueryFieldDescriptor(field_name))
 
-        # Register class (existing code)
+        # Simple import-time registration - replaces complex Registry
         if name not in ('Base', 'NodeModel', 'RelationshipModel'):
             if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
-                registry = get_global_registry()
-                registry.add(cls)
+                _MODEL_REGISTRY[cls.__name__] = cls
 
         return cls
 
@@ -584,13 +474,14 @@ class Base(BaseModel, metaclass=CustomMeta):
 
     @classmethod
     def discover_models(cls):
-        """Scan modules to discover model classes"""
-        cls.get_registry().auto_discover()
+        """Models are automatically discovered via import-time registration"""
+        # No-op: models are automatically registered when imported
         return cls
 
     @classmethod
     def get_registry(cls):
-        return get_global_registry()
+        """Return the simple model registry dict"""
+        return _MODEL_REGISTRY
 
     @classmethod
     def set_driver(cls, driver: Driver):
@@ -606,17 +497,12 @@ class Base(BaseModel, metaclass=CustomMeta):
     @classmethod
     def get_class_by_name(cls, name):
         """Get a model class by its name"""
-        registry = cls.get_registry()
-        for subclass in registry:
-            if subclass.__name__ == name:
-                return subclass
-        return None
+        return _MODEL_REGISTRY.get(name)
 
     @classmethod
     def model_create_index(cls):
         """Create indexes for all models"""
-        registry = cls.get_registry()
-        for model in registry:
+        for model in _MODEL_REGISTRY.values():
             if hasattr(model, 'create_index'):
                 model.create_index()
 

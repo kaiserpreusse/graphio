@@ -15,9 +15,7 @@ class TestRegistryMeta:
             _labels = ['Person']
             _merge_keys = ['name']
 
-        # Explicitly register the class with the registry
-        test_base.get_registry().add(MyNode)
-
+        # With simplified registry, classes are automatically registered when defined
         # Test class registration and lookup
         retrieved_class = test_base.get_class_by_name('MyNode')
 
