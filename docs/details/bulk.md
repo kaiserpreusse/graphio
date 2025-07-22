@@ -442,7 +442,7 @@ for _, row in df.iterrows():
     employee = Employee(**emp_data)  # Validates or raises error
     
     # Add to bulk container
-    employees.add(employee.dict())
+    employees.add(employee.model_dump())
 
 # Bulk load validated data
 employees.create(driver)
@@ -469,7 +469,7 @@ def validated_bulk_load(model_class, data_source, driver):
         try:
             # Validate with OGM model
             instance = model_class(**record)
-            bulk_container.add(instance.dict())
+            bulk_container.add(instance.model_dump())
             valid_count += 1
         except ValidationError as e:
             print(f"Skipping invalid record: {e}")
@@ -539,7 +539,7 @@ for record in large_dataset:  # 10,000 records
 people = Person.dataset()  # Use dataset() method
 for record in large_dataset:  # 10,000 records
     person = Person(**record)  # Validate locally
-    people.add(person.dict())  # Add to batch
+    people.add(person.model_dump())  # Add to batch
 
 people.create(driver)  # Single efficient bulk operation
 ```
@@ -596,10 +596,16 @@ class ETLPipeline:
     
     def customer_analytics(self):
         """Use OGM for complex analytics after bulk loading"""
+        from graphio.ogm.model import CypherQuery
+        
         # Find customers in major cities
-        major_city_customers = (Customer.match()
-                               .where(Customer.lives_at.target().city.in_(['London', 'Paris', 'Berlin']))
-                               .all())
+        # Complex relationship queries require custom Cypher
+        major_city_query = CypherQuery("""
+            MATCH (c:Customer)-[:LIVES_AT]->(city:City)
+            WHERE city.city IN ['London', 'Paris', 'Berlin']
+            RETURN DISTINCT c
+        """)
+        major_city_customers = Customer.match(major_city_query).all()
         
         return [c.name for c in major_city_customers]
 
@@ -627,13 +633,13 @@ analytics = pipeline.customer_analytics()  # OGM queries
    # Validate before adding to bulk container
    for data in source:
        model_instance = ProductModel(**data)  # Validates
-       bulk_container.add(model_instance.dict())
+       bulk_container.add(model_instance.model_dump())
    ```
 
 3. **Use registry for index management**
    ```python
    # Create indexes for all models at once
-   Base.create_indexes()
+   Base.model_create_index()
    
    # Then use bulk loading with existing indexes
    products.create(driver)

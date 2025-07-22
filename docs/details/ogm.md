@@ -125,8 +125,14 @@ current_job = alice.works_at.match().where('r.since > "2023-01-01"').all()
 # Filter target node properties  
 tech_companies = alice.works_at.match(Company.industry == 'Technology').all()
 
-# Chain relationship traversals
-alice_colleagues = alice.works_at.target().match().source().friends_with.match().all()
+# Chain relationship traversals (multi-hop queries not yet implemented)
+# Note: Complex traversals require custom Cypher queries
+from graphio.ogm.model import CypherQuery
+colleagues_query = CypherQuery(
+    "MATCH (alice:Person {email: $email})-[:WORKS_AT]->(:Company)<-[:WORKS_AT]-(colleague:Person) RETURN DISTINCT colleague", 
+    email=alice.email
+)
+alice_colleagues = Person.match(colleagues_query).all()
 ```
 
 ---
@@ -144,9 +150,16 @@ alice = Person.match(Person.email == 'alice@example.com').first()
 
 # Multiple conditions
 tech_workers = Person.match(
-    Person.age > 25,
-    Person.works_at.target().industry == 'Technology'
+    Person.age > 25
 ).all()
+
+# Note: Complex relationship filtering requires custom Cypher
+tech_workers_query = CypherQuery("""
+    MATCH (p:Person)-[:WORKS_AT]->(c:Company)
+    WHERE p.age > 25 AND c.industry = 'Technology'
+    RETURN DISTINCT p
+""")
+tech_workers = Person.match(tech_workers_query).all()
 ```
 
 ### Advanced Filtering
@@ -157,31 +170,49 @@ young_adults = Person.match(Person.age >= 18, Person.age < 30).all()
 
 # String operations
 smiths = Person.match(Person.name.contains('Smith')).all()
-alice_variations = Person.match(Person.name.ilike('ali%')).all()
+alice_starts = Person.match(Person.name.starts_with('Ali')).all()
+smith_ends = Person.match(Person.name.ends_with('Smith')).all()
 
-# List operations
-target_ages = [25, 30, 35]
-specific_ages = Person.match(Person.age.in_(target_ages)).all()
+# Complex filtering requires custom Cypher queries
+case_insensitive_query = CypherQuery(
+    "MATCH (n:Person) WHERE toLower(n.name) CONTAINS toLower($name) RETURN n", 
+    name="alice"
+)
+alice_variations = Person.match(case_insensitive_query).all()
 
-# Null checks
-people_without_age = Person.match(Person.age.is_null()).all()
+# List operations using custom Cypher
+list_query = CypherQuery(
+    "MATCH (n:Person) WHERE n.age IN $ages RETURN n",
+    ages=[25, 30, 35]
+)
+specific_ages = Person.match(list_query).all()
+
+# Null checks using custom Cypher
+null_query = CypherQuery("MATCH (n:Person) WHERE n.age IS NULL RETURN n")
+people_without_age = Person.match(null_query).all()
 ```
 
 ### Complex Queries
 
 ```python
-# Combine multiple models
-query = (Person.match(Person.age > 25)
-         .where(Person.works_at.target().industry == 'Technology')
-         .where(Person.lives_in.target().population > 1000000))
+# Complex queries require custom Cypher
+complex_query = CypherQuery("""
+    MATCH (p:Person)-[:WORKS_AT]->(c:Company), (p)-[:LIVES_IN]->(city:City)
+    WHERE p.age > 25 AND c.industry = 'Technology' AND city.population > 1000000
+    RETURN DISTINCT p
+""")
+tech_city_workers = Person.match(complex_query).all()
 
-tech_city_workers = query.all()
+# Custom Cypher integration with regex
+regex_query = CypherQuery("MATCH (n:Person) WHERE n.name =~ '.*Smith.*' RETURN n")
+smiths = Person.match(regex_query).all()
 
-# Custom Cypher integration
-custom_query = Person.match().where("n.name =~ '.*Smith.*'").all()
-
-# Count results
-person_count = Person.match(Person.age > 30).count()
+# Count results with custom query
+count_query = CypherQuery("MATCH (n:Person) WHERE n.age > 30 RETURN count(n) as person_count")
+# Note: count() method not implemented - use custom query
+with Base.get_driver().session() as session:
+    result = session.run(count_query.query, count_query.params)
+    person_count = result.single()['person_count']
 ```
 
 ---
@@ -196,13 +227,14 @@ The OGM maintains a global registry of all model classes:
 from graphio import Base
 
 # Registry automatically discovers models
-print(Base.registry)  # Shows all registered NodeModel classes
+print(Base.get_registry())  # Shows all registered NodeModel classes
 
 # Create indexes for all models
-Base.create_indexes()  # Creates indexes for all merge_keys
+Base.model_create_index()  # Creates indexes for all merge_keys
 
-# Clear all data (be careful!)
-Base.clear_graph()
+# Note: No built-in clear_graph() method - use custom Cypher if needed
+# with Base.get_driver().session() as session:
+#     session.run("MATCH (n) DETACH DELETE n")  # Be careful!
 ```
 
 ### Auto-Discovery
@@ -229,7 +261,7 @@ from models.person import Person
 from models.company import Company
 
 # Both models are now in the registry automatically
-Base.create_indexes()  # Creates indexes for both Person and Company
+Base.model_create_index()  # Creates indexes for both Person and Company
 ```
 
 ---
@@ -492,12 +524,12 @@ class Order(NodeModel):
     total: float
 
 # Use registry to create all indexes at once
-Base.create_indexes()  # Creates indexes for all registered models
+Base.model_create_index()  # Creates indexes for all registered models
 
 # Create bulk containers that match your OGM structure
 def create_matching_bulk_containers():
     containers = {}
-    for model_name, model_class in Base.registry.items():
+    for model_name, model_class in Base.get_registry().items():
         containers[model_name] = model_class.dataset()  # Use dataset() method
     return containers
 
@@ -529,13 +561,13 @@ orders = Order.dataset()
    # ✅ Good: Validate with OGM before bulk loading
    for data in large_dataset:
        person = Person(**data)  # Validate
-       bulk_container.add(person.dict())  # Load
+       bulk_container.add(person.model_dump())  # Load (Pydantic v2)
    ```
 
 3. **Index Management**
    ```python
    # ✅ Good: Use OGM registry for consistent indexing
-   Base.create_indexes()  # Creates indexes for all models
+   Base.model_create_index()  # Creates indexes for all models
    
    # Then use bulk loading knowing indexes exist
    people.create(driver)  # Will use existing indexes
@@ -564,7 +596,7 @@ class EcommerceSystem:
     def __init__(self, driver):
         self.driver = driver
         Base.set_driver(driver)
-        Base.create_indexes()  # Set up all indexes
+        Base.model_create_index()  # Set up all indexes
     
     def import_catalog(self, product_csv: str):
         """Use bulk loading for importing product catalog"""
@@ -671,10 +703,10 @@ except CypherSyntaxError as e:
 
 ```python
 # Create indexes before loading data
-Base.create_indexes()
+Base.model_create_index()
 
 # Or for specific model
-Person.create_indexes()
+Person.create_index()
 ```
 
 ### Efficient Queries
@@ -767,7 +799,7 @@ def create_social_network():
     bob.likes.add(post1, {'timestamp': datetime.now()})
     
     # Save to database
-    Base.create_indexes()  # Create all indexes
+    Base.model_create_index()  # Create all indexes
     
     alice.merge()  # Saves alice and all connected data
     bob.merge()    # Saves bob and all connected data
@@ -815,7 +847,7 @@ This example demonstrates:
    - Define relationships clearly with proper labels
 
 2. **🚀 Performance**
-   - Create indexes before querying (use `Base.create_indexes()`)
+   - Create indexes before querying (use `Base.model_create_index()`)
    - Use merge_keys for lookups when possible
    - Combine OGM with bulk loading for large datasets
 

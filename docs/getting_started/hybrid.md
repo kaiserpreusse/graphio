@@ -64,7 +64,7 @@ class Customer(NodeModel):
     membership_level: str = 'basic'
 
 # Create indexes using OGM structure
-Base.create_indexes()
+Base.model_create_index()
 ```
 
 ### Step 2: Bulk Load Initial Data with Validation
@@ -102,11 +102,30 @@ for _, row in customer_df.iterrows():
     except ValueError as e:
         print(f"Invalid customer data: {e}")  # Catch validation errors
 
+# Create relationship dataset from OGM model relationship
+purchases = Product.purchased_by.dataset()  # Uses relationship configuration
+
+# Process purchase data using OGM instances
+purchase_df = pd.read_csv('purchases.csv')
+for _, row in purchase_df.iterrows():
+    # Create OGM instances for the relationship (these validate the lookup keys)
+    product = Product(sku=row['product_sku'], name='', price=0.0, category='')  # Minimal for lookup
+    customer = Customer(email=row['customer_email'], name='')  # Minimal for lookup
+    
+    # Add relationship using validated OGM instances
+    purchases.add(
+        product,    # OGM instance (automatic merge key extraction)
+        customer,   # OGM instance (automatic merge key extraction)  
+        {'purchase_date': row['date'], 'quantity': int(row['quantity'])}
+    )
+
 # Bulk load for performance (but with validation benefits!)
 products.create(driver)
-customers.create(driver)
+customers.create(driver) 
+purchases.create(driver)   # Load relationships after nodes
 
-print(f"✅ Loaded {len(products.nodes)} validated products via bulk loading")
+print(f"✅ Loaded {len(products.nodes)} products, {len(customers.nodes)} customers")
+print(f"✅ Created {len(purchases.relationships)} purchase relationships via bulk loading")
 ```
 
 ### Step 3: Use OGM for Application Logic

@@ -69,7 +69,7 @@ alice_company = alice.works_at.match().first()
 
 ```python
 # Create indexes for all models
-Base.create_indexes()
+Base.model_create_index()
 ```
 
 ## What You've Learned
