@@ -7,6 +7,7 @@ help:
 	@echo "make format - format code with ruff"
 	@echo "make fix - fix code issues and format"
 	@echo "make check - run all checks (lint + test)"
+	@echo "make docs - serve documentation locally"
 
 # Database commands
 localdb:
@@ -33,4 +34,8 @@ fix:
 check: lint test
 	@echo "All checks passed!"
 
-.PHONY: help localdb stop test lint format fix check
+# Documentation commands
+docs:
+	uv run mkdocs serve
+
+.PHONY: help localdb stop test lint format fix check docs

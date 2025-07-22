@@ -3,31 +3,99 @@ site_url: https://graphio.readthedocs.io/en/latest/
 theme:
   name: material
   features:
-    - content.code.copy
+    # Navigation
     - navigation.path
-#    - navigation.tabs
-    - navigation.sections
+    - navigation.sections  
     - navigation.indexes
+    - navigation.top        # Back to top button
+    - navigation.footer     # Previous/next navigation
+    # - navigation.tabs     # Uncomment for top-level tabs
+    
+    # Search
+    - search.highlight      # Highlight search terms
+    - search.suggest        # Search suggestions
+    
+    # Content
+    - content.code.copy     # Copy code blocks
+    - content.code.annotate # Code annotations
+  
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default 
+      primary: blue grey
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+repo_url: https://github.com/kaiserpreusse/graphio
+repo_name: kaiserpreusse/graphio
+edit_uri: edit/master/docs/
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kaiserpreusse/graphio
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/graphio/
 markdown_extensions:
+  # Table of contents
   - toc:
       permalink: true
+      toc_depth: 3
+  
+  # Code highlighting
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.superfences
-  - admonition
-  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  
+  # Content enhancements  
+  - admonition              # !!! info blocks
+  - pymdownx.details        # ??? collapsible blocks
+  - pymdownx.tabbed:        # === "Tab" blocks
+      alternate_style: true
+  - pymdownx.keys           # ++ctrl+c++ keyboard keys
+  - pymdownx.mark           # ==highlighted== text
+  - pymdownx.critic         # {>>comments<<} and edits
+  
+  # Lists and formatting
+  - def_list                # Definition lists
+  - footnotes               # [^1] footnotes
+  - md_in_html             # Markdown in HTML blocks
+  - tables                 # GitHub-style tables
+  - attr_list              # {: .class} attributes
 nav:
   - Home: index.md
   - Getting Started:
       - Overview: getting_started/index.md
-  - Details:
+  - User Guide:
       - OGM: details/ogm.md
       - Data Sets: details/datasets.md
-  - API Documentation:
+  - API Reference:
       - NodeSet: api_reference/nodeset.md
       - RelationshipSet: api_reference/relationshipset.md
 plugins:
