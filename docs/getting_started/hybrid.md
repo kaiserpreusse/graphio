@@ -67,7 +67,7 @@ class Customer(NodeModel):
 Base.create_indexes()
 ```
 
-### Step 2: Bulk Load Initial Data
+### Step 2: Bulk Load Initial Data with Validation
 
 ```python
 # Get bulk containers directly from OGM models
@@ -79,21 +79,34 @@ import pandas as pd
 
 product_df = pd.read_csv('products.csv')
 for _, row in product_df.iterrows():
-    # Validate with OGM before bulk loading
-    product_data = {
-        'sku': row['sku'], 
-        'name': row['name'],
-        'price': float(row['price']),
-        'category': row['category']
-    }
-    Product(**product_data)  # Validates data structure
-    products.add_node(product_data)
+    # Create validated OGM instance
+    product = Product(
+        sku=row['sku'], 
+        name=row['name'],
+        price=float(row['price']),
+        category=row['category']
+    )
+    # Add validated instance directly to bulk dataset
+    products.add(product)  # Pydantic validation + bulk performance
 
-# Bulk load for performance
+# Process customer data with validation
+customer_df = pd.read_csv('customers.csv')
+for _, row in customer_df.iterrows():
+    try:
+        customer = Customer(
+            email=row['email'],
+            name=row['name'],
+            membership_level=row.get('membership_level', 'basic')
+        )
+        customers.add(customer)  # Validated data
+    except ValueError as e:
+        print(f"Invalid customer data: {e}")  # Catch validation errors
+
+# Bulk load for performance (but with validation benefits!)
 products.create(driver)
 customers.create(driver)
 
-print(f"Loaded {len(products.nodes)} products via bulk loading")
+print(f"✅ Loaded {len(products.nodes)} validated products via bulk loading")
 ```
 
 ### Step 3: Use OGM for Application Logic
@@ -130,24 +143,52 @@ def record_purchase(customer_email: str, product_sku: str):
 # For daily order imports, get RelationshipSet from OGM relationship
 daily_orders = Product.purchased_by.dataset()  # Uses relationship configuration
 
-# Process daily order file
+# Process daily order file with OGM instances for relationships
 orders_df = pd.read_csv('daily_orders.csv')
 for _, order in orders_df.iterrows():
-    daily_orders.add_relationship(
-        {'sku': order['product_sku']},
-        {'email': order['customer_email']},
-        {'timestamp': order['order_date'], 'quantity': order['quantity']}
-    )
+    # Find existing validated instances
+    product = Product.match(Product.sku == order['product_sku']).first()
+    customer = Customer.match(Customer.email == order['customer_email']).first()
+    
+    if product and customer:
+        # Add relationship using validated OGM instances
+        daily_orders.add(
+            product,    # OGM instance (automatic merge key extraction)
+            customer,   # OGM instance (automatic merge key extraction)
+            {'timestamp': order['order_date'], 'quantity': order['quantity']}
+        )
 
 daily_orders.create(driver)
 ```
 
 ## Benefits of the Hybrid Approach
 
-✅ **Data validation**: OGM models ensure data quality  
-✅ **Performance**: Bulk loading for high-volume operations  
+✅ **Data validation**: Pydantic validation catches errors before loading to Neo4j  
+✅ **Performance**: Bulk loading for high-volume operations (10,000+ records efficiently)  
 ✅ **Developer experience**: Type hints, IDE support, intuitive queries  
-✅ **Flexibility**: Right tool for each task  
+✅ **Automatic configuration**: `Model.dataset()` uses model labels and merge keys  
+✅ **Error handling**: Invalid data is caught early with clear error messages  
+✅ **Consistency**: Same data structure for both application logic and bulk operations  
+
+## Key Advantages of OGM + Bulk
+
+### 🛡️ **Validation Benefits**
+- **Type safety**: Pydantic ensures correct data types
+- **Field validation**: Required fields, email format, value ranges
+- **Early error detection**: Catch bad data before it reaches Neo4j
+- **Consistent schema**: Same validation rules across all data entry points
+
+### 🚀 **Performance Benefits** 
+- **Bulk operations**: Handle thousands of records efficiently
+- **Automatic batching**: Built-in chunking for large datasets
+- **Index optimization**: Create indexes from OGM model structure
+- **Memory efficient**: Process large files without loading everything into memory
+
+### 🔧 **Developer Experience Benefits**
+- **No configuration duplication**: `Person.dataset()` inherits model settings
+- **IDE support**: Auto-completion and type checking
+- **Merge key automation**: OGM instances automatically provide merge keys
+- **Clean API**: `.add()` works with both dicts and instances  
 
 ## When to Use What
 

@@ -46,13 +46,13 @@ employments = RelationshipSet(
 
 ```python
 # Add nodes (can handle thousands efficiently)
-people.add_node({'name': 'Alice Smith', 'email': 'alice@example.com', 'age': 30})
-people.add_node({'name': 'Bob Johnson', 'email': 'bob@example.com', 'age': 25})
+people.add({'name': 'Alice Smith', 'email': 'alice@example.com', 'age': 30})
+people.add({'name': 'Bob Johnson', 'email': 'bob@example.com', 'age': 25})
 
-companies.add_node({'name': 'ACME Corp', 'industry': 'Technology'})
+companies.add({'name': 'ACME Corp', 'industry': 'Technology'})
 
 # Add relationships
-employments.add_relationship(
+employments.add(
     {'email': 'alice@example.com'},  # Start node
     {'name': 'ACME Corp'},           # End node  
     {'position': 'Developer'}        # Relationship properties

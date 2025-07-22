@@ -362,16 +362,13 @@ def bulk_load_with_validation(csv_file):
     
     for _, row in df.iterrows():
         try:
-            # Validate each record with OGM model
-            person_data = {'name': row['name'], 'email': row['email'], 'age': int(row['age'])}
-            person = Person(**person_data)  # Validates structure and types
+            # Create validated OGM instances
+            person = Person(name=row['name'], email=row['email'], age=int(row['age']))  # Pydantic validation
+            company = Company(name=row['company'], industry=row['industry'])  # Pydantic validation
             
-            company_data = {'name': row['company'], 'industry': row['industry']}
-            company = Company(**company_data)  # Validates structure
-            
-            # Add to bulk containers after validation
-            people.add_node(person.dict())
-            companies.add_node(company.dict())
+            # Add validated instances directly to bulk containers
+            people.add(person)    # No need for person.dict() - accepts OGM instances!
+            companies.add(company) # Automatic property extraction
             
         except ValidationError as e:
             print(f"Skipping invalid record: {e}")
@@ -458,7 +455,7 @@ def daily_inventory_update(inventory_file: str):
     df = pd.read_csv(inventory_file)
     
     for _, row in df.iterrows():
-        products.add_node({
+        products.add({
             'sku': row['sku'],
             'stock_count': int(row['new_stock']),
             # Only update stock, preserve other properties
@@ -506,8 +503,8 @@ def create_matching_bulk_containers():
 
 # Usage
 bulk_containers = create_matching_bulk_containers()
-# bulk_containers['User'].add_node({...})
-# bulk_containers['Product'].add_node({...})
+# bulk_containers['User'].add({...})
+# bulk_containers['Product'].add({...})
 
 # Or even simpler, just use model.dataset() directly:
 users = User.dataset()
@@ -532,7 +529,7 @@ orders = Order.dataset()
    # ✅ Good: Validate with OGM before bulk loading
    for data in large_dataset:
        person = Person(**data)  # Validate
-       bulk_container.add_node(person.dict())  # Load
+       bulk_container.add(person.dict())  # Load
    ```
 
 3. **Index Management**
@@ -583,7 +580,7 @@ class EcommerceSystem:
                 'category': row['category']
             }
             Product(**product_data)  # Validates
-            products.add_node(product_data)
+            products.add(product_data)
         
         products.create(self.driver)
         return len(products.nodes)
@@ -702,7 +699,7 @@ slow_query = Person.match(Person.name.contains('Alice')).all()
 # ✅ Bulk loading
 people = NodeSet(['Person'], merge_keys=['email'])
 for person_data in large_dataset:
-    people.add_node(person_data)
+    people.add(person_data)
 people.create(driver)
 
 # ✅ Individual operations

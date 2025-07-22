@@ -45,9 +45,9 @@
     friendships = RelationshipSet('FRIENDS_WITH', ['Person'], ['Person'], ['name'], ['name'])
     
     # Add data
-    people.add_node({'name': 'Alice', 'age': 30})
-    people.add_node({'name': 'Bob', 'age': 25})
-    friendships.add_relationship({'name': 'Alice'}, {'name': 'Bob'})
+    people.add({'name': 'Alice', 'age': 30})
+    people.add({'name': 'Bob', 'age': 25})
+    friendships.add({'name': 'Alice'}, {'name': 'Bob'})
     
     # Bulk load to Neo4j
     people.create(driver)
@@ -75,10 +75,11 @@
     people = Person.dataset()  # Automatically uses Person's labels and merge_keys
     
     for person_data in large_dataset:
-        # Validate with OGM, load with bulk
-        Person(**person_data)  # Validates data
-        people.add_node(person_data)
-    people.create(driver)
+        # Create validated OGM instance and add directly
+        person = Person(**person_data)  # Pydantic validation happens here
+        people.add(person)  # Add validated instance to bulk dataset
+    
+    people.create(driver)  # Bulk create with validation benefits
     
     # Use OGM for application logic
     alice = Person.match(Person.email == 'alice@example.com').first()

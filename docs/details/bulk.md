@@ -33,8 +33,8 @@ driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password
 people = NodeSet(['Person'], merge_keys=['email'])
 
 # Add nodes
-people.add_node({'name': 'Alice Smith', 'email': 'alice@example.com', 'age': 30})
-people.add_node({'name': 'Bob Johnson', 'email': 'bob@example.com', 'age': 25})
+people.add({'name': 'Alice Smith', 'email': 'alice@example.com', 'age': 30})
+people.add({'name': 'Bob Johnson', 'email': 'bob@example.com', 'age': 25})
 
 # Bulk load to Neo4j
 people.create(driver)
@@ -46,7 +46,7 @@ Assign multiple labels to all nodes in a NodeSet:
 
 ```python
 employees = NodeSet(['Person', 'Employee'], merge_keys=['employee_id'])
-employees.add_node({'name': 'Alice', 'employee_id': 'E001', 'department': 'Engineering'})
+employees.add({'name': 'Alice', 'employee_id': 'E001', 'department': 'Engineering'})
 ```
 
 ### Merge Keys and Uniqueness
@@ -59,7 +59,7 @@ users = NodeSet(['User'], merge_keys=['username'])
 
 # Multiple merge keys (compound uniqueness)
 locations = NodeSet(['Location'], merge_keys=['country', 'city'])
-locations.add_node({'country': 'Germany', 'city': 'Munich', 'population': 1500000})
+locations.add({'country': 'Germany', 'city': 'Munich', 'population': 1500000})
 ```
 
 !!! tip "Performance Tip"
@@ -80,7 +80,7 @@ employees = NodeSet(
     default_props={'company': 'ACME Corp', 'active': True}
 )
 
-employees.add_node({'name': 'Alice', 'employee_id': 'E001'})
+employees.add({'name': 'Alice', 'employee_id': 'E001'})
 # Result: Alice gets company='ACME Corp' and active=True automatically
 ```
 
@@ -88,8 +88,8 @@ employees.add_node({'name': 'Alice', 'employee_id': 'E001'})
 
 **Option 1: Allow duplicates (fastest)**
 ```python
-people.add_node({'name': 'Alice', 'email': 'alice@example.com'})
-people.add_node({'name': 'Alice', 'email': 'alice@example.com'})  # Duplicate allowed
+people.add({'name': 'Alice', 'email': 'alice@example.com'})
+people.add({'name': 'Alice', 'email': 'alice@example.com'})  # Duplicate allowed
 len(people.nodes)  # Returns 2
 ```
 
@@ -122,7 +122,7 @@ employments = RelationshipSet(
 )
 
 # Add relationships
-employments.add_relationship(
+employments.add(
     {'email': 'alice@example.com'},    # Start node matcher
     {'name': 'ACME Corp'},             # End node matcher  
     {'position': 'Developer', 'since': '2023-01-15'}  # Relationship properties
@@ -144,7 +144,7 @@ visits = RelationshipSet(
     ['email'], ['country', 'city']
 )
 
-visits.add_relationship(
+visits.add(
     {'email': 'alice@example.com'},
     {'country': 'Germany', 'city': 'Munich'},
     {'date': '2023-06-15', 'duration_days': 5}
@@ -161,7 +161,7 @@ survey_responses = RelationshipSet(
 )
 
 # Every relationship gets survey and method automatically
-survey_responses.add_relationship(
+survey_responses.add(
     {'user_id': 'U001'}, 
     {'product_id': 'P456'}, 
     {'rating': 5}
@@ -287,7 +287,7 @@ def validate_email(email):
 # Validate data before adding
 for person_data in source_data:
     if validate_email(person_data.get('email', '')):
-        people.add_node(person_data)
+        people.add(person_data)
     else:
         print(f"Invalid email: {person_data}")
 ```
@@ -296,7 +296,7 @@ for person_data in source_data:
 ```python
 # RelationshipSets don't validate that referenced nodes exist
 # This relationship will be silently ignored if nodes don't exist
-employments.add_relationship(
+employments.add(
     {'email': 'nonexistent@example.com'},  # Node doesn't exist
     {'name': 'ACME Corp'},
     {'position': 'Developer'}
@@ -328,7 +328,7 @@ def load_employee_data(csv_file, driver):
     # Process data
     for _, row in df.iterrows():
         # Add employee
-        employees.add_node({
+        employees.add({
             'employee_id': row['id'],
             'name': row['full_name'],
             'email': row['email'],
@@ -342,7 +342,7 @@ def load_employee_data(csv_file, driver):
         })
         
         # Add relationship
-        works_in.add_relationship(
+        works_in.add(
             {'employee_id': row['id']},
             {'name': row['department']},
             {'start_date': row['start_date']}
@@ -442,7 +442,7 @@ for _, row in df.iterrows():
     employee = Employee(**emp_data)  # Validates or raises error
     
     # Add to bulk container
-    employees.add_node(employee.dict())
+    employees.add(employee.dict())
 
 # Bulk load validated data
 employees.create(driver)
@@ -469,7 +469,7 @@ def validated_bulk_load(model_class, data_source, driver):
         try:
             # Validate with OGM model
             instance = model_class(**record)
-            bulk_container.add_node(instance.dict())
+            bulk_container.add(instance.dict())
             valid_count += 1
         except ValidationError as e:
             print(f"Skipping invalid record: {e}")
@@ -506,7 +506,7 @@ class InventoryManager:
         
         df = pd.read_csv(csv_file)
         for _, row in df.iterrows():
-            products.add_node({
+            products.add({
                 'sku': row['sku'],
                 'stock_count': row['stock'],
                 'last_updated': datetime.now()
@@ -539,7 +539,7 @@ for record in large_dataset:  # 10,000 records
 people = Person.dataset()  # Use dataset() method
 for record in large_dataset:  # 10,000 records
     person = Person(**record)  # Validate locally
-    people.add_node(person.dict())  # Add to batch
+    people.add(person.dict())  # Add to batch
 
 people.create(driver)  # Single efficient bulk operation
 ```
@@ -579,9 +579,9 @@ class ETLPipeline:
             Address(**address_data)  # Validates
             
             # Add to bulk containers
-            customers.add_node(customer_data)
-            addresses.add_node(address_data)
-            lives_at.add_relationship(
+            customers.add(customer_data)
+            addresses.add(address_data)
+            lives_at.add(
                 {'email': row['email']},
                 {'address_id': row['address_id']},
                 {'since': row['move_in_date']}
@@ -627,7 +627,7 @@ analytics = pipeline.customer_analytics()  # OGM queries
    # Validate before adding to bulk container
    for data in source:
        model_instance = ProductModel(**data)  # Validates
-       bulk_container.add_node(model_instance.dict())
+       bulk_container.add(model_instance.dict())
    ```
 
 3. **Use registry for index management**

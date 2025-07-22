@@ -59,15 +59,33 @@ class NodeSet:
         """
         Create a node in this NodeSet.
 
-        :param properties: Node properties.
-        :type properties: dict
+        :param properties: Node properties as dict or OGM instance.
+        :type properties: dict or NodeModel instance
         """
-        if self.default_props:
-            node_props = {**self.default_props, **properties}
+        # Handle OGM instances
+        if hasattr(properties, 'model_dump'):  # Pydantic v2
+            node_props = properties.model_dump()
+        elif hasattr(properties, 'dict'):  # Pydantic v1
+            node_props = properties.dict()
+        elif hasattr(properties, '_all_properties'):  # Custom property method
+            node_props = properties._all_properties
         else:
-            node_props = properties
+            node_props = properties  # Regular dict
+        
+        # Apply default props
+        if self.default_props:
+            node_props = {**self.default_props, **node_props}
 
         self.nodes.append(node_props)
+
+    def add(self, properties):
+        """
+        Add a node to this NodeSet (alias for add_node).
+
+        :param properties: Node properties as dict or OGM instance.
+        :type properties: dict or NodeModel instance
+        """
+        return self.add_node(properties)
 
     def add_nodes(self, list_of_properties):
         for properties in list_of_properties:

@@ -87,13 +87,36 @@ class RelationshipSet:
         return f'<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>'
 
     def add_relationship(
-        self, start_node_properties: dict, end_node_properties: dict, properties: dict = None
+        self, start_node_properties, end_node_properties, properties: dict = None
     ):
         """
         Add a relationship to this RelationshipSet.
 
+        :param start_node_properties: Start node properties as dict or OGM instance.
+        :param end_node_properties: End node properties as dict or OGM instance.
         :param properties: Relationship properties.
         """
+        # Handle OGM instances for start node
+        if hasattr(start_node_properties, 'match_dict'):
+            start_props = start_node_properties.match_dict
+        elif hasattr(start_node_properties, 'model_dump'):
+            # Fallback to full properties if match_dict not available
+            start_props = start_node_properties.model_dump()
+        elif hasattr(start_node_properties, 'dict'):
+            start_props = start_node_properties.dict()
+        else:
+            start_props = start_node_properties  # Regular dict
+        
+        # Handle OGM instances for end node
+        if hasattr(end_node_properties, 'match_dict'):
+            end_props = end_node_properties.match_dict
+        elif hasattr(end_node_properties, 'model_dump'):
+            end_props = end_node_properties.model_dump()
+        elif hasattr(end_node_properties, 'dict'):
+            end_props = end_node_properties.dict()
+        else:
+            end_props = end_node_properties  # Regular dict
+        
         if not properties:
             properties = {}
         if self.default_props:
@@ -102,18 +125,28 @@ class RelationshipSet:
             rel_props = properties
 
         if self.unique:
-            # construct a check set with start_node_properties (values), end_node_properties (values) and properties (values)
+            # construct a check set with start_props (values), end_props (values) and properties (values)
             check_set = frozenset(
-                list(start_node_properties.values())
-                + list(end_node_properties.values())
+                list(start_props.values())
+                + list(end_props.values())
                 + list(rel_props.values())
             )
 
             if check_set not in self.unique_rels:
-                self.relationships.append((start_node_properties, end_node_properties, rel_props))
+                self.relationships.append((start_props, end_props, rel_props))
                 self.unique_rels.add(check_set)
         else:
-            self.relationships.append((start_node_properties, end_node_properties, rel_props))
+            self.relationships.append((start_props, end_props, rel_props))
+
+    def add(self, start_node_properties, end_node_properties, properties: dict = None):
+        """
+        Add a relationship to this RelationshipSet (alias for add_relationship).
+
+        :param start_node_properties: Start node properties as dict or OGM instance.
+        :param end_node_properties: End node properties as dict or OGM instance.
+        :param properties: Relationship properties.
+        """
+        return self.add_relationship(start_node_properties, end_node_properties, properties)
 
     def all_property_keys(self) -> set[str]:
         """

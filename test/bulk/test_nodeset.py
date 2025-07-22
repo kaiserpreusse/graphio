@@ -396,4 +396,172 @@ class TestNodeSetToJSON:
             suffix='.json') == "nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
 
+class TestNodeSetOGMInstances:
+    """Test NodeSet with OGM instances"""
+    
+    def test_nodeset_add_ogm_instance(self, test_base):
+        """Test adding OGM instance to NodeSet"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+        
+        # Create NodeSet using dataset() method
+        people = Person.dataset()
+        
+        # Create OGM instance
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        
+        # Add OGM instance to NodeSet
+        people.add_node(alice)
+        
+        # Verify it was added correctly
+        assert len(people.nodes) == 1
+        assert people.nodes[0] == {
+            'name': 'Alice',
+            'email': 'alice@example.com', 
+            'age': 30
+        }
+    
+    def test_nodeset_add_mixed_instances_and_dicts(self, test_base):
+        """Test adding both OGM instances and dicts to same NodeSet"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+        
+        people = Person.dataset()
+        
+        # Add OGM instance
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        people.add_node(alice)
+        
+        # Add dict
+        people.add_node({'name': 'Bob', 'email': 'bob@example.com', 'age': 25})
+        
+        # Verify both were added
+        assert len(people.nodes) == 2
+        assert people.nodes[0]['name'] == 'Alice'
+        assert people.nodes[1]['name'] == 'Bob'
+    
+    def test_nodeset_with_default_props(self, test_base):
+        """Test NodeSet with default_props and OGM instances"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            _default_props = {'status': 'active'}
+            name: str
+            email: str
+            age: int
+        
+        people = Person.dataset()
+        
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        people.add_node(alice)
+        
+        # Verify default props were applied
+        assert people.nodes[0]['status'] == 'active'
+        assert people.nodes[0]['name'] == 'Alice'
+    
+    def test_nodeset_create_with_ogm_instances(self, graph, clear_graph, test_base):
+        """Test creating nodes from OGM instances"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+        
+        people = Person.dataset()
+        
+        # Add multiple OGM instances
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        bob = Person(name='Bob', email='bob@example.com', age=25)
+        
+        people.add_node(alice)
+        people.add_node(bob)
+        
+        # Create in Neo4j
+        people.create(graph)
+        
+        # Verify nodes were created
+        result = run_query_return_results(graph, "MATCH (p:Person) RETURN count(p)")
+        assert result[0][0] == 2
+        
+        # Verify properties
+        result = run_query_return_results(graph, 
+            "MATCH (p:Person {email: 'alice@example.com'}) RETURN p.name, p.age")
+        assert result[0][0] == 'Alice'
+        assert result[0][1] == 30
+    
+    def test_nodeset_merge_with_ogm_instances(self, graph, clear_graph, test_base):
+        """Test merging nodes from OGM instances"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+        
+        people = Person.dataset()
+        
+        # First merge
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        people.add_node(alice)
+        people.merge(graph)
+        
+        # Second merge with updated age
+        people2 = Person.dataset()
+        alice_updated = Person(name='Alice', email='alice@example.com', age=31)
+        people2.add_node(alice_updated)
+        people2.merge(graph)
+        
+        # Verify only one node exists with updated age
+        result = run_query_return_results(graph, "MATCH (p:Person) RETURN count(p)")
+        assert result[0][0] == 1
+        
+        result = run_query_return_results(graph, 
+            "MATCH (p:Person {email: 'alice@example.com'}) RETURN p.age")
+        assert result[0][0] == 31
+    
+    def test_nodeset_add_method_alias(self, test_base):
+        """Test that NodeSet.add() works as alias for add_node()"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+        
+        people = Person.dataset()
+        
+        # Test .add() with OGM instance
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        people.add(alice)  # Using .add() instead of .add_node()
+        
+        # Test .add() with dict
+        people.add({'name': 'Bob', 'email': 'bob@example.com', 'age': 25})
+        
+        # Verify both were added correctly
+        assert len(people.nodes) == 2
+        assert people.nodes[0]['name'] == 'Alice'
+        assert people.nodes[1]['name'] == 'Bob'
+
+
 

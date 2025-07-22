@@ -2184,3 +2184,145 @@ class TestClassLevelRelationshipMatch:
         # Test first() with no relationships
         first_friend = Person.match().knows.match().first()
         assert first_friend is None
+
+
+class TestRelationshipDataset:
+    """Test Relationship.dataset() method"""
+    
+    def test_relationship_dataset_configuration(self, test_base):
+        """Test that Relationship.dataset() creates correctly configured RelationshipSet"""
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+            
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+            works_at: Relationship = Relationship('Person', 'WORKS_AT', 'Company')
+        
+        class Company(NodeModel):
+            _labels = ['Company'] 
+            _merge_keys = ['name']
+            name: str
+            industry: str
+        
+        # Test Person -> Person relationship
+        friendship_dataset = Person.knows.dataset()
+        assert friendship_dataset.rel_type == 'KNOWS'
+        assert friendship_dataset.start_node_labels == ['Person']
+        assert friendship_dataset.end_node_labels == ['Person']
+        assert friendship_dataset.start_node_properties == ['email']
+        assert friendship_dataset.end_node_properties == ['email']
+        
+        # Test Person -> Company relationship
+        employment_dataset = Person.works_at.dataset()
+        assert employment_dataset.rel_type == 'WORKS_AT'
+        assert employment_dataset.start_node_labels == ['Person']
+        assert employment_dataset.end_node_labels == ['Company']
+        assert employment_dataset.start_node_properties == ['email']
+        assert employment_dataset.end_node_properties == ['name']
+    
+    def test_relationship_dataset_usage(self, test_base):
+        """Test using RelationshipSet created from Relationship.dataset()"""
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+            
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+        
+        # Create dataset and add relationships
+        friendship_dataset = Person.knows.dataset()
+        
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        bob = Person(name='Bob', email='bob@example.com', age=25)
+        
+        friendship_dataset.add_relationship(alice, bob, {'since': '2020', 'strength': 0.8})
+        
+        # Verify relationship was added
+        assert len(friendship_dataset.relationships) == 1
+        start_props, end_props, rel_props = friendship_dataset.relationships[0]
+        
+        assert start_props == {'email': 'alice@example.com'}
+        assert end_props == {'email': 'bob@example.com'}
+        assert rel_props == {'since': '2020', 'strength': 0.8}
+    
+    def test_relationship_dataset_multiple_relationships(self, test_base):
+        """Test Relationship.dataset() with multiple different relationship types"""
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+            manages: Relationship = Relationship('Person', 'MANAGES', 'Person')
+        
+        class Company(NodeModel):
+            _labels = ['Company']
+            _merge_keys = ['name']
+            name: str
+            
+            employs: Relationship = Relationship('Company', 'EMPLOYS', 'Person')
+        
+        # Each relationship should create a different dataset
+        friendship = Person.knows.dataset()
+        management = Person.manages.dataset()
+        employment = Company.employs.dataset()
+        
+        # Verify they're different instances
+        assert friendship is not management
+        assert management is not employment
+        
+        # Verify configurations
+        assert friendship.rel_type == 'KNOWS'
+        assert management.rel_type == 'MANAGES'
+        assert employment.rel_type == 'EMPLOYS'
+        
+        # Verify directional configurations
+        assert employment.start_node_labels == ['Company']
+        assert employment.end_node_labels == ['Person']
+        assert employment.start_node_properties == ['name']
+        assert employment.end_node_properties == ['email']
+    
+    def test_relationship_dataset_integration_with_bulk_operations(self, graph, clear_graph, test_base):
+        """Test end-to-end integration: OGM -> dataset -> Neo4j"""
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+            
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+        
+        # Create nodes first
+        people = Person.dataset()
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        bob = Person(name='Bob', email='bob@example.com', age=25)
+        charlie = Person(name='Charlie', email='charlie@example.com', age=35)
+        
+        people.add_node(alice)
+        people.add_node(bob)
+        people.add_node(charlie)
+        people.create(graph)
+        
+        # Create relationships using dataset
+        friendships = Person.knows.dataset()
+        friendships.add_relationship(alice, bob, {'since': '2020'})
+        friendships.add_relationship(bob, charlie, {'since': '2021'})
+        friendships.add_relationship(alice, charlie, {'since': '2019'})
+        
+        friendships.create(graph)
+        
+        # Verify in Neo4j
+        result = run_query_return_results(graph, "MATCH ()-[r:KNOWS]->() RETURN count(r)")
+        assert result[0][0] == 3
+        
+        # Verify relationship properties
+        result = run_query_return_results(graph, 
+            "MATCH (a:Person {email: 'alice@example.com'})-[r:KNOWS]->(b:Person {email: 'bob@example.com'}) RETURN r.since")
+        assert result[0][0] == '2020'
