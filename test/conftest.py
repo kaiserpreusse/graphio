@@ -64,7 +64,7 @@ def test_base():
     """
     Creates a clean Base class for testing.
     """
-    from graphio.objects.model import Base
+    from graphio.ogm.model import Base
     # Reset any class attributes that might carry over between tests
     Base._driver = None
     return Base
@@ -79,7 +79,7 @@ def reset_registry():
     """
     Pytest fixture to reset the registry between tests.
     """
-    from graphio.objects.model import _MODEL_REGISTRY
+    from graphio.ogm.model import _MODEL_REGISTRY
     # Store original registry state
     original = _MODEL_REGISTRY.copy()
     # Reset for test

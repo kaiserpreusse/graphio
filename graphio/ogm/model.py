@@ -4,7 +4,7 @@ from typing import List, ClassVar, Dict, Any, Optional, Tuple
 from neo4j import Driver
 from pydantic import BaseModel, PrivateAttr
 
-from graphio import NodeSet, RelationshipSet
+from graphio.bulk import NodeSet, RelationshipSet
 from graphio.helper import convert_neo4j_types_to_python
 from graphio.queries import where_clause_with_properties, get_label_string_from_list_of_labels
 
@@ -169,7 +169,7 @@ class Query:
         start_step = self.path[0]
         if hasattr(start_step.node_class, '_relationships') and name in start_step.node_class._relationships:
             relationship = start_step.node_class._relationships[name]
-            from graphio.objects.model import Base
+            from graphio.ogm.model import Base
             target_class = Base.get_class_by_name(relationship.target)
             if not target_class:
                 raise ValueError(f"Could not find target class {relationship.target}")
@@ -691,7 +691,7 @@ class Relationship(BaseModel):
 
     def _get_base(self):
         """Helper method to get the Base class."""
-        from graphio.objects.model import Base
+        from graphio.ogm.model import Base
         return Base
 
     def relationshipset(self):

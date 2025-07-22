@@ -5,8 +5,8 @@ import os
 import json
 from uuid import uuid4
 import pytest
-from graphio.objects.nodeset import NodeSet
-from graphio.objects.relationshipset import RelationshipSet, tuplify_json_list
+from graphio.bulk.nodeset import NodeSet
+from graphio.bulk.relationshipset import RelationshipSet, tuplify_json_list
 from graphio import ArrayProperty
 from graphio.helper import run_query_return_results
 
