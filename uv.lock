@@ -175,19 +175,23 @@ dev = [
     { name = "ruff" },
 ]
 docs = [
+    { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings-python" },
+    { name = "pymdown-extensions" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'" },
+    { name = "mkdocs", marker = "extra == 'docs'" },
     { name = "mkdocs-material", marker = "extra == 'dev'" },
     { name = "mkdocs-material", marker = "extra == 'docs'" },
     { name = "mkdocstrings-python", marker = "extra == 'dev'" },
     { name = "mkdocstrings-python", marker = "extra == 'docs'" },
     { name = "neo4j", specifier = ">=5.25.0" },
     { name = "pydantic", specifier = "<3" },
+    { name = "pymdown-extensions", marker = "extra == 'docs'" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
