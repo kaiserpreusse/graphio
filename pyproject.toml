@@ -34,6 +34,7 @@ Issues = "https://github.com/kaiserpreusse/graphio/issues"
 
 [project.optional-dependencies]
 docs = [
+    "mkdocs",
     "mkdocs-material",
     "mkdocstrings-python",
     "pymdown-extensions",
