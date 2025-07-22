@@ -1,12 +1,12 @@
 import logging
-from typing import List, ClassVar, Dict, Any, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from neo4j import Driver
 from pydantic import BaseModel, PrivateAttr
 
 from graphio.bulk import NodeSet, RelationshipSet
-from graphio.utils import convert_neo4j_types_to_python, get_label_string_from_list_of_labels
 from graphio.ogm.query_utils import where_clause_with_properties
+from graphio.utils import convert_neo4j_types_to_python, get_label_string_from_list_of_labels
 
 log = logging.getLogger(__name__)
 
@@ -329,7 +329,7 @@ WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties
             rel_conditions.append(f"r.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
 
-        # Add target node filters  
+        # Add target node filters
         target_conditions = []
         for i, f in enumerate(target_step.node_filters):
             param_name = f"target_{f.field}_{i}"

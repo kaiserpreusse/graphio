@@ -1,14 +1,14 @@
 """
 GraphIO utilities for query building, data processing, and configuration.
 """
-from itertools import chain, islice
-import logging
 import datetime
+import logging
+from itertools import chain, islice
 from typing import List, Union
 
-from neo4j import Driver, DEFAULT_DATABASE
-from neo4j.time import DateTime as Neo4jDateTime, Date as Neo4jDate
-
+from neo4j import DEFAULT_DATABASE, Driver
+from neo4j.time import Date as Neo4jDate
+from neo4j.time import DateTime as Neo4jDateTime
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def create_single_index(graph, label, prop, database=None):
     :param prop: The property.
     """
 
-    log.debug("Create index {}, {}".format(label, prop))
+    log.debug(f"Create index {label}, {prop}")
     q = f"CREATE INDEX IF NOT EXISTS FOR (n:{label}) ON (n.{prop})"
     log.debug(q)
     run_query_return_results(graph, q, database=database)

@@ -1,14 +1,17 @@
 import logging
+from typing import List, Set
 from uuid import uuid4
-import os
-import json
-from collections import defaultdict
-from typing import Set, List, Union
 
-from neo4j import Driver, DEFAULT_DATABASE
+from neo4j import DEFAULT_DATABASE, Driver
 
-from graphio.utils import chunks, create_single_index, create_composite_index, run_query_return_results, get_label_string_from_list_of_labels, BATCHSIZE
 from graphio.bulk.query_utils import CypherQuery, merge_clause_with_properties
+from graphio.utils import (
+    BATCHSIZE,
+    chunks,
+    create_composite_index,
+    create_single_index,
+    get_label_string_from_list_of_labels,
+)
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +118,7 @@ class NodeSet:
         log.debug('Create NodeSet')
         if not batch_size:
             batch_size = BATCHSIZE
-        log.debug('Batch Size: {}'.format(batch_size))
+        log.debug(f'Batch Size: {batch_size}')
 
         q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels)
 

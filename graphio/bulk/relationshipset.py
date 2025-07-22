@@ -1,11 +1,15 @@
-from uuid import uuid4
 import logging
-import json
-import os
-from typing import Set, List
+from typing import List, Set
+from uuid import uuid4
 
-from graphio.utils import chunks, create_single_index, create_composite_index, run_query_return_results, get_label_string_from_list_of_labels, BATCHSIZE
-from graphio.bulk.query_utils import CypherQuery, ArrayProperty
+from graphio.bulk.query_utils import ArrayProperty, CypherQuery
+from graphio.utils import (
+    BATCHSIZE,
+    chunks,
+    create_composite_index,
+    create_single_index,
+    get_label_string_from_list_of_labels,
+)
 
 log = logging.getLogger(__name__)
 
@@ -169,7 +173,7 @@ class RelationshipSet:
         """
         if not batch_size:
             batch_size = BATCHSIZE
-        log.debug('Batch Size: {}'.format(batch_size))
+        log.debug(f'Batch Size: {batch_size}')
 
         # iterate over chunks of rels
         q = rels_merge_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
@@ -238,9 +242,9 @@ def rels_params_from_objects(relationships, property_identifier=None):
     for r in relationships:
         d = {}
         for k, v in r[0].items():
-            d['start_{}'.format(k)] = v
+            d[f'start_{k}'] = v
         for k, v in r[1].items():
-            d['end_{}'.format(k)] = v
+            d[f'end_{k}'] = v
         d['properties'] = r[2]
         output.append(d)
 
@@ -285,12 +289,12 @@ def rels_create_factory(start_node_labels, end_node_labels, start_node_propertie
         if isinstance(property, ArrayProperty):
             where_clauses.append(f'rel.start_{property} IN a.{property}')
         else:
-            where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+            where_clauses.append(f'a.{property} = rel.start_{property}')
     for property in end_node_properties:
         if isinstance(property, ArrayProperty):
             where_clauses.append(f'rel.end_{property} IN b.{property}')
         else:
-            where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+            where_clauses.append(f'b.{property} = rel.end_{property}')
 
     q.append("WHERE " + ' AND '.join(where_clauses))
 
@@ -340,12 +344,12 @@ def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties
         if isinstance(property, ArrayProperty):
             where_clauses.append(f'rel.start_{property} IN a.{property}')
         else:
-            where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+            where_clauses.append(f'a.{property} = rel.start_{property}')
     for property in end_node_properties:
         if isinstance(property, ArrayProperty):
             where_clauses.append(f'rel.end_{property} IN b.{property}')
         else:
-            where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+            where_clauses.append(f'b.{property} = rel.end_{property}')
 
     q.append("WHERE " + ' AND '.join(where_clauses))
 

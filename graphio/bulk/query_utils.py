@@ -2,6 +2,7 @@
 Bulk-specific query building utilities shared between NodeSet and RelationshipSet.
 """
 from typing import List
+
 from graphio.utils import get_label_string_from_list_of_labels
 
 

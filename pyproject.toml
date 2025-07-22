@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphio"
+description = "Library to load data sets to Neo4j."
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    {name = "Martin Preusse", email = "mail@martinpreusse.de"}
+]
+keywords = ["NEO4J"]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Developers",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "neo4j>=5.25.0",
+    "pydantic<3",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/kaiserpreusse/graphio"
+Documentation = "https://graphio.readthedocs.io/"
+Repository = "https://github.com/kaiserpreusse/graphio"
+Issues = "https://github.com/kaiserpreusse/graphio/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "hypothesis",
+]
+docs = [
+    "mkdocs-material",
+    "mkdocstrings-python",
+]
+dev = [
+    "pytest",
+    "hypothesis",
+    "mkdocs-material", 
+    "mkdocstrings-python",
+    "ruff",
+]
+
+[tool.setuptools]
+packages = ["graphio", "graphio.bulk", "graphio.ogm"]
+
+[tool.setuptools_scm]
+root = "."
+local_scheme = "node-and-timestamp"
+
+# Modern tooling configuration
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # line too long, handled by formatter
+]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["graphio"]
+omit = [
+    "*/test*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+

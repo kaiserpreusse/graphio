@@ -1,4 +1,0 @@
-neo4j>=5.25.0
-mkdocs-material
-mkdocstrings-python
-pydantic<3
