@@ -20,7 +20,7 @@ def small_nodeset(request, test_base) -> NodeSet:
     if request.param == "bare":
         ns = NodeSet(['Test'], merge_keys=['uuid'])
         for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
+            ns.add({'uuid': i, 'key': 'value'})
         yield ns
 
     elif request.param == "NodelNode":
@@ -34,7 +34,7 @@ def small_nodeset(request, test_base) -> NodeSet:
         print(ns)
 
         for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
+            ns.add({'uuid': i, 'key': 'value'})
 
         yield ns
 
@@ -43,7 +43,7 @@ def small_nodeset(request, test_base) -> NodeSet:
 def nodeset_no_label() -> NodeSet:
     ns = NodeSet(merge_keys=['uuid'])
     for i in range(100):
-        ns.add_node({'uuid': i, 'key': 'value'})
+        ns.add({'uuid': i, 'key': 'value'})
 
     return ns
 
@@ -52,7 +52,7 @@ def nodeset_no_label() -> NodeSet:
 def nodeset_multiple_labels():
     ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'])
     for i in range(100):
-        ns.add_node({'uuid': i})
+        ns.add({'uuid': i})
 
     return ns
 
@@ -61,7 +61,7 @@ def nodeset_multiple_labels():
 def nodeset_multiple_labels_multiple_merge_keys():
     ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid', 'other'])
     for i in range(1000):
-        ns.add_node({'uuid': i, 'other': i + 10})
+        ns.add({'uuid': i, 'other': i + 10})
 
     return ns
 
@@ -106,7 +106,7 @@ class TestNodeSetInstances:
     def test_create_instance_add_nodes(self, labels, merge_keys, data):
         ns = NodeSet(labels, merge_keys)
         for i in data:
-            ns.add_node(i)
+            ns.add(i)
 
 
 class TestDefaultProps:
@@ -114,7 +114,7 @@ class TestDefaultProps:
     def test_default_props(self):
         ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'], default_props={'user': 'foo'})
         for i in range(100):
-            ns.add_node({'uuid': i})
+            ns.add({'uuid': i})
 
         for n in ns.nodes:
             assert n['user'] == 'foo'
@@ -122,7 +122,7 @@ class TestDefaultProps:
     def test_default_props_overwrite_from_node(self):
         ns = NodeSet(['Test', 'Foo', 'Bar'], merge_keys=['uuid'], default_props={'user': 'foo'})
         for i in range(100):
-            ns.add_node({'uuid': i, 'user': 'bar'})
+            ns.add({'uuid': i, 'user': 'bar'})
 
         for n in ns.nodes:
             assert n['user'] == 'bar'
@@ -172,7 +172,7 @@ class TestNodeSetCreate:
     def test_nodeset_create_additional_labels(self, graph, clear_graph):
         ns = NodeSet(['Test'], merge_keys=['key'], additional_labels=['Foo', 'Bar'])
         for i in range(10):
-            ns.add_node({'key': i})
+            ns.add({'key': i})
 
         ns.create(graph)
         result = run_query_return_results(graph, "MATCH (n:Test:Foo:Bar) RETURN count(n)")
@@ -185,7 +185,7 @@ class TestNodeSetCreate:
     def test_nodeset_create_without_merge_key(self, graph, clear_graph):
         ns = NodeSet(['Test'])
         for i in range(10):
-            ns.add_node({'key': i})
+            ns.add({'key': i})
 
         ns.create(graph)
 
@@ -272,7 +272,7 @@ class TestNodeSetMerge:
 
         do_not_overwrite_ns = NodeSet(['Test'], merge_keys=['uuid'], preserve=['key'])
         for i in range(100):
-            do_not_overwrite_ns.add_node({'uuid': i, 'key': 'other_value'})
+            do_not_overwrite_ns.add({'uuid': i, 'key': 'other_value'})
 
         do_not_overwrite_ns.merge(graph)
 
@@ -285,13 +285,13 @@ class TestNodeSetMerge:
         """
         ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
         for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
+            ns.add({'uuid': i, 'key': 'value'})
 
         ns.merge(graph)
 
         append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
         for i in range(100):
-            append_ns.add_node({'uuid': i, 'key': 'other_value'})
+            append_ns.add({'uuid': i, 'key': 'other_value'})
 
         append_ns.merge(graph)
         assert run_query_return_results(graph, "MATCH (n:Test) where 'value' in n.key and 'other_value' in n.key RETURN count(n)")[0][
@@ -303,7 +303,7 @@ class TestNodeSetMerge:
         """
         ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['other_key'])
         for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value', 'other_key': 'bar'})
+            ns.add({'uuid': i, 'key': 'value', 'other_key': 'bar'})
 
         ns.merge(graph)
         assert run_query_return_results(graph, "MATCH (n:Test) where 'value' IN n.key RETURN count(n)")[0][0] == 100
@@ -311,7 +311,7 @@ class TestNodeSetMerge:
 
         append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['other_key'])
         for i in range(100):
-            append_ns.add_node({'uuid': i, 'key': 'other_value', 'other_key': 'foo'})
+            append_ns.add({'uuid': i, 'key': 'other_value', 'other_key': 'foo'})
 
         append_ns.merge(graph)
 
@@ -326,14 +326,14 @@ class TestNodeSetMerge:
         """
         ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['key'])
         for i in range(100):
-            ns.add_node({'uuid': i, 'key': 'value'})
+            ns.add({'uuid': i, 'key': 'value'})
 
         ns.merge(graph)
         assert run_query_return_results(graph, "MATCH (n:Test) where 'value' IN n.key RETURN count(n)")[0][0] == 100
 
         append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'], preserve=['key'])
         for i in range(100):
-            append_ns.add_node({'uuid': i, 'key': 'other_value'})
+            append_ns.add({'uuid': i, 'key': 'other_value'})
 
         append_ns.merge(graph)
 
@@ -362,9 +362,9 @@ class TestNodeSetMerge:
 
     def test_nodeset_merge_additional_labels(self, graph, clear_graph):
         ns = NodeSet(['Test'], merge_keys=['uuid'], additional_labels=['Foo', 'Bar'])
-        ns.add_node({'uuid': 1})
+        ns.add({'uuid': 1})
         ns2 = NodeSet(['Test'], merge_keys=['uuid'], additional_labels=['Kurt', 'Peter'])
-        ns2.add_node({'uuid': 1})
+        ns2.add({'uuid': 1})
 
         ns.merge(graph)
         ns.merge(graph)
@@ -381,7 +381,7 @@ class TestNodeSetMerge:
 
         with pytest.raises(ValueError):
             ns = NodeSet(['Test'])
-            ns.add_node({'uuid': 1})
+            ns.add({'uuid': 1})
             ns.merge(graph)
 
 
@@ -417,7 +417,7 @@ class TestNodeSetOGMInstances:
         alice = Person(name='Alice', email='alice@example.com', age=30)
         
         # Add OGM instance to NodeSet
-        people.add_node(alice)
+        people.add(alice)
         
         # Verify it was added correctly
         assert len(people.nodes) == 1
@@ -442,10 +442,10 @@ class TestNodeSetOGMInstances:
         
         # Add OGM instance
         alice = Person(name='Alice', email='alice@example.com', age=30)
-        people.add_node(alice)
+        people.add(alice)
         
         # Add dict
-        people.add_node({'name': 'Bob', 'email': 'bob@example.com', 'age': 25})
+        people.add({'name': 'Bob', 'email': 'bob@example.com', 'age': 25})
         
         # Verify both were added
         assert len(people.nodes) == 2
@@ -467,7 +467,7 @@ class TestNodeSetOGMInstances:
         people = Person.dataset()
         
         alice = Person(name='Alice', email='alice@example.com', age=30)
-        people.add_node(alice)
+        people.add(alice)
         
         # Verify default props were applied
         assert people.nodes[0]['status'] == 'active'
@@ -490,8 +490,8 @@ class TestNodeSetOGMInstances:
         alice = Person(name='Alice', email='alice@example.com', age=30)
         bob = Person(name='Bob', email='bob@example.com', age=25)
         
-        people.add_node(alice)
-        people.add_node(bob)
+        people.add(alice)
+        people.add(bob)
         
         # Create in Neo4j
         people.create(graph)
@@ -521,13 +521,13 @@ class TestNodeSetOGMInstances:
         
         # First merge
         alice = Person(name='Alice', email='alice@example.com', age=30)
-        people.add_node(alice)
+        people.add(alice)
         people.merge(graph)
         
         # Second merge with updated age
         people2 = Person.dataset()
         alice_updated = Person(name='Alice', email='alice@example.com', age=31)
-        people2.add_node(alice_updated)
+        people2.add(alice_updated)
         people2.merge(graph)
         
         # Verify only one node exists with updated age
@@ -553,7 +553,7 @@ class TestNodeSetOGMInstances:
         
         # Test .add() with OGM instance
         alice = Person(name='Alice', email='alice@example.com', age=30)
-        people.add(alice)  # Using .add() instead of .add_node()
+        people.add(alice)
         
         # Test .add() with dict
         people.add({'name': 'Bob', 'email': 'bob@example.com', 'age': 25})
@@ -562,6 +562,27 @@ class TestNodeSetOGMInstances:
         assert len(people.nodes) == 2
         assert people.nodes[0]['name'] == 'Alice'
         assert people.nodes[1]['name'] == 'Bob'
+    
+    def test_nodeset_add_node_backward_compatibility(self, test_base):
+        """Test that NodeSet.add_node() still works for backward compatibility"""
+        from graphio.ogm.model import Base, NodeModel
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+        
+        people = Person.dataset()
+        
+        # Test add_node() still works
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        people.add_node(alice)  # Using deprecated add_node() method
+        
+        # Verify it was added correctly
+        assert len(people.nodes) == 1
+        assert people.nodes[0]['name'] == 'Alice'
 
 
 

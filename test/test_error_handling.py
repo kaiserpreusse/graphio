@@ -53,7 +53,7 @@ class TestConnectionFailures:
         mock_driver.session.side_effect = ServiceUnavailable("Connection failed")
         
         nodeset = NodeSet(labels=['Person'], merge_keys=['email'])
-        nodeset.add_node({'name': 'Alice', 'email': 'alice@example.com'})
+        nodeset.add({'name': 'Alice', 'email': 'alice@example.com'})
         
         # Should propagate the connection error
         with pytest.raises(ServiceUnavailable, match="Connection failed"):
@@ -175,10 +175,10 @@ class TestDataValidationErrors:
         nodeset = NodeSet(labels=['Person'], merge_keys=['email'])
         
         # Add valid node
-        nodeset.add_node({'name': 'Alice', 'email': 'alice@example.com', 'age': 30})
+        nodeset.add({'name': 'Alice', 'email': 'alice@example.com', 'age': 30})
         
         # Add node with problematic data (should not fail at add time)
-        nodeset.add_node({'name': None, 'email': 'bob@example.com', 'age': 'not_a_number'})
+        nodeset.add({'name': None, 'email': 'bob@example.com', 'age': 'not_a_number'})
         
         # Should succeed - Neo4j is flexible with data types
         # This tests that GraphIO doesn't over-validate bulk data

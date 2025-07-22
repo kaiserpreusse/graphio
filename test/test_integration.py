@@ -37,14 +37,14 @@ class TestOGMBulkIntegration:
         
         # 1. Bulk load companies
         companies = NodeSet(labels=['Company'], merge_keys=['name'])
-        companies.add_node({'name': 'TechCorp', 'industry': 'Technology', 'founded': 2010})
-        companies.add_node({'name': 'FinanceInc', 'industry': 'Finance', 'founded': 2015})
+        companies.add({'name': 'TechCorp', 'industry': 'Technology', 'founded': 2010})
+        companies.add({'name': 'FinanceInc', 'industry': 'Finance', 'founded': 2015})
         companies.create(driver)
         
         # 2. Bulk load people
         people = NodeSet(labels=['Person'], merge_keys=['email'])
-        people.add_node({'name': 'Alice', 'age': 30, 'email': 'alice@techcorp.com', 'department': 'Engineering'})
-        people.add_node({'name': 'Bob', 'age': 25, 'email': 'bob@financeinc.com', 'department': 'Sales'})
+        people.add({'name': 'Alice', 'age': 30, 'email': 'alice@techcorp.com', 'department': 'Engineering'})
+        people.add({'name': 'Bob', 'age': 25, 'email': 'bob@financeinc.com', 'department': 'Sales'})
         people.create(driver)
         
         # 3. Bulk load relationships
@@ -55,12 +55,12 @@ class TestOGMBulkIntegration:
             start_node_properties=['email'],
             end_node_properties=['name']
         )
-        work_rels.add_relationship(
+        work_rels.add(
             {'email': 'alice@techcorp.com'}, 
             {'name': 'TechCorp'}, 
             {'start_date': '2020-01-01', 'role': 'Senior Developer'}
         )
-        work_rels.add_relationship(
+        work_rels.add(
             {'email': 'bob@financeinc.com'}, 
             {'name': 'FinanceInc'}, 
             {'start_date': '2021-06-01', 'role': 'Account Manager'}
@@ -127,7 +127,7 @@ class TestOGMBulkIntegration:
         # 3. Bulk load additional people to extend the dataset
         people_bulk = NodeSet(labels=['Person'], merge_keys=['email'])
         for i in range(10):  # Reduced from 100 to 10 for faster testing
-            people_bulk.add_node({
+            people_bulk.add({
                 'name': f'Employee_{i}',
                 'age': 20 + (i % 40),
                 'email': f'employee_{i}@techcorp.com',
@@ -144,7 +144,7 @@ class TestOGMBulkIntegration:
             end_node_properties=['name']
         )
         for i in range(10):
-            work_rels.add_relationship(
+            work_rels.add(
                 {'email': f'employee_{i}@techcorp.com'}, 
                 {'name': 'TechCorp'}, 
                 {'start_date': '2023-01-01', 'role': 'Developer' if i % 2 == 0 else 'Marketer'}
@@ -203,7 +203,7 @@ class TestOGMBulkIntegration:
         
         # 2. Update same person with bulk merge (should not duplicate)
         people_bulk = NodeSet(labels=['Person'], merge_keys=['email'])
-        people_bulk.add_node({
+        people_bulk.add({
             'name': 'Alice Smith',  # Updated name
             'age': 31,              # Updated age
             'email': 'alice@example.com',  # Same merge key

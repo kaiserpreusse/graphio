@@ -16,7 +16,7 @@ def small_relationshipset():
     rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
 
     for i in range(100):
-        rs.add_relationship(
+        rs.add(
             {'uuid': i}, {'uuid': i}, {}
         )
 
@@ -28,7 +28,7 @@ def small_relationshipset_no_labels():
     rs = RelationshipSet('TEST', [], [], ['uuid'], ['uuid'])
 
     for i in range(100):
-        rs.add_relationship(
+        rs.add(
             {'uuid': i}, {'uuid': i}, {}
         )
 
@@ -40,7 +40,7 @@ def small_relationshipset_multiple_labels():
     rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid'], ['uuid'])
 
     for i in range(100):
-        rs.add_relationship(
+        rs.add(
             {'uuid': i}, {'uuid': i}, {}
         )
 
@@ -52,7 +52,7 @@ def small_relationshipset_multiple_labels_multiple_merge_keys():
     rs = RelationshipSet('TEST', ['Test', 'Other'], ['Foo', 'SomeLabel'], ['uuid', 'numerical'], ['uuid', 'value'])
 
     for i in range(100):
-        rs.add_relationship(
+        rs.add(
             {'uuid': i, 'numerical': 1}, {'uuid': i, 'value': 'foo'}, {}
         )
 
@@ -66,9 +66,9 @@ def create_nodes_test(graph, clear_graph):
     ns3 = NodeSet(['Bar'], merge_keys=['uuid', 'key'])
 
     for i in range(100):
-        ns1.add_node({'uuid': i, 'array_key': [i, 9999, 99999]})
-        ns2.add_node({'uuid': i, 'array_key': [i, 7777, 77777]})
-        ns3.add_node({'uuid': i, 'key': i, 'array_key': [i, 6666, 66666]})
+        ns1.add({'uuid': i, 'array_key': [i, 9999, 99999]})
+        ns2.add({'uuid': i, 'array_key': [i, 7777, 77777]})
+        ns3.add({'uuid': i, 'key': i, 'array_key': [i, 6666, 66666]})
 
     ns1.create(graph)
     ns2.create(graph)
@@ -97,7 +97,7 @@ def test_relationshipset_unique():
     rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
     rs.unique = True
     for i in range(10):
-        rs.add_relationship({'uid': 1}, {'name': 'peter'}, {'some': 'value', 'user': 'bar'})
+        rs.add({'uid': 1}, {'name': 'peter'}, {'some': 'value', 'user': 'bar'})
     assert len(rs.relationships) == 1
 
 
@@ -111,7 +111,7 @@ def test_relationshipset_all_property_keys():
             rel_props = {}
             rel_props[val] = 'peter'
 
-            rs.add_relationship({'uid': 1}, {'name': 'peter'}, rel_props)
+            rs.add({'uid': 1}, {'name': 'peter'}, rel_props)
 
     assert rs.all_property_keys() == set(random_keys)
 
@@ -122,16 +122,16 @@ class TestDefaultProps:
 
     def test_default_props(self):
         rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'], default_props={'user': 'foo'})
-        rs.add_relationship({'uid': 1}, {'name': 'peter'}, {'some': 'value'})
-        rs.add_relationship({'uid': 2}, {'name': 'tim'}, {'some': 'value'})
+        rs.add({'uid': 1}, {'name': 'peter'}, {'some': 'value'})
+        rs.add({'uid': 2}, {'name': 'tim'}, {'some': 'value'})
 
         for n in rs.relationships:
             assert n[2]['user'] == 'foo'
 
     def test_default_props_overwrite_from_node(self):
         rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'], default_props={'user': 'foo'})
-        rs.add_relationship({'uid': 1}, {'name': 'peter'}, {'some': 'value', 'user': 'bar'})
-        rs.add_relationship({'uid': 2}, {'name': 'tim'}, {'some': 'value', 'user': 'bar'})
+        rs.add({'uid': 1}, {'name': 'peter'}, {'some': 'value', 'user': 'bar'})
+        rs.add({'uid': 2}, {'name': 'tim'}, {'some': 'value', 'user': 'bar'})
 
         for r in rs.relationships:
             assert r[2]['user'] == 'bar'
@@ -158,7 +158,7 @@ class TestRelationshipSetCreate:
         rs = RelationshipSet('TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
 
         for i in range(100):
-            rs.add_relationship({'uuid': i}, {'uuid': i})
+            rs.add({'uuid': i}, {'uuid': i})
 
         rs.create(graph)
 
@@ -179,7 +179,7 @@ class TestRelationshipSetCreate:
         rs = RelationshipSet('TEST', ['Test'], ['Bar'], ['uuid'], ['uuid', 'key'])
 
         for i in range(100):
-            rs.add_relationship(
+            rs.add(
                 {'uuid': i}, {'uuid': i, 'key': i}, {}
             )
 
@@ -194,7 +194,7 @@ class TestRelationshipSetCreate:
         rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
 
         for i in range(100):
-            rs.add_relationship({'array_key': i}, {'array_key': i})
+            rs.add({'array_key': i}, {'array_key': i})
 
         rs.create(graph)
 
@@ -207,7 +207,7 @@ class TestRelationshipSetCreate:
         rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
 
         for i in range(100):
-            rs.add_relationship({'uuid': i, 'array_key': i}, {'uuid': i, 'array_key': i})
+            rs.add({'uuid': i, 'array_key': i}, {'uuid': i, 'array_key': i})
 
         rs.create(graph)
 
@@ -288,7 +288,7 @@ class TestRelationshipSetMerge:
         rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
 
         for i in range(100):
-            rs.add_relationship({'array_key': i}, {'array_key': i})
+            rs.add({'array_key': i}, {'array_key': i})
 
         rs.merge(graph)
 
@@ -308,7 +308,7 @@ class TestRelationshipSetMerge:
         rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])
 
         for i in range(100):
-            rs.add_relationship({'uuid': i, 'array_key': i}, {'uuid': i, 'array_key': i})
+            rs.add({'uuid': i, 'array_key': i}, {'uuid': i, 'array_key': i})
 
         rs.merge(graph)
 
@@ -369,7 +369,7 @@ class TestRelationshipSetOGMInstances:
         acme = Company(name='Acme Inc', industry='Tech')
         
         # Add relationship with OGM instances
-        rs.add_relationship(alice, acme, {'role': 'Engineer', 'start_date': '2023-01-01'})
+        rs.add(alice, acme, {'role': 'Engineer', 'start_date': '2023-01-01'})
         
         # Verify relationship was added correctly
         assert len(rs.relationships) == 1
@@ -407,15 +407,15 @@ class TestRelationshipSetOGMInstances:
         
         # OGM instance to dict
         alice = Person(name='Alice', email='alice@example.com', age=30)
-        rs.add_relationship(alice, {'name': 'Acme Inc'}, {'role': 'Engineer'})
+        rs.add(alice, {'name': 'Acme Inc'}, {'role': 'Engineer'})
         
         # Dict to OGM instance
         acme = Company(name='Acme Inc', industry='Tech')
-        rs.add_relationship({'email': 'bob@example.com'}, acme, {'role': 'Manager'})
+        rs.add({'email': 'bob@example.com'}, acme, {'role': 'Manager'})
         
         # Both OGM instances
         bob = Person(name='Bob', email='bob@example.com', age=25)
-        rs.add_relationship(bob, acme, {'role': 'Developer'})
+        rs.add(bob, acme, {'role': 'Developer'})
         
         assert len(rs.relationships) == 3
     
@@ -452,7 +452,7 @@ class TestRelationshipSetOGMInstances:
         alice = Person(name='Alice', email='alice@example.com', age=30)
         acme = Company(name='Acme Inc', industry='Tech')
         
-        employment.add_relationship(alice, acme, {'role': 'Engineer'})
+        employment.add(alice, acme, {'role': 'Engineer'})
         
         assert len(employment.relationships) == 1
     
@@ -483,17 +483,17 @@ class TestRelationshipSetOGMInstances:
         bob = Person(name='Bob', email='bob@example.com', age=25)
         acme = Company(name='Acme Inc', industry='Tech')
         
-        people.add_node(alice)
-        people.add_node(bob)
-        companies.add_node(acme)
+        people.add(alice)
+        people.add(bob)
+        companies.add(acme)
         
         people.create(graph)
         companies.create(graph)
         
         # Now create relationships
         employment = Person.works_at.dataset()
-        employment.add_relationship(alice, acme, {'role': 'Engineer', 'start_date': '2023-01-01'})
-        employment.add_relationship(bob, acme, {'role': 'Manager', 'start_date': '2023-02-01'})
+        employment.add(alice, acme, {'role': 'Engineer', 'start_date': '2023-01-01'})
+        employment.add(bob, acme, {'role': 'Manager', 'start_date': '2023-02-01'})
         
         employment.create(graph)
         
@@ -537,7 +537,7 @@ class TestRelationshipSetOGMInstances:
         alice = Person(name='Alice', email='alice@example.com', age=30)
         acme = Company(name='Acme Inc', industry='Tech')
         
-        rs.add_relationship(alice, acme, {'role': 'Engineer'})
+        rs.add(alice, acme, {'role': 'Engineer'})
         
         # Verify default props were applied
         _, _, rel_props = rs.relationships[0]
@@ -573,6 +573,43 @@ class TestRelationshipSetOGMInstances:
         
         # Use .add() instead of .add_relationship()
         employment.add(alice, acme, {'role': 'Engineer', 'start_date': '2023-01-01'})
+        
+        # Verify relationship was added correctly
+        assert len(employment.relationships) == 1
+        start_props, end_props, rel_props = employment.relationships[0]
+        
+        assert start_props == {'email': 'alice@example.com'}
+        assert end_props == {'name': 'Acme Inc'}
+        assert rel_props == {'role': 'Engineer', 'start_date': '2023-01-01'}
+    
+    def test_relationshipset_add_relationship_backward_compatibility(self, test_base):
+        """Test that RelationshipSet.add_relationship() still works for backward compatibility"""
+        from graphio.ogm.model import Base, NodeModel, Relationship
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+            age: int
+            
+            works_at: Relationship = Relationship('Person', 'WORKS_AT', 'Company')
+        
+        class Company(NodeModel):
+            _labels = ['Company']
+            _merge_keys = ['name']
+            name: str
+            industry: str
+        
+        # Get RelationshipSet using dataset()
+        employment = Person.works_at.dataset()
+        
+        # Create OGM instances
+        alice = Person(name='Alice', email='alice@example.com', age=30)
+        acme = Company(name='Acme Inc', industry='Tech')
+        
+        # Use deprecated add_relationship() method
+        employment.add_relationship(alice, acme, {'role': 'Engineer', 'start_date': '2023-01-01'})
         
         # Verify relationship was added correctly
         assert len(employment.relationships) == 1

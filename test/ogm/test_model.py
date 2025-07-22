@@ -73,7 +73,7 @@ class TestNodeModelToDatasets:
         assert isinstance(persons, NodeSet)
 
         for i in range(10):
-            persons.add_node({'name': f'Person {i}', 'age': i})
+            persons.add({'name': f'Person {i}', 'age': i})
 
         assert len(persons.nodes) == 10
 
@@ -95,7 +95,7 @@ class TestNodeModelToDatasets:
         assert isinstance(friends, RelationshipSet)
 
         for i in range(10):
-            friends.add_relationship({'name': f'Person {i}', 'age': i}, {'name': f'Person {i - 1}', 'age': i - 1},
+            friends.add({'name': f'Person {i}', 'age': i}, {'name': f'Person {i - 1}', 'age': i - 1},
                                      {'since': i})
 
         assert len(friends.relationships) == 10
@@ -2240,7 +2240,7 @@ class TestRelationshipDataset:
         alice = Person(name='Alice', email='alice@example.com', age=30)
         bob = Person(name='Bob', email='bob@example.com', age=25)
         
-        friendship_dataset.add_relationship(alice, bob, {'since': '2020', 'strength': 0.8})
+        friendship_dataset.add(alice, bob, {'since': '2020', 'strength': 0.8})
         
         # Verify relationship was added
         assert len(friendship_dataset.relationships) == 1
@@ -2305,16 +2305,16 @@ class TestRelationshipDataset:
         bob = Person(name='Bob', email='bob@example.com', age=25)
         charlie = Person(name='Charlie', email='charlie@example.com', age=35)
         
-        people.add_node(alice)
-        people.add_node(bob)
-        people.add_node(charlie)
+        people.add(alice)
+        people.add(bob)
+        people.add(charlie)
         people.create(graph)
         
         # Create relationships using dataset
         friendships = Person.knows.dataset()
-        friendships.add_relationship(alice, bob, {'since': '2020'})
-        friendships.add_relationship(bob, charlie, {'since': '2021'})
-        friendships.add_relationship(alice, charlie, {'since': '2019'})
+        friendships.add(alice, bob, {'since': '2020'})
+        friendships.add(bob, charlie, {'since': '2021'})
+        friendships.add(alice, charlie, {'since': '2019'})
         
         friendships.create(graph)
         
