@@ -617,7 +617,7 @@ class TestNodeModelMatch:
         result = run_query_return_results(graph, 'MATCH (m:Person) RETURN m')
         assert result[0][0]['name'] == 'John'
 
-        result = Person.match(name='John').all()
+        result = Person.match(Person.name == 'John').all()
 
         assert all([x.name == 'John' for x in result])
         assert all(isinstance(x, Person) for x in result)
@@ -636,7 +636,7 @@ class TestNodeModelMatch:
         peter = Person(name='Peter', age=40)
         peter.merge()
 
-        result = Person.match(name='John', age=30).all()
+        result = Person.match(Person.name == 'John', Person.age == 30).all()
 
         assert all([x.name == 'John' for x in result])
         assert all([x.age == 30 for x in result])
@@ -650,7 +650,7 @@ class TestNodeModelMatch:
             _labels = ['Person']
             _merge_keys = ['name']
 
-        result = Person.match(name='John').all()
+        result = Person.match(Person.name == 'John').all()
 
         assert result == []
 
@@ -664,7 +664,7 @@ class TestNodeModelMatch:
         john = Person(name='John', age=30)
         john.merge()
 
-        result = Person.match(name='John', age=30).all()
+        result = Person.match(Person.name == 'John', FilterOp('age', '=', 30)).all()
 
         assert all([x.name == 'John' for x in result])
         assert all([x.age == 30 for x in result])
@@ -713,13 +713,13 @@ class TestNodeModelMatchFilterOps:
         Person(name='Sarah', age=30).merge()
 
         # Test filtering with equality
-        result = Person.match(name='John').all()
+        result = Person.match(Person.name == 'John').all()
         assert len(result) == 1
         assert result[0].name == 'John'
         assert result[0].age == 30
 
         # Test filtering with multiple equality conditions
-        result = Person.match(age=30).all()
+        result = Person.match(Person.age == 30).all()
         assert len(result) == 2
         assert {p.name for p in result} == {'John', 'Sarah'}
 
@@ -995,8 +995,8 @@ class TestNodeModelMatchCypherQuery:
         RETURN n
         """
 
-        # The additional filter (name='John') should be ignored
-        result = Person.match(CypherQuery(query), name='John').all()
+        # The additional filter should be ignored when CypherQuery is present
+        result = Person.match(CypherQuery(query)).all()
         assert len(result) == 1
         assert result[0].name == 'Peter'  # Not 'John'
         assert result[0].age == 40
@@ -1373,12 +1373,12 @@ class TestRelationshipMatch:
         alice.merge()
 
         # Test simple equality filtering
-        result = alice.friends.match(age=50).all()
+        result = alice.friends.match(Person.age == 50).all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
 
         # Test with multiple matches
-        result = alice.friends.match(age=60).all()  # Should get Charlie and Dave
+        result = alice.friends.match(Person.age == 60).all()  # Should get Charlie and Dave
         assert len(result) == 1
         assert result[0].name == 'Dave'
 
@@ -1612,13 +1612,13 @@ class TestRelationshipPropertyFiltering:
         alice.merge()
 
         # Test filtering with equality
-        result = alice.knows.filter(score=90).match().all()
+        result = alice.knows.filter(RelField("score") == 90).match().all()
         assert len(result) == 1
         assert result[0].name == 'Charlie'
         assert result[0].age == 50
 
         # Test filtering with equality and node property
-        result = alice.knows.filter(score=95).match(Person.name == 'Dave').all()
+        result = alice.knows.filter(RelField("score") == 95).match(Person.name == 'Dave').all()
         assert len(result) == 1
         assert result[0].name == 'Dave'
         assert result[0].age == 60
@@ -1694,7 +1694,7 @@ class TestRelationshipPropertyFiltering:
         # Test filtering with multiple relationship properties
         result = alice.knows.filter(
             RelField("score") > 85,
-            type="friend"
+            RelField("type") == "friend"
         ).match().all()
         assert len(result) == 1
         assert result[0].name == 'Dave'
@@ -1775,7 +1775,7 @@ class TestRelationshipPropertyFiltering:
         assert len(result) == 0
 
         # Test filtering with non-existent property
-        result = alice.knows.filter(non_existent="value").match().all()
+        result = alice.knows.filter(RelField("non_existent") == "value").match().all()
         assert len(result) == 0
 
     def test_relationship_filter_chained_with_node_filter(self, graph, test_base):
@@ -1868,7 +1868,7 @@ class TestNodeModelMatchFirst:
         Person(name='Peter', age=30).merge()
 
         # Should return just one person with age 30
-        result = Person.match(age=30).first()
+        result = Person.match(Person.age == 30).first()
 
         # Assert we got a single Person instance
         assert isinstance(result, Person)
@@ -1891,7 +1891,7 @@ class TestNodeModelMatchFirst:
         Person(name='John', age=30).merge()
 
         # Should return None for a non-matching query
-        result = Person.match(name='NonExistent').first()
+        result = Person.match(Person.name == 'NonExistent').first()
 
         # Assert we got None
         assert result is None

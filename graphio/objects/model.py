@@ -258,28 +258,79 @@ class CustomMeta(BaseModel.__class__):
         return cls
 
 
-class NodeQueryBuilder:
-    """Builder class for node queries with deferred execution."""
+class NodeQuery:
+    """Consolidated builder for all node queries with deferred execution."""
 
-    def __init__(self, node_class, filter_ops=None, equality_filters=None):
+    def __init__(self, node_class, filters=None, rel_context=None):
         self.node_class = node_class
-        self.filter_ops = filter_ops or []
-        self.equality_filters = equality_filters or {}
+        self.filters = filters or []
+        # rel_context: {'rel_type': str, 'target_class': class, 'source_filters': list, 'rel_filters': list}
+        self.rel_context = rel_context
 
     def __getattr__(self, name):
         """Allow access to relationships like Person.match().knows"""
         # Check if this is a relationship defined on the class
         if hasattr(self.node_class, '_relationships') and name in self.node_class._relationships:
-            # Return a relationship query builder
             relationship = self.node_class._relationships[name]
-            return ChainedRelationshipQueryBuilder(
-                self.node_class,
-                relationship.rel_type,
-                relationship.target,
-                self.filter_ops,
-                self.equality_filters
+            from graphio.objects.model import Base
+            target_class = Base.get_class_by_name(relationship.target)
+            if not target_class:
+                raise ValueError(f"Could not find target class {relationship.target}")
+            
+            # Return new NodeQuery with relationship context
+            return NodeQuery(
+                target_class,
+                filters=[],
+                rel_context={
+                    'rel_type': relationship.rel_type,
+                    'target_class': target_class,
+                    'source_class': self.node_class,
+                    'source_filters': self.filters,
+                    'rel_filters': []
+                }
             )
         raise AttributeError(f"'{self.node_class.__name__}' has no relationship '{name}'")
+
+    def filter(self, *filter_ops):
+        """Add filters and return new NodeQuery instance."""
+        # If we have relationship context, these are relationship filters
+        if self.rel_context:
+            new_rel_context = self.rel_context.copy()
+            new_rel_filters = list(new_rel_context.get('rel_filters', []))
+            
+            # Add FilterOp objects to relationship filters
+            for f in filter_ops:
+                if isinstance(f, FilterOp):
+                    new_rel_filters.append(f)
+                else:
+                    raise ValueError(f"Unsupported filter type: {type(f)}")
+            
+            new_rel_context['rel_filters'] = new_rel_filters
+            return NodeQuery(self.node_class, self.filters, new_rel_context)
+        else:
+            # No relationship context, these are regular node filters
+            new_filters = list(self.filters)
+            
+            # Add FilterOp objects
+            for f in filter_ops:
+                if isinstance(f, FilterOp):
+                    new_filters.append(f)
+                else:
+                    raise ValueError(f"Unsupported filter type: {type(f)}")
+
+            return NodeQuery(self.node_class, new_filters, self.rel_context)
+
+    def match(self, *filter_ops):
+        """Add target node filters for relationship queries."""
+        if not self.rel_context:
+            # This is a direct node match, just add filters
+            return self.filter(*filter_ops)
+        
+        # This is a relationship traversal - filters apply to target nodes
+        new_filters = list(filter_ops)
+        new_rel_context = self.rel_context.copy()
+        
+        return NodeQuery(self.node_class, new_filters, new_rel_context)
 
     def all(self):
         """Execute the query and return all results."""
@@ -287,23 +338,40 @@ class NodeQueryBuilder:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
         # Handle CypherQuery if present
-        for f in self.filter_ops:
+        for f in self.filters:
             if isinstance(f, CypherQuery):
                 return self._execute_cypher_query(f)
 
-        # Build and execute regular query
-        query = f"""MATCH (n{self.node_class._label_match_string()})"""
+        if self.rel_context:
+            return self._execute_relationship_query()
+        else:
+            return self._execute_node_query()
+
+    def first(self):
+        """Execute the query with LIMIT 1."""
+        if self.node_class._driver is None:
+            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+
+        # Handle CypherQuery if present
+        for f in self.filters:
+            if isinstance(f, CypherQuery):
+                log.warning("Using CypherQuery in first() method needs a LIMIT 1 in the query.")
+                results = self._execute_cypher_query(f)
+                return results[0] if results else None
+
+        if self.rel_context:
+            return self._execute_relationship_query(limit=1)
+        else:
+            return self._execute_node_query(limit=1)
+
+    def _execute_node_query(self, limit=None):
+        """Execute a direct node query."""
+        query = f"MATCH (n{self.node_class._label_match_string()})"
         conditions = []
         params = {}
 
-        # Process equality filters from kwargs
-        for field, value in self.equality_filters.items():
-            param_name = f"{field}_eq"
-            conditions.append(f"n.{field} = ${param_name}")
-            params[param_name] = value
-
         # Process FilterOp objects
-        for i, f in enumerate(self.filter_ops):
+        for i, f in enumerate(self.filters):
             param_name = f"{f.field}_{i}"
             conditions.append(f"n.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
@@ -312,66 +380,75 @@ class NodeQueryBuilder:
             query += f"\nWHERE {' AND '.join(conditions)}"
 
         query += "\nRETURN n"
+        
+        if limit is not None:
+            query += f" LIMIT {limit}"
+
         log.debug(query)
+        
         # Execute the query
-        nodes = []
+        results = []
         with self.node_class._driver.session() as session:
             result = session.run(query, params)
             for record in result:
                 node = record['n']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                nodes.append(self.node_class(**properties))
+                results.append(self.node_class(**properties))
 
-        return nodes
+        return results[0] if limit == 1 and results else (results if limit != 1 else None)
 
-    def first(self):
-        """Execute the query with LIMIT 1."""
-        if self.node_class._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
-        # Handle CypherQuery if present
-        for f in self.filter_ops:
-            if isinstance(f, CypherQuery):
-                # TODO: For custom CypherQuery objects, we should ideally add LIMIT 1
-                # For now, just execute the same code as all() but return only first result
-                log.warning(f"Using CypherQuery in first() method needs a LIMIT 1 in the query. ")
-                results = self._execute_cypher_query(f)
-                return results[0] if results else None
+    def _execute_relationship_query(self, limit=None):
+        """Execute a relationship traversal query."""
+        rel_ctx = self.rel_context
+        source_class = rel_ctx['source_class']
+        target_class = rel_ctx['target_class']
+        rel_type = rel_ctx['rel_type']
+        
+        query = f"""
+        MATCH (source{source_class._label_match_string()})-[r:{rel_type}]->(target{target_class._label_match_string()})
+        """
 
-        # Build query (same as in all() method)
-        query = f"""MATCH (n{self.node_class._label_match_string()})"""
         conditions = []
         params = {}
 
-        # Process equality filters
-        for field, value in self.equality_filters.items():
-            param_name = f"{field}_eq"
-            conditions.append(f"n.{field} = ${param_name}")
-            params[param_name] = value
+        # Source node filters
+        for i, f in enumerate(rel_ctx['source_filters']):
+            param_name = f"source_{f.field}_{i}"
+            conditions.append(f"source.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
 
-        # Process FilterOp objects
-        for i, f in enumerate(self.filter_ops):
-            param_name = f"{f.field}_{i}"
-            conditions.append(f"n.{f.field} {f.operator} ${param_name}")
+        # Relationship filters
+        for i, f in enumerate(rel_ctx['rel_filters']):
+            param_name = f"rel_{f.field}_{i}"
+            conditions.append(f"r.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
+
+        # Target node filters
+        for i, f in enumerate(self.filters):
+            param_name = f"target_{f.field}_{i}"
+            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
 
         if conditions:
-            query += f"\nWHERE {' AND '.join(conditions)}"
+            query += f"WHERE {' AND '.join(conditions)}\n"
 
-        # Add LIMIT 1 to only return a single node
-        query += "\nRETURN n LIMIT 1"
+        query += "RETURN DISTINCT target"
+
+        if limit is not None:
+            query += f" LIMIT {limit}"
 
         # Execute the query
+        results = []
         with self.node_class._driver.session() as session:
             result = session.run(query, params)
-            record = result.single()  # Get only one record
-            if record and 'n' in record.keys():
-                node = record['n']
+            for record in result:
+                node = record['target']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                return self.node_class(**properties)
+                results.append(target_class(**properties))
 
-        return None
+        return results[0] if limit == 1 and results else (results if limit != 1 else None)
 
     def _execute_cypher_query(self, cypher_query):
         """Execute a CypherQuery and return results."""
@@ -390,174 +467,66 @@ class NodeQueryBuilder:
         return nodes
 
 
-class ChainedRelationshipQueryBuilder:
-    """Builder class for chained relationship queries."""
+class RelationshipQuery:
+    """Consolidated builder for instance-level relationship queries."""
 
-    def __init__(self, source_class, rel_type, target_class_name,
-                 source_filters, source_equality_filters):
-        self.source_class = source_class
-        self.rel_type = rel_type
-        self.target_class_name = target_class_name
-        self.source_filters = source_filters
-        self.source_equality_filters = source_equality_filters
-        self.rel_filters = {}
-
-    def filter(self, *filter_ops, **equality_filters):
-        """Filter relationships based on relationship properties."""
-        new_builder = ChainedRelationshipQueryBuilder(
-            self.source_class,
-            self.rel_type,
-            self.target_class_name,
-            self.source_filters,
-            self.source_equality_filters
-        )
-        new_builder.rel_filters = self.rel_filters.copy()
-
-        # Add equality filters
-        for field, value in equality_filters.items():
-            new_builder.rel_filters[field] = FilterOp(field, "=", value)
-
-        # Add FilterOp objects
-        for f in filter_ops:
-            if isinstance(f, FilterOp):
-                new_builder.rel_filters[f.field] = f
-
-        return new_builder
-
-    def match(self, *filter_ops, **equality_filters):
-        """Match nodes related to nodes of this class."""
-        # Get the target class directly from Base
-        from graphio.objects.model import Base
-        target_class = Base.get_class_by_name(self.target_class_name)
-        if not target_class:
-            raise ValueError(f"Could not find target class {self.target_class_name}")
-
-        return ChainedRelationshipMatchBuilder(
-            self.source_class,
-            self.rel_type,
-            target_class,
-            self.source_filters,
-            self.source_equality_filters,
-            self.rel_filters,
-            filter_ops,
-            equality_filters
-        )
-
-
-class ChainedRelationshipMatchBuilder:
-    """Builder class for executing chained relationship queries."""
-
-    def __init__(self, source_class, rel_type, target_class,
-                 source_filters, source_equality_filters,
-                 rel_filters, target_filters=None, target_equality_filters=None):
-        self.source_class = source_class
-        self.rel_type = rel_type
-        self.target_class = target_class
-        self.source_filters = source_filters
-        self.source_equality_filters = source_equality_filters
-        self.rel_filters = rel_filters or {}
-        self.target_filters = target_filters or []
-        self.target_equality_filters = target_equality_filters or {}
-
-    def _build_query(self, limit=None):
-        """Build a Cypher query with all filters applied."""
-        query = f"""
-        MATCH (source{self.source_class._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
-        """
-
-        conditions = []
-        params = {}
-
-        # Source node filters
-        for field, value in self.source_equality_filters.items():
-            param_name = f"source_{field}_eq"
-            conditions.append(f"source.{field} = ${param_name}")
-            params[param_name] = value
-
-        for i, f in enumerate(self.source_filters):
-            param_name = f"source_{f.field}_{i}"
-            conditions.append(f"source.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
-
-        # Relationship filters
-        for i, (field, filter_op) in enumerate(self.rel_filters.items()):
-            param_name = f"rel_{field}_{i}"
-            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
-            params[param_name] = filter_op.value
-
-        # Target node filters
-        for field, value in self.target_equality_filters.items():
-            param_name = f"target_{field}_eq"
-            conditions.append(f"target.{field} = ${param_name}")
-            params[param_name] = value
-
-        for i, f in enumerate(self.target_filters):
-            param_name = f"target_{f.field}_{i}"
-            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
-
-        if conditions:
-            query += f"WHERE {' AND '.join(conditions)}\n"
-
-        query += "RETURN DISTINCT target"
-
-        if limit is not None:
-            query += f" LIMIT {limit}"
-
-        return query, params
-
-    def all(self):
-        """Execute the query and return all targets."""
-        driver = self.source_class.get_driver()
-
-        query, params = self._build_query()
-
-        # Execute the query
-        results = []
-        with driver.session() as session:
-            result = session.run(query, params)
-            for record in result:
-                node = record['target']
-                properties = dict(node.items())
-                properties = convert_neo4j_types_to_python(properties)
-                results.append(self.target_class(**properties))
-
-        return results
-
-    def first(self):
-        """Execute the query and return the first target."""
-        driver = self.source_class.get_driver()
-        query, params = self._build_query(limit=1)
-
-        # Execute the query
-        with driver.session() as session:
-            result = session.run(query, params)
-            record = result.single()
-            if record and 'target' in record.keys():
-                node = record['target']
-                properties = dict(node.items())
-                properties = convert_neo4j_types_to_python(properties)
-                return self.target_class(**properties)
-
-        return None
-
-
-class InstanceRelationshipQueryBuilder:
-    """Builder class for instance-level relationship queries with deferred execution."""
-
-    def __init__(self, parent_instance, rel_type, target_class, rel_filters=None,
-                 node_filters=None, node_equality_filters=None):
+    def __init__(self, parent_instance, rel_type, target_class, rel_filters=None, node_filters=None):
         self.parent_instance = parent_instance
         self.rel_type = rel_type
         self.target_class = target_class
-        self.rel_filters = rel_filters or {}
+        self.rel_filters = rel_filters or []
         self.node_filters = node_filters or []
-        self.node_equality_filters = node_equality_filters or {}
+
+    def filter(self, *filter_ops):
+        """Add relationship property filters."""
+        new_rel_filters = list(self.rel_filters)
+        
+        for f in filter_ops:
+            if isinstance(f, FilterOp):
+                new_rel_filters.append(f)
+            else:
+                raise ValueError(f"Unsupported filter type: {type(f)}")
+
+        return RelationshipQuery(
+            self.parent_instance,
+            self.rel_type,
+            self.target_class,
+            new_rel_filters,
+            self.node_filters
+        )
+
+    def match(self, *filter_ops):
+        """Add target node filters."""
+        new_node_filters = list(self.node_filters)
+        
+        # Add FilterOp objects
+        for f in filter_ops:
+            if isinstance(f, FilterOp):
+                new_node_filters.append(f)
+            else:
+                raise ValueError(f"Unsupported filter type: {type(f)}")
+
+        return RelationshipQuery(
+            self.parent_instance,
+            self.rel_type,
+            self.target_class,
+            self.rel_filters,
+            new_node_filters
+        )
+
+    def all(self):
+        """Execute the query and return all target nodes."""
+        query, params = self._build_query()
+        return self._execute_query(query, params)
+
+    def first(self):
+        """Execute the query and return only the first target node."""
+        query, params = self._build_query(limit=1)
+        results = self._execute_query(query, params)
+        return results[0] if results else None
 
     def _build_query(self, limit=None):
         """Build the Cypher query with optional LIMIT clause."""
-        base = self._get_base()
-
         query = f"""WITH $properties AS properties
         MATCH (source{self.parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
         WHERE {where_clause_with_properties(self.parent_instance.match_dict, 'properties', node_variable='source')}"""
@@ -566,19 +535,14 @@ class InstanceRelationshipQueryBuilder:
         params = {"properties": self.parent_instance.match_dict}
 
         # Add relationship property filters
-        for i, (field, filter_op) in enumerate(self.rel_filters.items()):
-            param_name = f"rel_{field}_{i}"
-            conditions.append(f"r.{filter_op.field} {filter_op.operator} ${param_name}")
-            params[param_name] = filter_op.value
+        for i, f in enumerate(self.rel_filters):
+            param_name = f"rel_{f.field}_{i}"
+            conditions.append(f"r.{f.field} {f.operator} ${param_name}")
+            params[param_name] = f.value
 
         # Add node property filters
-        for field, value in self.node_equality_filters.items():
-            param_name = f"{field}_eq"
-            conditions.append(f"target.{field} = ${param_name}")
-            params[param_name] = value
-
         for i, f in enumerate(self.node_filters):
-            param_name = f"{f.field}_{i}"
+            param_name = f"target_{f.field}_{i}"
             conditions.append(f"target.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
 
@@ -592,14 +556,11 @@ class InstanceRelationshipQueryBuilder:
 
         return query, params
 
-    def all(self):
-        """Execute the query and return all target nodes."""
+    def _execute_query(self, query, params):
+        """Execute the query and return results."""
         base = self._get_base()
         driver = base.get_driver()
 
-        query, params = self._build_query()
-
-        # Execute the query
         instances = []
         with driver.session() as session:
             result = session.run(query, **params)
@@ -610,28 +571,6 @@ class InstanceRelationshipQueryBuilder:
                 instances.append(self.target_class(**properties))
 
         return instances
-
-    def first(self):
-        """Execute the query and return only the first target node."""
-        base = self._get_base()
-        driver = base.get_driver()
-
-        query, params = self._build_query(limit=1)
-        print(f"In first() method in InstanceRelationshipQueryBuilder")
-        print(query)
-        print(params)
-
-        # Execute the query
-        with driver.session() as session:
-            result = session.run(query, **params)
-            record = result.single()
-            if record and 'target' in record.keys():
-                node = record['target']
-                properties = dict(node.items())
-                properties = convert_neo4j_types_to_python(properties)
-                return self.target_class(**properties)
-
-        return None
 
     def _get_base(self):
         """Helper method to get the Base class."""
@@ -875,20 +814,14 @@ class NodeModel(Base, metaclass=CustomMeta):
         return ":" + ":".join(cls._labels)
 
     @classmethod
-    def match(cls, *filter_ops, **equality_filters) -> 'NodeQueryBuilder[T]':
+    def match(cls, *filter_ops) -> 'NodeQuery':
         """Match nodes using a query builder pattern with deferred execution."""
         # Check if driver is set
         if cls._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-        # Check if kwargs are valid model fields
-        for key in equality_filters.keys():
-            if key not in cls.model_fields:
-                log.warning(f"Key '{key}' is not a valid model field. The result will not "
-                            f"be accessible as a model instance attribute.")
-
         # Return a query builder instead of executing directly
-        return NodeQueryBuilder(cls, filter_ops, equality_filters)
+        return NodeQuery(cls, list(filter_ops))
 
     def delete(self):
         if Base._driver is None:
@@ -928,7 +861,7 @@ class Relationship(BaseModel):
 
     # Use PrivateAttr for non-model fields
     _parent_instance: Optional[Any] = PrivateAttr(default=None)
-    _rel_filters: Dict[str, Any] = PrivateAttr(default_factory=dict)
+    _rel_filters: List[Any] = PrivateAttr(default_factory=list)
 
     # Add model_config for Pydantic v2
     model_config = {
@@ -993,16 +926,14 @@ class Relationship(BaseModel):
     def set(self):
         return self.dataset()
 
-    def filter(self, *filter_ops, **equality_filters):
+    def filter(self, *filter_ops):
         """
         Filter relationships based on relationship properties.
 
         Usage:
         Person.knows.filter(RelField("score") > 90).match(Person.age > 50)
-        Person.knows.filter(score="good").match(Person.age > 50)
 
         :param filter_ops: FilterOp objects for complex filtering on relationship properties
-        :param equality_filters: Keyword arguments for equality conditions on relationship properties
         :return: self (for method chaining)
         """
         # Create a new instance of the relationship with filters
@@ -1015,20 +946,16 @@ class Relationship(BaseModel):
         rel_copy.nodes = self.nodes.copy()
 
         # Store relationship filters
-        rel_copy._rel_filters = {**getattr(self, '_rel_filters', {})}  # Copy existing filters
-
-        # Add equality filters from kwargs
-        for field, value in equality_filters.items():
-            rel_copy._rel_filters[field] = FilterOp(field, "=", value)
+        rel_copy._rel_filters = list(getattr(self, '_rel_filters', []))  # Copy existing filters
 
         # Add FilterOp objects
         for f in filter_ops:
             if isinstance(f, FilterOp):
-                rel_copy._rel_filters[f.field] = f
+                rel_copy._rel_filters.append(f)
 
         return rel_copy
 
-    def match(self, *filter_ops, **equality_filters):
+    def match(self, *filter_ops):
         """
         Match and return instances of the target node with filtering capabilities.
         Returns a query builder for deferred execution.
@@ -1038,7 +965,7 @@ class Relationship(BaseModel):
         all_friends = person.knows.match().all()
 
         # Get the first related node that matches criteria
-        best_friend = person.knows.filter(score=100).match(name="Bob").first()
+        best_friend = person.knows.filter(RelField("score") == 100).match(Person.age > 25).first()
         """
         # Get the base class to access driver and registry
         base = self._get_base()
@@ -1048,13 +975,12 @@ class Relationship(BaseModel):
         target_class = base.get_class_by_name(self.target)
 
         # Return a query builder instead of executing directly
-        return InstanceRelationshipQueryBuilder(
+        return RelationshipQuery(
             parent_instance=self._parent_instance,
             rel_type=self.rel_type,
             target_class=target_class,
-            rel_filters=getattr(self, '_rel_filters', {}),
-            node_filters=filter_ops,
-            node_equality_filters=equality_filters
+            rel_filters=getattr(self, '_rel_filters', []),
+            node_filters=list(filter_ops)
         )
 
     def delete(self, target=None):
