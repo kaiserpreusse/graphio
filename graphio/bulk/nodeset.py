@@ -71,7 +71,7 @@ class NodeSet:
             node_props = properties._all_properties
         else:
             node_props = properties  # Regular dict
-        
+
         # Apply default props
         if self.default_props:
             node_props = {**self.default_props, **node_props}

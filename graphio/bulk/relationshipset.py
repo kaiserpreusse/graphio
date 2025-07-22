@@ -86,9 +86,7 @@ class RelationshipSet:
     def __str__(self):
         return f'<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>'
 
-    def add_relationship(
-        self, start_node_properties, end_node_properties, properties: dict = None
-    ):
+    def add_relationship(self, start_node_properties, end_node_properties, properties: dict = None):
         """
         Add a relationship to this RelationshipSet.
 
@@ -106,7 +104,7 @@ class RelationshipSet:
             start_props = start_node_properties.dict()
         else:
             start_props = start_node_properties  # Regular dict
-        
+
         # Handle OGM instances for end node
         if hasattr(end_node_properties, 'match_dict'):
             end_props = end_node_properties.match_dict
@@ -116,7 +114,7 @@ class RelationshipSet:
             end_props = end_node_properties.dict()
         else:
             end_props = end_node_properties  # Regular dict
-        
+
         if not properties:
             properties = {}
         if self.default_props:
@@ -127,9 +125,7 @@ class RelationshipSet:
         if self.unique:
             # construct a check set with start_props (values), end_props (values) and properties (values)
             check_set = frozenset(
-                list(start_props.values())
-                + list(end_props.values())
-                + list(rel_props.values())
+                list(start_props.values()) + list(end_props.values()) + list(rel_props.values())
             )
 
             if check_set not in self.unique_rels:
