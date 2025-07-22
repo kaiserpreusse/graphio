@@ -171,3 +171,4 @@ files_for_test
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
 CLAUDE.md
+smoketest.py
