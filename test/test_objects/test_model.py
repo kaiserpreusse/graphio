@@ -2,7 +2,7 @@ import pytest
 import random
 from datetime import datetime, timedelta
 
-from graphio.helper import run_query_return_results
+from graphio.utils import run_query_return_results
 from graphio import Relationship, NodeSet, RelationshipSet, FilterOp, CypherQuery, RelField, NodeModel
 
 

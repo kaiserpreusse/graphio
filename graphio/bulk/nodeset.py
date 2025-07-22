@@ -7,10 +7,8 @@ from typing import Set, List, Union
 
 from neo4j import Driver, DEFAULT_DATABASE
 
-from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
+from graphio.utils import chunks, create_single_index, create_composite_index, run_query_return_results, get_label_string_from_list_of_labels, BATCHSIZE
 from graphio.bulk.queries import CypherQuery, merge_clause_with_properties
-from graphio.queries import get_label_string_from_list_of_labels
-from graphio.config import config
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +114,7 @@ class NodeSet:
         """
         log.debug('Create NodeSet')
         if not batch_size:
-            batch_size = config.BATCHSIZE
+            batch_size = BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels)
@@ -151,7 +149,7 @@ class NodeSet:
             self.append_props = append_props
 
         if not batch_size:
-            batch_size = config.BATCHSIZE
+            batch_size = BATCHSIZE
 
         if not merge_properties:
             merge_properties = self.merge_keys

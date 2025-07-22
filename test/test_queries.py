@@ -1,4 +1,4 @@
-from graphio.queries import get_label_string_from_list_of_labels
+from graphio.utils import get_label_string_from_list_of_labels
 from graphio.ogm.queries import where_clause_with_properties
 from graphio.bulk.queries import CypherQuery, match_clause_with_properties, merge_clause_with_properties, match_properties_as_string
 from graphio.bulk.nodeset import nodes_merge_factory, nodes_create_factory

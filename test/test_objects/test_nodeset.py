@@ -6,7 +6,7 @@ from hypothesis import given, strategies as st
 from graphio.bulk.nodeset import NodeSet
 from graphio import NodeModel
 
-from graphio.helper import run_query_return_results
+from graphio.utils import run_query_return_results
 
 
 @pytest.fixture(scope="session")

@@ -1,7 +1,6 @@
-from graphio.helper import create_single_index, create_composite_index, run_query_return_results, convert_neo4j_types_to_python
+from graphio.utils import create_single_index, create_composite_index, run_query_return_results, convert_neo4j_types_to_python
 from neo4j.time import DateTime as Neo4jDateTime
 from neo4j.time import Date as Neo4jDate
-from graphio.helper import convert_neo4j_types_to_python
 import datetime
 
 

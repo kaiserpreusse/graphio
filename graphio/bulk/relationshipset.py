@@ -4,10 +4,8 @@ import json
 import os
 from typing import Set, List
 
-from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
+from graphio.utils import chunks, create_single_index, create_composite_index, run_query_return_results, get_label_string_from_list_of_labels, BATCHSIZE
 from graphio.bulk.queries import CypherQuery, ArrayProperty
-from graphio.queries import get_label_string_from_list_of_labels
-from graphio.config import config
 
 log = logging.getLogger(__name__)
 
@@ -148,7 +146,7 @@ class RelationshipSet:
         """
         log.debug('Create RelationshipSet')
         if not batch_size:
-            batch_size = config.BATCHSIZE
+            batch_size = BATCHSIZE
 
         # iterate over chunks of rels
         q = rels_create_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
@@ -170,7 +168,7 @@ class RelationshipSet:
         Create relationships in this RelationshipSet
         """
         if not batch_size:
-            batch_size = config.BATCHSIZE
+            batch_size = BATCHSIZE
         log.debug('Batch Size: {}'.format(batch_size))
 
         # iterate over chunks of rels

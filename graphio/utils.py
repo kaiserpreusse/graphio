@@ -1,12 +1,20 @@
+"""
+GraphIO utilities for query building, data processing, and configuration.
+"""
 from itertools import chain, islice
 import logging
 import datetime
+from typing import List, Union
 
 from neo4j import Driver, DEFAULT_DATABASE
 from neo4j.time import DateTime as Neo4jDateTime, Date as Neo4jDate
 
 
 log = logging.getLogger(__name__)
+
+
+# Configuration constants
+BATCHSIZE = 10000
 
 
 def chunks(iterable, size=10):
@@ -91,3 +99,15 @@ def convert_neo4j_types_to_python(data):
         )
 
     return data
+
+
+def get_label_string_from_list_of_labels(labels: Union[List[str], None]) -> str:
+    """
+    Get a label string from a list of labels. If the list is empty, return an empty string.
+    :param labels: List of labels
+    :return: Label string
+    """
+    if labels:
+        return f":{':'.join(labels)}"
+    else:
+        return ""
