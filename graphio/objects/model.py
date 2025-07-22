@@ -55,48 +55,14 @@ class QueryFieldDescriptor:
     def __get__(self, instance, owner):
         if instance is None:
             # Class access - return query helper object
-            return QueryField(self.name, owner)
+            return RelField(self.name)
         # Instance access - pass through to normal attribute access
         return instance.__dict__.get(self.name)
 
 
-class QueryField:
-    """Helper class for creating filter operations with class field reference syntax"""
-
-    def __init__(self, field_name, model_cls):
-        self.field_name = field_name
-        self.model_cls = model_cls
-
-    def __eq__(self, other):
-        return FilterOp(self.field_name, "=", other)
-
-    def __gt__(self, other):
-        return FilterOp(self.field_name, ">", other)
-
-    def __lt__(self, other):
-        return FilterOp(self.field_name, "<", other)
-
-    def __ge__(self, other):
-        return FilterOp(self.field_name, ">=", other)
-
-    def __le__(self, other):
-        return FilterOp(self.field_name, "<=", other)
-
-    def __ne__(self, other):
-        return FilterOp(self.field_name, "<>", other)
-
-    def starts_with(self, value):
-        return FilterOp(self.field_name, "STARTS WITH", value)
-
-    def ends_with(self, value):
-        return FilterOp(self.field_name, "ENDS WITH", value)
-
-    def contains(self, value):
-        return FilterOp(self.field_name, "CONTAINS", value)
-
-
 class RelField:
-    """Helper class for creating filter operations on relationship properties"""
+    """Helper class for creating filter operations on both node and relationship properties"""
+
     def __init__(self, field_name):
         self.field_name = field_name
 
@@ -128,141 +94,186 @@ class RelField:
         return FilterOp(self.field_name, "CONTAINS", value)
 
 
-
 class CustomMeta(BaseModel.__class__):
     def __new__(mcs, name, bases, attrs):
         # First create the class using the normal mechanism
         cls = super().__new__(mcs, name, bases, attrs)
 
         # Add field descriptors for all fields in model classes
-        if name not in ('Base', 'NodeModel', 'RelationshipModel'):
+        if name not in ('Base', 'NodeModel'):
             if hasattr(cls, 'model_fields'):
                 for field_name in cls.model_fields:
                     setattr(cls, field_name, QueryFieldDescriptor(field_name))
 
         # Simple import-time registration - replaces complex Registry
-        if name not in ('Base', 'NodeModel', 'RelationshipModel'):
+        if name not in ('Base', 'NodeModel'):
             if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
                 _MODEL_REGISTRY[cls.__name__] = cls
 
         return cls
 
 
-class NodeQuery:
-    """Consolidated builder for all node queries with deferred execution."""
+class PathStep:
+    """Represents one step in a graph traversal path"""
 
-    def __init__(self, node_class, filters=None, rel_context=None):
+    def __init__(self, node_class, rel_type=None, node_filters=None, rel_filters=None):
         self.node_class = node_class
-        self.filters = filters or []
-        # rel_context: {'rel_type': str, 'target_class': class, 'source_filters': list, 'rel_filters': list}
-        self.rel_context = rel_context
+        self.rel_type = rel_type  # None for starting node
+        self.node_filters = node_filters or []
+        self.rel_filters = rel_filters or []
+
+
+class RelationshipTraversal:
+    """Helper class for relationship traversal that provides a clean interface for class-level queries"""
+
+    def __init__(self, query):
+        self.query = query
+
+    def filter(self, *filter_ops):
+        """Add relationship filters - context makes this apply to relationship properties"""
+        return RelationshipTraversal(self.query.filter(*filter_ops, _context="relationship"))
+
+    def match(self, *filter_ops):
+        """Add node filters to target nodes"""
+        return self.query.filter(*filter_ops)
+
+    def all(self):
+        """Execute query and return all results"""
+        return self.query.all()
+
+    def first(self):
+        """Execute query and return first result"""
+        return self.query.first()
+
+
+class Query:
+    """Unified query builder for graph traversal patterns (0-hop and 1-hop)"""
+
+    def __init__(self, start_class, source_instance=None, path=None):
+        self.start_class = start_class
+        self.source_instance = source_instance  # For instance-based queries like alice.knows.match()
+        self.path = path or [PathStep(start_class)]  # Always start with the initial node
+
+    @property
+    def current_step(self):
+        """Get the current step we're building filters for"""
+        return self.path[-1]
+
+    @property
+    def target_class(self):
+        """Get the class we'll return instances of"""
+        return self.current_step.node_class
 
     def __getattr__(self, name):
-        """Allow access to relationships like Person.match().knows"""
-        # Check if this is a relationship defined on the class
-        if hasattr(self.node_class, '_relationships') and name in self.node_class._relationships:
-            relationship = self.node_class._relationships[name]
+        """Handle relationship traversal like Person.match().knows"""
+        # Only allow traversal from the start node (0-hop to 1-hop)
+        if len(self.path) > 1:
+            raise AttributeError("Multi-hop traversal not yet implemented")
+
+        start_step = self.path[0]
+        if hasattr(start_step.node_class, '_relationships') and name in start_step.node_class._relationships:
+            relationship = start_step.node_class._relationships[name]
             from graphio.objects.model import Base
             target_class = Base.get_class_by_name(relationship.target)
             if not target_class:
                 raise ValueError(f"Could not find target class {relationship.target}")
-            
-            # Return new NodeQuery with relationship context
-            return NodeQuery(
-                target_class,
-                filters=[],
-                rel_context={
-                    'rel_type': relationship.rel_type,
-                    'target_class': target_class,
-                    'source_class': self.node_class,
-                    'source_filters': self.filters,
-                    'rel_filters': []
-                }
-            )
-        raise AttributeError(f"'{self.node_class.__name__}' has no relationship '{name}'")
 
-    def filter(self, *filter_ops):
-        """Add filters and return new NodeQuery instance."""
-        # If we have relationship context, these are relationship filters
-        if self.rel_context:
-            new_rel_context = self.rel_context.copy()
-            new_rel_filters = list(new_rel_context.get('rel_filters', []))
-            
-            # Add FilterOp objects to relationship filters
-            for f in filter_ops:
-                if isinstance(f, FilterOp):
-                    new_rel_filters.append(f)
-                else:
-                    raise ValueError(f"Unsupported filter type: {type(f)}")
-            
-            new_rel_context['rel_filters'] = new_rel_filters
-            return NodeQuery(self.node_class, self.filters, new_rel_context)
-        else:
-            # No relationship context, these are regular node filters
-            new_filters = list(self.filters)
-            
-            # Add FilterOp objects
-            for f in filter_ops:
-                if isinstance(f, FilterOp):
-                    new_filters.append(f)
-                else:
-                    raise ValueError(f"Unsupported filter type: {type(f)}")
+            # Create new Query with 1-hop path
+            new_path = [
+                start_step,  # Keep the start step with its filters
+                PathStep(target_class, rel_type=relationship.rel_type)
+            ]
 
-            return NodeQuery(self.node_class, new_filters, self.rel_context)
+            # Return a RelationshipTraversal helper that supports both filter() and rel_filter()
+            return RelationshipTraversal(Query(self.start_class, self.source_instance, new_path))
+
+        raise AttributeError(f"'{start_step.node_class.__name__}' has no relationship '{name}'")
+
+    def filter(self, *filter_ops, _context="node"):
+        """Add filters to current step - context determines if they're node or relationship filters"""
+        new_path = [step for step in self.path]  # Copy path
+        new_step = PathStep(
+            self.current_step.node_class,
+            self.current_step.rel_type,
+            list(self.current_step.node_filters),  # Copy existing node filters
+            list(self.current_step.rel_filters)  # Copy existing rel filters
+        )
+
+        # Add filters based on context parameter
+        for f in filter_ops:
+            if isinstance(f, FilterOp):
+                if _context == "relationship":
+                    # Add to relationship filters
+                    new_step.rel_filters.append(f)
+                else:
+                    # Add to node filters (default)
+                    new_step.node_filters.append(f)
+            elif isinstance(f, CypherQuery):
+                # CypherQuery always applies to nodes
+                new_step.node_filters.append(f)
+            else:
+                raise ValueError(f"Unsupported filter type: {type(f)}")
+
+        new_path[-1] = new_step
+        return Query(self.start_class, self.source_instance, new_path)
 
     def match(self, *filter_ops):
-        """Add target node filters for relationship queries."""
-        if not self.rel_context:
-            # This is a direct node match, just add filters
-            return self.filter(*filter_ops)
-        
-        # This is a relationship traversal - filters apply to target nodes
-        new_filters = list(filter_ops)
-        new_rel_context = self.rel_context.copy()
-        
-        return NodeQuery(self.node_class, new_filters, new_rel_context)
+        """Alias for filter() to maintain compatibility"""
+        return self.filter(*filter_ops)
 
     def all(self):
-        """Execute the query and return all results."""
-        if self.node_class._driver is None:
+        """Execute the query and return all results"""
+        if self.start_class._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-        # Handle CypherQuery if present
-        for f in self.filters:
-            if isinstance(f, CypherQuery):
-                return self._execute_cypher_query(f)
+        # Handle CypherQuery in filters
+        for step in self.path:
+            for f in step.node_filters:
+                if isinstance(f, CypherQuery):
+                    return self._execute_cypher_query(f)
 
-        if self.rel_context:
+        if len(self.path) == 1:
+            return self._execute_node_query()
+        elif len(self.path) == 2:
             return self._execute_relationship_query()
         else:
-            return self._execute_node_query()
+            raise NotImplementedError("Multi-hop queries not yet implemented")
 
     def first(self):
-        """Execute the query with LIMIT 1."""
-        if self.node_class._driver is None:
+        """Execute the query and return first result"""
+        if self.start_class._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-        # Handle CypherQuery if present
-        for f in self.filters:
-            if isinstance(f, CypherQuery):
-                log.warning("Using CypherQuery in first() method needs a LIMIT 1 in the query.")
-                results = self._execute_cypher_query(f)
-                return results[0] if results else None
+        # Handle CypherQuery in filters
+        for step in self.path:
+            for f in step.node_filters:
+                if isinstance(f, CypherQuery):
+                    log.warning("Using CypherQuery in first() method needs a LIMIT 1 in the query.")
+                    results = self._execute_cypher_query(f)
+                    return results[0] if results else None
 
-        if self.rel_context:
+        if len(self.path) == 1:
+            return self._execute_node_query(limit=1)
+        elif len(self.path) == 2:
             return self._execute_relationship_query(limit=1)
         else:
-            return self._execute_node_query(limit=1)
+            raise NotImplementedError("Multi-hop queries not yet implemented")
 
     def _execute_node_query(self, limit=None):
-        """Execute a direct node query."""
-        query = f"MATCH (n{self.node_class._label_match_string()})"
+        """Execute 0-hop node query"""
+        step = self.path[0]
+
+        # If we have a source instance, match that specific instance
+        if self.source_instance:
+            return [self.source_instance] if limit != 1 else self.source_instance
+
+        query = f"MATCH (n{step.node_class._label_match_string()})"
         conditions = []
         params = {}
 
-        # Process FilterOp objects
-        for i, f in enumerate(self.filters):
-            param_name = f"{f.field}_{i}"
+        # Add node filters
+        for i, f in enumerate(step.node_filters):
+            param_name = f"n_{f.field}_{i}"
             conditions.append(f"n.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
 
@@ -270,80 +281,94 @@ class NodeQuery:
             query += f"\nWHERE {' AND '.join(conditions)}"
 
         query += "\nRETURN n"
-        
+
         if limit is not None:
             query += f" LIMIT {limit}"
 
         log.debug(query)
-        
-        # Execute the query
+
+        # Execute query
         results = []
-        with self.node_class._driver.session() as session:
+        with step.node_class._driver.session() as session:
             result = session.run(query, params)
             for record in result:
                 node = record['n']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                results.append(self.node_class(**properties))
+                results.append(step.node_class(**properties))
 
         return results[0] if limit == 1 and results else (results if limit != 1 else None)
 
     def _execute_relationship_query(self, limit=None):
-        """Execute a relationship traversal query."""
-        rel_ctx = self.rel_context
-        source_class = rel_ctx['source_class']
-        target_class = rel_ctx['target_class']
-        rel_type = rel_ctx['rel_type']
-        
-        query = f"""
-        MATCH (source{source_class._label_match_string()})-[r:{rel_type}]->(target{target_class._label_match_string()})
-        """
+        """Execute 1-hop relationship query"""
+        start_step = self.path[0]
+        target_step = self.path[1]
 
-        conditions = []
-        params = {}
+        # Build Cypher query
+        if self.source_instance:
+            # Instance-based query: MATCH (source)-[r:REL]->(target) WHERE source matches instance
+            query = f"""WITH $properties AS properties
+MATCH (source{start_step.node_class._label_match_string()})-[r:{target_step.rel_type}]->(target{target_step.node_class._label_match_string()})
+WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties', node_variable='source')}"""
+            params = {"properties": self.source_instance.match_dict}
+        else:
+            # Class-based query: MATCH (source)-[r:REL]->(target) with source filters
+            query = f"MATCH (source{start_step.node_class._label_match_string()})-[r:{target_step.rel_type}]->(target{target_step.node_class._label_match_string()})"
+            params = {}
 
-        # Source node filters
-        for i, f in enumerate(rel_ctx['source_filters']):
-            param_name = f"source_{f.field}_{i}"
-            conditions.append(f"source.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
+            # Add source node filters
+            conditions = []
+            for i, f in enumerate(start_step.node_filters):
+                param_name = f"source_{f.field}_{i}"
+                conditions.append(f"source.{f.field} {f.operator} ${param_name}")
+                params[param_name] = f.value
 
-        # Relationship filters
-        for i, f in enumerate(rel_ctx['rel_filters']):
+            if conditions:
+                query += f"\nWHERE {' AND '.join(conditions)}"
+
+        # Add relationship filters
+        rel_conditions = []
+        for i, f in enumerate(target_step.rel_filters):
             param_name = f"rel_{f.field}_{i}"
-            conditions.append(f"r.{f.field} {f.operator} ${param_name}")
+            rel_conditions.append(f"r.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
 
-        # Target node filters
-        for i, f in enumerate(self.filters):
+        # Add target node filters  
+        target_conditions = []
+        for i, f in enumerate(target_step.node_filters):
             param_name = f"target_{f.field}_{i}"
-            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
+            target_conditions.append(f"target.{f.field} {f.operator} ${param_name}")
             params[param_name] = f.value
 
-        if conditions:
-            query += f"WHERE {' AND '.join(conditions)}\n"
+        # Combine additional conditions
+        additional_conditions = rel_conditions + target_conditions
+        if additional_conditions:
+            if "WHERE" in query:
+                query += f"\nAND {' AND '.join(additional_conditions)}"
+            else:
+                query += f"\nWHERE {' AND '.join(additional_conditions)}"
 
-        query += "RETURN DISTINCT target"
+        query += "\nRETURN DISTINCT target"
 
         if limit is not None:
             query += f" LIMIT {limit}"
 
-        # Execute the query
+        # Execute query
         results = []
-        with self.node_class._driver.session() as session:
+        with target_step.node_class._driver.session() as session:
             result = session.run(query, params)
             for record in result:
                 node = record['target']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                results.append(target_class(**properties))
+                results.append(target_step.node_class(**properties))
 
         return results[0] if limit == 1 and results else (results if limit != 1 else None)
 
     def _execute_cypher_query(self, cypher_query):
-        """Execute a CypherQuery and return results."""
+        """Execute a CypherQuery and return results"""
         nodes = []
-        with self.node_class._driver.session() as session:
+        with self.start_class._driver.session() as session:
             result = session.run(cypher_query.query, cypher_query.params)
             for record in result:
                 if 'n' not in record.keys():
@@ -352,120 +377,9 @@ class NodeQuery:
                 node = record['n']
                 properties = dict(node.items())
                 properties = convert_neo4j_types_to_python(properties)
-                nodes.append(self.node_class(**properties))
+                nodes.append(self.target_class(**properties))
 
         return nodes
-
-
-class RelationshipQuery:
-    """Consolidated builder for instance-level relationship queries."""
-
-    def __init__(self, parent_instance, rel_type, target_class, rel_filters=None, node_filters=None):
-        self.parent_instance = parent_instance
-        self.rel_type = rel_type
-        self.target_class = target_class
-        self.rel_filters = rel_filters or []
-        self.node_filters = node_filters or []
-
-    def filter(self, *filter_ops):
-        """Add relationship property filters."""
-        new_rel_filters = list(self.rel_filters)
-        
-        for f in filter_ops:
-            if isinstance(f, FilterOp):
-                new_rel_filters.append(f)
-            else:
-                raise ValueError(f"Unsupported filter type: {type(f)}")
-
-        return RelationshipQuery(
-            self.parent_instance,
-            self.rel_type,
-            self.target_class,
-            new_rel_filters,
-            self.node_filters
-        )
-
-    def match(self, *filter_ops):
-        """Add target node filters."""
-        new_node_filters = list(self.node_filters)
-        
-        # Add FilterOp objects
-        for f in filter_ops:
-            if isinstance(f, FilterOp):
-                new_node_filters.append(f)
-            else:
-                raise ValueError(f"Unsupported filter type: {type(f)}")
-
-        return RelationshipQuery(
-            self.parent_instance,
-            self.rel_type,
-            self.target_class,
-            self.rel_filters,
-            new_node_filters
-        )
-
-    def all(self):
-        """Execute the query and return all target nodes."""
-        query, params = self._build_query()
-        return self._execute_query(query, params)
-
-    def first(self):
-        """Execute the query and return only the first target node."""
-        query, params = self._build_query(limit=1)
-        results = self._execute_query(query, params)
-        return results[0] if results else None
-
-    def _build_query(self, limit=None):
-        """Build the Cypher query with optional LIMIT clause."""
-        query = f"""WITH $properties AS properties
-        MATCH (source{self.parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{self.target_class._label_match_string()})
-        WHERE {where_clause_with_properties(self.parent_instance.match_dict, 'properties', node_variable='source')}"""
-
-        conditions = []
-        params = {"properties": self.parent_instance.match_dict}
-
-        # Add relationship property filters
-        for i, f in enumerate(self.rel_filters):
-            param_name = f"rel_{f.field}_{i}"
-            conditions.append(f"r.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
-
-        # Add node property filters
-        for i, f in enumerate(self.node_filters):
-            param_name = f"target_{f.field}_{i}"
-            conditions.append(f"target.{f.field} {f.operator} ${param_name}")
-            params[param_name] = f.value
-
-        if conditions:
-            query += f"\nAND {' AND '.join(conditions)}"
-
-        query += "\nRETURN DISTINCT target"
-
-        if limit is not None:
-            query += f" LIMIT {limit}"
-
-        return query, params
-
-    def _execute_query(self, query, params):
-        """Execute the query and return results."""
-        base = self._get_base()
-        driver = base.get_driver()
-
-        instances = []
-        with driver.session() as session:
-            result = session.run(query, **params)
-            for record in result:
-                node = record['target']
-                properties = dict(node.items())
-                properties = convert_neo4j_types_to_python(properties)
-                instances.append(self.target_class(**properties))
-
-        return instances
-
-    def _get_base(self):
-        """Helper method to get the Base class."""
-        from graphio.objects.model import Base
-        return Base
 
 
 class Base(BaseModel, metaclass=CustomMeta):
@@ -700,14 +614,17 @@ class NodeModel(Base, metaclass=CustomMeta):
         return ":" + ":".join(cls._labels)
 
     @classmethod
-    def match(cls, *filter_ops) -> 'NodeQuery':
+    def match(cls, *filter_ops) -> 'Query':
         """Match nodes using a query builder pattern with deferred execution."""
         # Check if driver is set
         if cls._driver is None:
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
-        # Return a query builder instead of executing directly
-        return NodeQuery(cls, list(filter_ops))
+        # Return unified query builder
+        query = Query(cls)
+        if filter_ops:
+            query = query.filter(*filter_ops)
+        return query
 
     def delete(self):
         if Base._driver is None:
@@ -724,19 +641,6 @@ class NodeModel(Base, metaclass=CustomMeta):
 
         with Base._driver.session() as session:
             session.run(query, properties=self._unique_id_dict)
-
-
-class RelationshipModel(Base, metaclass=CustomMeta):
-    """Base class for Neo4j relationship models"""
-    source: ClassVar[str]
-    target: ClassVar[str]
-    rel_type: ClassVar[str]
-    default_props: ClassVar[Dict[str, Any]] = {}
-
-    @classmethod
-    def create_index(cls):
-        # Will be implemented later
-        pass
 
 
 class Relationship(BaseModel):
@@ -814,32 +718,37 @@ class Relationship(BaseModel):
 
     def filter(self, *filter_ops):
         """
-        Filter relationships based on relationship properties.
+        Filter relationships based on relationship properties and return a query builder.
 
         Usage:
-        Person.knows.filter(RelField("score") > 90).match(Person.age > 50)
+        person.knows.filter(RelField("score") > 90).match(Person.age > 50)
 
-        :param filter_ops: FilterOp objects for complex filtering on relationship properties
-        :return: self (for method chaining)
+        :param filter_ops: FilterOp objects for complex filtering on relationship properties  
+        :return: Query with relationship filters applied
         """
-        # Create a new instance of the relationship with filters
-        rel_copy = self.__class__(
-            source=self.source,
-            rel_type=self.rel_type,
-            target=self.target
-        )
-        rel_copy._parent_instance = self._parent_instance
-        rel_copy.nodes = self.nodes.copy()
+        # Get the base class to access driver and registry
+        base = self._get_base()
+        if not base:
+            raise ValueError("Could not determine Base class")
 
-        # Store relationship filters
-        rel_copy._rel_filters = list(getattr(self, '_rel_filters', []))  # Copy existing filters
+        target_class = base.get_class_by_name(self.target)
+        source_class = base.get_class_by_name(self.source)
 
-        # Add FilterOp objects
+        # Start with existing rel_filters plus new ones
+        rel_filters = list(getattr(self, '_rel_filters', []))
         for f in filter_ops:
             if isinstance(f, FilterOp):
-                rel_copy._rel_filters.append(f)
+                rel_filters.append(f)
+            else:
+                raise ValueError(f"Unsupported filter type: {type(f)}")
 
-        return rel_copy
+        # Create 1-hop query path with relationship filters
+        path = [
+            PathStep(source_class),
+            PathStep(target_class, rel_type=self.rel_type, rel_filters=rel_filters)
+        ]
+
+        return Query(source_class, source_instance=self._parent_instance, path=path)
 
     def match(self, *filter_ops):
         """
@@ -859,15 +768,19 @@ class Relationship(BaseModel):
             raise ValueError("Could not determine Base class")
 
         target_class = base.get_class_by_name(self.target)
+        source_class = base.get_class_by_name(self.source)
 
-        # Return a query builder instead of executing directly
-        return RelationshipQuery(
-            parent_instance=self._parent_instance,
-            rel_type=self.rel_type,
-            target_class=target_class,
-            rel_filters=getattr(self, '_rel_filters', []),
-            node_filters=list(filter_ops)
-        )
+        # Create 1-hop query path: source -> relationship -> target
+        path = [
+            PathStep(source_class),
+            PathStep(target_class, rel_type=self.rel_type, rel_filters=getattr(self, '_rel_filters', []))
+        ]
+
+        # Create query with instance context and add any node filters
+        query = Query(source_class, source_instance=self._parent_instance, path=path)
+        if filter_ops:
+            query = query.filter(*filter_ops)
+        return query
 
     def delete(self, target=None):
         """
@@ -903,21 +816,3 @@ class Relationship(BaseModel):
 
             with driver.session() as session:
                 session.run(query, properties=self._parent_instance.match_dict)
-
-
-class Graph(BaseModel):
-    def create(self, *objects):
-        for o in objects:
-            if hasattr(o, 'create_node'):
-                o.create_node()
-        for o in objects:
-            if hasattr(o, 'create_relationships'):
-                o.create_relationships()
-
-    def merge(self, *objects):
-        for o in objects:
-            if hasattr(o, 'merge_node'):
-                o.merge_node()
-        for o in objects:
-            if hasattr(o, 'merge_relationships'):
-                o.merge_relationships()
