@@ -36,6 +36,7 @@ Issues = "https://github.com/kaiserpreusse/graphio/issues"
 docs = [
     "mkdocs-material",
     "mkdocstrings-python",
+    "pymdown-extensions",
 ]
 dev = [
     "pytest",
