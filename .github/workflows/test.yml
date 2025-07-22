@@ -17,6 +17,9 @@ jobs:
     services:
       neo4j5_community:
         image: neo4j:5-community
+        ports:
+          - 7687:7687
+          - 7474:7474
         env:
           NEO4J_AUTH: neo4j/test
           NEO4J_PLUGINS: '["apoc"]'
@@ -24,6 +27,9 @@ jobs:
           NEO4J_dbms_security_auth__minimum__password__length: 4
       neo4j5_enterprise:
         image: neo4j:5-enterprise
+        ports:
+          - 7688:7687
+          - 7475:7474
         env:
           NEO4J_AUTH: neo4j/test
           NEO4J_PLUGINS: '["apoc"]'

@@ -19,9 +19,9 @@ DRIVER = os.getenv('DRIVER', None)
 
 if RUN_ENVIRONMENT == 'github_actions':
     NEO4J_VERSIONS = [
-        {'host': 'neo4j5_community', 'version': '5-community', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt',
+        {'host': 'localhost', 'version': '5-community', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt',
          'lib': 'neodriver'},
-        {'host': 'neo4j5_community', 'version': '5-enterprise', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt',
+        {'host': 'localhost', 'version': '5-enterprise', 'ports': (7475, 7473, 7688), 'uri_prefix': 'bolt',
          'lib': 'neodriver'},
     ]
 
