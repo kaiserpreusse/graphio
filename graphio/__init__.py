@@ -5,7 +5,7 @@ from graphio.ogm.model import Base, CypherQuery, FilterOp, NodeModel, Relationsh
 
 __all__ = [
     'NodeSet',
-    'RelationshipSet', 
+    'RelationshipSet',
     'ArrayProperty',
     'Base',
     'NodeModel',

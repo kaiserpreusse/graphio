@@ -1,5 +1,4 @@
 import logging
-from typing import List, Set
 from uuid import uuid4
 
 from graphio.bulk.query_utils import ArrayProperty, CypherQuery
@@ -26,7 +25,7 @@ def tuplify_json_list(list_object: list) -> tuple:
     :param list_object: A list with sub-lists.
     :return: A tuple version of the list object.
     """
-    output = tuple()
+    output = ()
     for element in list_object:
         if isinstance(element, list):
             output = output + (tuple(element),)
@@ -40,9 +39,15 @@ class RelationshipSet:
     Container for a set of Relationships with the same type of start and end nodes.
     """
 
-    def __init__(self, rel_type: str, start_node_labels: List[str], end_node_labels: List[str],
-                 start_node_properties: List[str], end_node_properties: List[str],
-                 default_props: dict = None):
+    def __init__(
+        self,
+        rel_type: str,
+        start_node_labels: list[str],
+        end_node_labels: list[str],
+        start_node_properties: list[str],
+        end_node_properties: list[str],
+        default_props: dict = None,
+    ):
         """
 
         :param rel_type: Realtionship type.
@@ -56,9 +61,13 @@ class RelationshipSet:
         self.start_node_labels = start_node_labels
         self.end_node_labels = end_node_labels
         if not self.start_node_labels:
-            log.warning("Creating or merging relationships without start node labels is slow because no index is used.")
+            log.warning(
+                'Creating or merging relationships without start node labels is slow because no index is used.'
+            )
         if not self.end_node_labels:
-            log.warning("Creating or merging relationships without end node labels is slow because no index is used.")
+            log.warning(
+                'Creating or merging relationships without end node labels is slow because no index is used.'
+            )
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
         self.default_props = default_props
@@ -67,12 +76,7 @@ class RelationshipSet:
         self.fixed_order_end_node_properties = tuple(self.end_node_properties)
 
         self.uuid = str(uuid4())
-        self.combined = '{0}_{1}_{2}_{3}_{4}'.format(self.rel_type,
-                                                     '_'.join(sorted(self.start_node_labels)),
-                                                     '_'.join(sorted(self.end_node_labels)),
-                                                     '_'.join(sorted([str(x) for x in self.start_node_properties])),
-                                                     '_'.join(sorted([str(x) for x in self.end_node_properties]))
-                                                     )
+        self.combined = f'{self.rel_type}_{"_".join(sorted(self.start_node_labels))}_{"_".join(sorted(self.end_node_labels))}_{"_".join(sorted([str(x) for x in self.start_node_properties]))}_{"_".join(sorted([str(x) for x in self.end_node_properties]))}'
 
         self.relationships = []
 
@@ -80,9 +84,11 @@ class RelationshipSet:
         self.unique_rels = set()
 
     def __str__(self):
-        return f"<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>"
+        return f'<RelationshipSet ({self.start_node_labels}; {self.start_node_properties})-[{self.rel_type}]->({self.end_node_labels}; {self.end_node_properties})>'
 
-    def add_relationship(self, start_node_properties: dict, end_node_properties: dict, properties: dict = None):
+    def add_relationship(
+        self, start_node_properties: dict, end_node_properties: dict, properties: dict = None
+    ):
         """
         Add a relationship to this RelationshipSet.
 
@@ -98,7 +104,10 @@ class RelationshipSet:
         if self.unique:
             # construct a check set with start_node_properties (values), end_node_properties (values) and properties (values)
             check_set = frozenset(
-                list(start_node_properties.values()) + list(end_node_properties.values()) + list(rel_props.values()))
+                list(start_node_properties.values())
+                + list(end_node_properties.values())
+                + list(rel_props.values())
+            )
 
             if check_set not in self.unique_rels:
                 self.relationships.append((start_node_properties, end_node_properties, rel_props))
@@ -106,7 +115,7 @@ class RelationshipSet:
         else:
             self.relationships.append((start_node_properties, end_node_properties, rel_props))
 
-    def all_property_keys(self) -> Set[str]:
+    def all_property_keys(self) -> set[str]:
         """
         Return a set of all property keys in this RelationshipSet
 
@@ -122,11 +131,13 @@ class RelationshipSet:
 
     @property
     def metadata_dict(self):
-        return {"rel_type": self.rel_type,
-                "start_node_labels": self.start_node_labels,
-                "end_node_labels": self.end_node_labels,
-                "start_node_properties": self.start_node_properties,
-                "end_node_properties": self.end_node_properties}
+        return {
+            'rel_type': self.rel_type,
+            'start_node_labels': self.start_node_labels,
+            'end_node_labels': self.end_node_labels,
+            'start_node_properties': self.start_node_properties,
+            'end_node_properties': self.end_node_properties,
+        }
 
     def object_file_name(self, suffix: str = None) -> str:
         """
@@ -139,7 +150,7 @@ class RelationshipSet:
 
             `relationshipset_StartLabel_TYPE_EndLabel_uuid.json`
         """
-        basename = f"relationshipset_{'_'.join(self.start_node_labels)}_{self.rel_type}_{'_'.join(self.end_node_labels)}_{self.uuid}"
+        basename = f'relationshipset_{"_".join(self.start_node_labels)}_{self.rel_type}_{"_".join(self.end_node_labels)}_{self.uuid}'
         if suffix:
             basename += suffix
         return basename
@@ -153,8 +164,13 @@ class RelationshipSet:
             batch_size = BATCHSIZE
 
         # iterate over chunks of rels
-        q = rels_create_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                                self.end_node_properties, self.rel_type)
+        q = rels_create_factory(
+            self.start_node_labels,
+            self.end_node_labels,
+            self.start_node_properties,
+            self.end_node_properties,
+            self.rel_type,
+        )
 
         # Define transaction function once
         def create_batch(tx, batch_params):
@@ -176,8 +192,13 @@ class RelationshipSet:
         log.debug(f'Batch Size: {batch_size}')
 
         # iterate over chunks of rels
-        q = rels_merge_factory(self.start_node_labels, self.end_node_labels, self.start_node_properties,
-                               self.end_node_properties, self.rel_type)
+        q = rels_merge_factory(
+            self.start_node_labels,
+            self.end_node_labels,
+            self.start_node_properties,
+            self.end_node_properties,
+            self.rel_type,
+        )
 
         # Define transaction function once
         def merge_batch(tx, batch_params):
@@ -251,8 +272,14 @@ def rels_params_from_objects(relationships, property_identifier=None):
     return {property_identifier: output}
 
 
-def rels_create_factory(start_node_labels, end_node_labels, start_node_properties,
-                        end_node_properties, rel_type, property_identifier=None):
+def rels_create_factory(
+    start_node_labels,
+    end_node_labels,
+    start_node_properties,
+    end_node_properties,
+    rel_type,
+    property_identifier=None,
+):
     """
     Create relationship query with explicit arguments.
 
@@ -280,8 +307,8 @@ def rels_create_factory(start_node_labels, end_node_labels, start_node_propertie
     end_node_label_string = get_label_string_from_list_of_labels(end_node_labels)
 
     q = CypherQuery()
-    q.append(f"UNWIND ${property_identifier} AS rel")
-    q.append(f"MATCH (a{start_node_label_string}), (b{end_node_label_string})")
+    q.append(f'UNWIND ${property_identifier} AS rel')
+    q.append(f'MATCH (a{start_node_label_string}), (b{end_node_label_string})')
 
     # collect WHERE clauses
     where_clauses = []
@@ -296,16 +323,22 @@ def rels_create_factory(start_node_labels, end_node_labels, start_node_propertie
         else:
             where_clauses.append(f'b.{property} = rel.end_{property}')
 
-    q.append("WHERE " + ' AND '.join(where_clauses))
+    q.append('WHERE ' + ' AND '.join(where_clauses))
 
-    q.append(f"CREATE (a)-[r:{rel_type}]->(b)")
-    q.append("SET r = rel.properties")
+    q.append(f'CREATE (a)-[r:{rel_type}]->(b)')
+    q.append('SET r = rel.properties')
 
     return q.query()
 
 
-def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties,
-                       end_node_properties, rel_type, property_identifier=None):
+def rels_merge_factory(
+    start_node_labels,
+    end_node_labels,
+    start_node_properties,
+    end_node_properties,
+    rel_type,
+    property_identifier=None,
+):
     """
     Merge relationship query with explicit arguments.
 
@@ -335,8 +368,8 @@ def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties
     end_node_label_string = get_label_string_from_list_of_labels(end_node_labels)
 
     q = CypherQuery()
-    q.append(f"UNWIND ${property_identifier} AS rel")
-    q.append(f"MATCH (a{start_node_label_string}), (b{end_node_label_string})")
+    q.append(f'UNWIND ${property_identifier} AS rel')
+    q.append(f'MATCH (a{start_node_label_string}), (b{end_node_label_string})')
 
     # collect WHERE clauses
     where_clauses = []
@@ -351,10 +384,10 @@ def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties
         else:
             where_clauses.append(f'b.{property} = rel.end_{property}')
 
-    q.append("WHERE " + ' AND '.join(where_clauses))
+    q.append('WHERE ' + ' AND '.join(where_clauses))
 
-    q.append(f"MERGE (a)-[r:{rel_type}]->(b)")
-    q.append("ON CREATE SET r = rel.properties")
-    q.append("ON MATCH SET r += rel.properties")
+    q.append(f'MERGE (a)-[r:{rel_type}]->(b)')
+    q.append('ON CREATE SET r = rel.properties')
+    q.append('ON MATCH SET r += rel.properties')
 
     return q.query()

@@ -1,5 +1,5 @@
 import logging
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar
 
 from neo4j import Driver
 from pydantic import BaseModel, PrivateAttr
@@ -63,31 +63,31 @@ class RelField:
         self.field_name = field_name
 
     def __eq__(self, other):
-        return FilterOp(self.field_name, "=", other)
+        return FilterOp(self.field_name, '=', other)
 
     def __gt__(self, other):
-        return FilterOp(self.field_name, ">", other)
+        return FilterOp(self.field_name, '>', other)
 
     def __lt__(self, other):
-        return FilterOp(self.field_name, "<", other)
+        return FilterOp(self.field_name, '<', other)
 
     def __ge__(self, other):
-        return FilterOp(self.field_name, ">=", other)
+        return FilterOp(self.field_name, '>=', other)
 
     def __le__(self, other):
-        return FilterOp(self.field_name, "<=", other)
+        return FilterOp(self.field_name, '<=', other)
 
     def __ne__(self, other):
-        return FilterOp(self.field_name, "<>", other)
+        return FilterOp(self.field_name, '<>', other)
 
     def starts_with(self, value):
-        return FilterOp(self.field_name, "STARTS WITH", value)
+        return FilterOp(self.field_name, 'STARTS WITH', value)
 
     def ends_with(self, value):
-        return FilterOp(self.field_name, "ENDS WITH", value)
+        return FilterOp(self.field_name, 'ENDS WITH', value)
 
     def contains(self, value):
-        return FilterOp(self.field_name, "CONTAINS", value)
+        return FilterOp(self.field_name, 'CONTAINS', value)
 
 
 class CustomMeta(BaseModel.__class__):
@@ -127,7 +127,7 @@ class RelationshipTraversal:
 
     def filter(self, *filter_ops):
         """Add relationship filters - context makes this apply to relationship properties"""
-        return RelationshipTraversal(self.query.filter(*filter_ops, _context="relationship"))
+        return RelationshipTraversal(self.query.filter(*filter_ops, _context='relationship'))
 
     def match(self, *filter_ops):
         """Add node filters to target nodes"""
@@ -147,7 +147,9 @@ class Query:
 
     def __init__(self, start_class, source_instance=None, path=None):
         self.start_class = start_class
-        self.source_instance = source_instance  # For instance-based queries like alice.knows.match()
+        self.source_instance = (
+            source_instance  # For instance-based queries like alice.knows.match()
+        )
         self.path = path or [PathStep(start_class)]  # Always start with the initial node
 
     @property
@@ -164,20 +166,24 @@ class Query:
         """Handle relationship traversal like Person.match().knows"""
         # Only allow traversal from the start node (0-hop to 1-hop)
         if len(self.path) > 1:
-            raise AttributeError("Multi-hop traversal not yet implemented")
+            raise AttributeError('Multi-hop traversal not yet implemented')
 
         start_step = self.path[0]
-        if hasattr(start_step.node_class, '_relationships') and name in start_step.node_class._relationships:
+        if (
+            hasattr(start_step.node_class, '_relationships')
+            and name in start_step.node_class._relationships
+        ):
             relationship = start_step.node_class._relationships[name]
             from graphio.ogm.model import Base
+
             target_class = Base.get_class_by_name(relationship.target)
             if not target_class:
-                raise ValueError(f"Could not find target class {relationship.target}")
+                raise ValueError(f'Could not find target class {relationship.target}')
 
             # Create new Query with 1-hop path
             new_path = [
                 start_step,  # Keep the start step with its filters
-                PathStep(target_class, rel_type=relationship.rel_type)
+                PathStep(target_class, rel_type=relationship.rel_type),
             ]
 
             # Return a RelationshipTraversal helper that supports both filter() and rel_filter()
@@ -185,20 +191,20 @@ class Query:
 
         raise AttributeError(f"'{start_step.node_class.__name__}' has no relationship '{name}'")
 
-    def filter(self, *filter_ops, _context="node"):
+    def filter(self, *filter_ops, _context='node'):
         """Add filters to current step - context determines if they're node or relationship filters"""
-        new_path = [step for step in self.path]  # Copy path
+        new_path = list(self.path)  # Copy path
         new_step = PathStep(
             self.current_step.node_class,
             self.current_step.rel_type,
             list(self.current_step.node_filters),  # Copy existing node filters
-            list(self.current_step.rel_filters)  # Copy existing rel filters
+            list(self.current_step.rel_filters),  # Copy existing rel filters
         )
 
         # Add filters based on context parameter
         for f in filter_ops:
             if isinstance(f, FilterOp):
-                if _context == "relationship":
+                if _context == 'relationship':
                     # Add to relationship filters
                     new_step.rel_filters.append(f)
                 else:
@@ -208,7 +214,7 @@ class Query:
                 # CypherQuery always applies to nodes
                 new_step.node_filters.append(f)
             else:
-                raise ValueError(f"Unsupported filter type: {type(f)}")
+                raise ValueError(f'Unsupported filter type: {type(f)}')
 
         new_path[-1] = new_step
         return Query(self.start_class, self.source_instance, new_path)
@@ -220,7 +226,7 @@ class Query:
     def all(self):
         """Execute the query and return all results"""
         if self.start_class._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
 
         # Handle CypherQuery in filters
         for step in self.path:
@@ -233,18 +239,18 @@ class Query:
         elif len(self.path) == 2:
             return self._execute_relationship_query()
         else:
-            raise NotImplementedError("Multi-hop queries not yet implemented")
+            raise NotImplementedError('Multi-hop queries not yet implemented')
 
     def first(self):
         """Execute the query and return first result"""
         if self.start_class._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
 
         # Handle CypherQuery in filters
         for step in self.path:
             for f in step.node_filters:
                 if isinstance(f, CypherQuery):
-                    log.warning("Using CypherQuery in first() method needs a LIMIT 1 in the query.")
+                    log.warning('Using CypherQuery in first() method needs a LIMIT 1 in the query.')
                     results = self._execute_cypher_query(f)
                     return results[0] if results else None
 
@@ -253,7 +259,7 @@ class Query:
         elif len(self.path) == 2:
             return self._execute_relationship_query(limit=1)
         else:
-            raise NotImplementedError("Multi-hop queries not yet implemented")
+            raise NotImplementedError('Multi-hop queries not yet implemented')
 
     def _execute_node_query(self, limit=None):
         """Execute 0-hop node query"""
@@ -263,23 +269,23 @@ class Query:
         if self.source_instance:
             return [self.source_instance] if limit != 1 else self.source_instance
 
-        query = f"MATCH (n{get_label_string_from_list_of_labels(step.node_class._labels)})"
+        query = f'MATCH (n{get_label_string_from_list_of_labels(step.node_class._labels)})'
         conditions = []
         params = {}
 
         # Add node filters
         for i, f in enumerate(step.node_filters):
-            param_name = f"n_{f.field}_{i}"
-            conditions.append(f"n.{f.field} {f.operator} ${param_name}")
+            param_name = f'n_{f.field}_{i}'
+            conditions.append(f'n.{f.field} {f.operator} ${param_name}')
             params[param_name] = f.value
 
         if conditions:
-            query += f"\nWHERE {' AND '.join(conditions)}"
+            query += f'\nWHERE {" AND ".join(conditions)}'
 
-        query += "\nRETURN n"
+        query += '\nRETURN n'
 
         if limit is not None:
-            query += f" LIMIT {limit}"
+            query += f' LIMIT {limit}'
 
         log.debug(query)
 
@@ -306,48 +312,48 @@ class Query:
             query = f"""WITH $properties AS properties
 MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})
 WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties', node_variable='source')}"""
-            params = {"properties": self.source_instance.match_dict}
+            params = {'properties': self.source_instance.match_dict}
         else:
             # Class-based query: MATCH (source)-[r:REL]->(target) with source filters
-            query = f"MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})"
+            query = f'MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})'
             params = {}
 
             # Add source node filters
             conditions = []
             for i, f in enumerate(start_step.node_filters):
-                param_name = f"source_{f.field}_{i}"
-                conditions.append(f"source.{f.field} {f.operator} ${param_name}")
+                param_name = f'source_{f.field}_{i}'
+                conditions.append(f'source.{f.field} {f.operator} ${param_name}')
                 params[param_name] = f.value
 
             if conditions:
-                query += f"\nWHERE {' AND '.join(conditions)}"
+                query += f'\nWHERE {" AND ".join(conditions)}'
 
         # Add relationship filters
         rel_conditions = []
         for i, f in enumerate(target_step.rel_filters):
-            param_name = f"rel_{f.field}_{i}"
-            rel_conditions.append(f"r.{f.field} {f.operator} ${param_name}")
+            param_name = f'rel_{f.field}_{i}'
+            rel_conditions.append(f'r.{f.field} {f.operator} ${param_name}')
             params[param_name] = f.value
 
         # Add target node filters
         target_conditions = []
         for i, f in enumerate(target_step.node_filters):
-            param_name = f"target_{f.field}_{i}"
-            target_conditions.append(f"target.{f.field} {f.operator} ${param_name}")
+            param_name = f'target_{f.field}_{i}'
+            target_conditions.append(f'target.{f.field} {f.operator} ${param_name}')
             params[param_name] = f.value
 
         # Combine additional conditions
         additional_conditions = rel_conditions + target_conditions
         if additional_conditions:
-            if "WHERE" in query:
-                query += f"\nAND {' AND '.join(additional_conditions)}"
+            if 'WHERE' in query:
+                query += f'\nAND {" AND ".join(additional_conditions)}'
             else:
-                query += f"\nWHERE {' AND '.join(additional_conditions)}"
+                query += f'\nWHERE {" AND ".join(additional_conditions)}'
 
-        query += "\nRETURN DISTINCT target"
+        query += '\nRETURN DISTINCT target'
 
         if limit is not None:
-            query += f" LIMIT {limit}"
+            query += f' LIMIT {limit}'
 
         # Execute query
         results = []
@@ -368,7 +374,9 @@ WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties
             result = session.run(cypher_query.query, cypher_query.params)
             for record in result:
                 if 'n' not in record.keys():
-                    raise ValueError(f"Query must return nodes with variable name 'n'. Got keys: {record.keys()}")
+                    raise ValueError(
+                        f"Query must return nodes with variable name 'n'. Got keys: {record.keys()}"
+                    )
 
                 node = record['n']
                 properties = dict(node.items())
@@ -380,6 +388,7 @@ WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties
 
 class Base(BaseModel, metaclass=CustomMeta):
     """Static base class for all Neo4j ORM models"""
+
     _driver = None
 
     @classmethod
@@ -401,7 +410,7 @@ class Base(BaseModel, metaclass=CustomMeta):
     @classmethod
     def get_driver(cls) -> Driver:
         if cls._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         return cls._driver
 
     @classmethod
@@ -419,13 +428,14 @@ class Base(BaseModel, metaclass=CustomMeta):
 
 class NodeModel(Base, metaclass=CustomMeta):
     """Base class for Neo4j node models"""
-    _default_props: ClassVar[Dict] = {}
-    _preserve: ClassVar[List[str]] = None
-    _append_props: ClassVar[List[str]] = None
-    _additional_labels: ClassVar[List[str]] = None
-    _labels: ClassVar[List[str]] = []
-    _merge_keys: ClassVar[List[str]] = []
-    _relationships: ClassVar[Dict[str, 'Relationship']] = {}
+
+    _default_props: ClassVar[dict] = {}
+    _preserve: ClassVar[list[str]] = None
+    _append_props: ClassVar[list[str]] = None
+    _additional_labels: ClassVar[list[str]] = None
+    _labels: ClassVar[list[str]] = []
+    _merge_keys: ClassVar[list[str]] = []
+    _relationships: ClassVar[dict[str, 'Relationship']] = {}
 
     class Config:
         extra = 'allow'
@@ -485,8 +495,14 @@ class NodeModel(Base, metaclass=CustomMeta):
         append_props = cls._append_props
         additional_labels = cls._additional_labels
 
-        return NodeSet(labels=labels, merge_keys=merge_keys, default_props=default_props,
-                       preserve=preserve, append_props=append_props, additional_labels=additional_labels)
+        return NodeSet(
+            labels=labels,
+            merge_keys=merge_keys,
+            default_props=default_props,
+            preserve=preserve,
+            append_props=append_props,
+            additional_labels=additional_labels,
+        )
 
     @classmethod
     def dataset(cls):
@@ -497,7 +513,7 @@ class NodeModel(Base, metaclass=CustomMeta):
         cls.nodeset().create_index(Base._driver)
 
     @property
-    def relationships(self) -> List['Relationship']:
+    def relationships(self) -> list['Relationship']:
         # get all attributes of this class that are instances of Relationship
         relationship_objects = []
         for attr_name, attr_value in self.__dict__.items():
@@ -520,16 +536,16 @@ class NodeModel(Base, metaclass=CustomMeta):
 
     def create_target_nodes(self):
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         for rel in self.relationships:
             if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
-                for other_node, properties in rel.nodes:
+                for other_node, _ in rel.nodes:
                     other_node.create()
 
     def create_relationships(self) -> None:
         """Create relationships for this node."""
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         for rel in self.relationships:
             # relationships
             if self.__class__.__name__ == rel.source:
@@ -545,7 +561,7 @@ class NodeModel(Base, metaclass=CustomMeta):
 
     def create_node(self):
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         ns = self.nodeset()
 
         ns.add_node(self._all_properties)
@@ -559,16 +575,16 @@ class NodeModel(Base, metaclass=CustomMeta):
 
     def merge_target_nodes(self):
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         for rel in self.relationships:
             if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
-                for other_node, properties in rel.nodes:
+                for other_node, _ in rel.nodes:
                     other_node.merge()
 
     def merge_relationships(self) -> None:
         """Merge relationships for this node."""
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         for rel in self.relationships:
             # relationships
             if self.__class__.__name__ == rel.source:
@@ -584,7 +600,7 @@ class NodeModel(Base, metaclass=CustomMeta):
 
     def merge_node(self):
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         ns = self.nodeset()
 
         ns.add_node(self._all_properties)
@@ -596,13 +612,12 @@ class NodeModel(Base, metaclass=CustomMeta):
         self.merge_target_nodes()
         self.merge_relationships()
 
-
     @classmethod
     def match(cls, *filter_ops) -> 'Query':
         """Match nodes using a query builder pattern with deferred execution."""
         # Check if driver is set
         if cls._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
 
         # Return unified query builder
         query = Query(cls)
@@ -612,7 +627,7 @@ class NodeModel(Base, metaclass=CustomMeta):
 
     def delete(self):
         if Base._driver is None:
-            raise ValueError("Driver is not set. Use set_driver() to set the driver.")
+            raise ValueError('Driver is not set. Use set_driver() to set the driver.')
 
         query = f"""WITH $properties AS properties
         MATCH (n{get_label_string_from_list_of_labels(self._labels)})
@@ -631,16 +646,14 @@ class Relationship(BaseModel):
     source: str
     rel_type: str
     target: str
-    nodes: List[Tuple[Any, Dict]] = []
+    nodes: list[tuple[Any, dict]] = []
 
     # Use PrivateAttr for non-model fields
-    _parent_instance: Optional[Any] = PrivateAttr(default=None)
-    _rel_filters: List[Any] = PrivateAttr(default_factory=list)
+    _parent_instance: Any | None = PrivateAttr(default=None)
+    _rel_filters: list[Any] = PrivateAttr(default_factory=list)
 
     # Add model_config for Pydantic v2
-    model_config = {
-        "arbitrary_types_allowed": True
-    }
+    model_config = {'arbitrary_types_allowed': True}
 
     def __init__(self, source: str, rel_type: str, target: str, parent=None, **data):
         super().__init__(source=source, rel_type=rel_type, target=target, **data)
@@ -654,13 +667,11 @@ class Relationship(BaseModel):
 
         # Instance access
         # Use a unique attribute name for each relationship instance
-        inst_attr = f"_rel_{self.rel_type}_{id(self)}"
+        inst_attr = f'_rel_{self.rel_type}_{id(self)}'
         if not hasattr(instance, inst_attr):
             # Create instance-specific copy
             rel_copy = self.__class__(
-                source=self.source,
-                rel_type=self.rel_type,
-                target=self.target
+                source=self.source, rel_type=self.rel_type, target=self.target
             )
             rel_copy._parent_instance = instance
             # Store on instance using object.__setattr__ to bypass Pydantic's __setattr__
@@ -668,13 +679,12 @@ class Relationship(BaseModel):
 
         return getattr(instance, inst_attr)
 
-    def add(self, node: Any, properties: Dict = None):
+    def add(self, node: Any, properties: dict = None):
         """Add a target node to this relationship"""
         self.nodes.append((node, properties or {}))
         return self  # Allow method chaining
 
     def dataset(self):
-
         # Add debugging to see what's in the registry
         base = self._get_base()
 
@@ -692,6 +702,7 @@ class Relationship(BaseModel):
     def _get_base(self):
         """Helper method to get the Base class."""
         from graphio.ogm.model import Base
+
         return Base
 
     def relationshipset(self):
@@ -707,13 +718,13 @@ class Relationship(BaseModel):
         Usage:
         person.knows.filter(RelField("score") > 90).match(Person.age > 50)
 
-        :param filter_ops: FilterOp objects for complex filtering on relationship properties  
+        :param filter_ops: FilterOp objects for complex filtering on relationship properties
         :return: Query with relationship filters applied
         """
         # Get the base class to access driver and registry
         base = self._get_base()
         if not base:
-            raise ValueError("Could not determine Base class")
+            raise ValueError('Could not determine Base class')
 
         target_class = base.get_class_by_name(self.target)
         source_class = base.get_class_by_name(self.source)
@@ -724,12 +735,12 @@ class Relationship(BaseModel):
             if isinstance(f, FilterOp):
                 rel_filters.append(f)
             else:
-                raise ValueError(f"Unsupported filter type: {type(f)}")
+                raise ValueError(f'Unsupported filter type: {type(f)}')
 
         # Create 1-hop query path with relationship filters
         path = [
             PathStep(source_class),
-            PathStep(target_class, rel_type=self.rel_type, rel_filters=rel_filters)
+            PathStep(target_class, rel_type=self.rel_type, rel_filters=rel_filters),
         ]
 
         return Query(source_class, source_instance=self._parent_instance, path=path)
@@ -749,7 +760,7 @@ class Relationship(BaseModel):
         # Get the base class to access driver and registry
         base = self._get_base()
         if not base:
-            raise ValueError("Could not determine Base class")
+            raise ValueError('Could not determine Base class')
 
         target_class = base.get_class_by_name(self.target)
         source_class = base.get_class_by_name(self.source)
@@ -757,7 +768,9 @@ class Relationship(BaseModel):
         # Create 1-hop query path: source -> relationship -> target
         path = [
             PathStep(source_class),
-            PathStep(target_class, rel_type=self.rel_type, rel_filters=getattr(self, '_rel_filters', []))
+            PathStep(
+                target_class, rel_type=self.rel_type, rel_filters=getattr(self, '_rel_filters', [])
+            ),
         ]
 
         # Create query with instance context and add any node filters
@@ -772,23 +785,26 @@ class Relationship(BaseModel):
         """
         base = self._get_base()
         if not base:
-            raise ValueError("Could not determine Base class")
+            raise ValueError('Could not determine Base class')
         driver = base.get_driver()
         target_class = base.get_class_by_name(self.target)
 
         # if target instance is provided, delete only the relationship between the source and target
         if target:
-
             query = f"""WITH $properties AS properties, $target_properties AS target_properties
             MATCH (source{get_label_string_from_list_of_labels(self._parent_instance._labels)})-[r:{self.rel_type}]->(target{get_label_string_from_list_of_labels(target_class._labels)})
             WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')} \n"""
             if target:
-                query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
-            query += "DELETE r"
+                query += f' AND {where_clause_with_properties(target.match_dict, "target_properties", node_variable="target")} \n'
+            query += 'DELETE r'
             log.debug(query)
 
             with driver.session() as session:
-                session.run(query, properties=self._parent_instance.match_dict, target_properties=target.match_dict)
+                session.run(
+                    query,
+                    properties=self._parent_instance.match_dict,
+                    target_properties=target.match_dict,
+                )
 
         else:
             query = f"""WITH $properties AS properties

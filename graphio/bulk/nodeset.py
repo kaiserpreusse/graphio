@@ -1,5 +1,4 @@
 import logging
-from typing import List, Set
 from uuid import uuid4
 
 from neo4j import DEFAULT_DATABASE, Driver
@@ -21,13 +20,17 @@ class NodeSet:
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
     """
 
-    def __init__(self, labels: List[str] = None, merge_keys: List[str] = None, default_props: dict = None,
-                 preserve: List[str] = None, append_props: List[str] = None,
-                 additional_labels: List[str] = None, indexed: bool = False):
-        """
-
-
-        """
+    def __init__(
+        self,
+        labels: list[str] = None,
+        merge_keys: list[str] = None,
+        default_props: dict = None,
+        preserve: list[str] = None,
+        append_props: list[str] = None,
+        additional_labels: list[str] = None,
+        indexed: bool = False,
+    ):
+        """ """
         self.labels = labels
         self.merge_keys = merge_keys
         self.default_props = default_props or {}
@@ -41,7 +44,7 @@ class NodeSet:
         self.nodes = []
 
     def __str__(self):
-        return f"<NodeSet ({self.labels}; {self.merge_keys})>"
+        return f'<NodeSet ({self.labels}; {self.merge_keys})>'
 
     def _merge_key_id(self, node_dict: dict) -> tuple:
         """
@@ -93,7 +96,7 @@ class NodeSet:
 
     @property
     def metadata_dict(self):
-        return {"labels": self.labels, "merge_keys": self.merge_keys}
+        return {'labels': self.labels, 'merge_keys': self.merge_keys}
 
     def object_file_name(self, suffix: str = None) -> str:
         """
@@ -106,7 +109,7 @@ class NodeSet:
 
             `nodeset_Label_merge-key_uuid.json`
         """
-        basename = f"nodeset_{'_'.join(self.labels)}_{'_'.join(self.merge_keys)}_{self.uuid}"
+        basename = f'nodeset_{"_".join(self.labels)}_{"_".join(self.merge_keys)}_{self.uuid}'
         if suffix:
             basename += suffix
         return basename
@@ -120,7 +123,9 @@ class NodeSet:
             batch_size = BATCHSIZE
         log.debug(f'Batch Size: {batch_size}')
 
-        q = nodes_create_factory(self.labels, property_parameter="props", additional_labels=self.additional_labels)
+        q = nodes_create_factory(
+            self.labels, property_parameter='props', additional_labels=self.additional_labels
+        )
 
         # Define transaction function once
         def create_batch(tx, batch_props):
@@ -132,17 +137,25 @@ class NodeSet:
             for batch in chunks(self.nodes, size=batch_size):
                 session.execute_write(create_batch, list(batch))
 
-    def merge(self, graph, merge_properties=None, batch_size=None, preserve=None, append_props=None, database=None):
+    def merge(
+        self,
+        graph,
+        merge_properties=None,
+        batch_size=None,
+        preserve=None,
+        append_props=None,
+        database=None,
+    ):
         """
         Merge nodes from NodeSet on merge properties.
 
         :param merge_properties: The merge properties.
         """
         if not self.labels:
-            log.warning("MERGing without labels will not use an index and is slow.")
+            log.warning('MERGing without labels will not use an index and is slow.')
 
         if not self.merge_keys:
-            raise ValueError("Merge keys are empty, MERGE requires merge keys.")
+            raise ValueError('Merge keys are empty, MERGE requires merge keys.')
 
         # overwrite if preserve is passed
         if preserve:
@@ -157,13 +170,20 @@ class NodeSet:
         if not merge_properties:
             merge_properties = self.merge_keys
 
-        q = nodes_merge_factory(self.labels, self.merge_keys, array_props=self.append_props, preserve=self.preserve,
-                                property_parameter='props', additional_labels=self.additional_labels)
+        q = nodes_merge_factory(
+            self.labels,
+            self.merge_keys,
+            array_props=self.append_props,
+            preserve=self.preserve,
+            property_parameter='props',
+            additional_labels=self.additional_labels,
+        )
 
         # Define transaction function once
         def merge_batch(tx, batch_props):
-            result = tx.run(q, props=batch_props, append_props=self.append_props,
-                            preserve=self.preserve)
+            result = tx.run(
+                q, props=batch_props, append_props=self.append_props, preserve=self.preserve
+            )
             result.consume()
             return []
 
@@ -171,7 +191,7 @@ class NodeSet:
             for batch in chunks(self.nodes, size=batch_size):
                 session.execute_write(merge_batch, list(batch))
 
-    def all_property_keys(self) -> Set[str]:
+    def all_property_keys(self) -> set[str]:
         """
         Return a set of all property keys in this NodeSet
 
@@ -211,15 +231,23 @@ def nodes_create_factory(labels, property_parameter=None, additional_labels=None
 
     label_string = get_label_string_from_list_of_labels(labels)
 
-    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
-                    f"CREATE (n{label_string})",
-                    "SET n = properties")
+    q = CypherQuery(
+        f'UNWIND ${property_parameter} AS properties',
+        f'CREATE (n{label_string})',
+        'SET n = properties',
+    )
 
     return q.query()
 
 
-def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=None, property_parameter=None,
-                        additional_labels=None):
+def nodes_merge_factory(
+    labels,
+    merge_properties,
+    array_props=None,
+    preserve=None,
+    property_parameter=None,
+    additional_labels=None,
+):
     """
     Generate a :code:`MERGE` query based on the combination of paremeters.
     """
@@ -234,42 +262,43 @@ def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=Non
 
     on_create_array_props_list = []
     for ap in array_props:
-        on_create_array_props_list.append(f"n.{ap} = [properties.{ap}]")
+        on_create_array_props_list.append(f'n.{ap} = [properties.{ap}]')
     on_create_array_props_string = ', '.join(on_create_array_props_list)
 
     on_match_array_props_list = []
     for ap in array_props:
         if ap not in preserve:
-            on_match_array_props_list.append(f"n.{ap} = n.{ap} + properties.{ap}")
+            on_match_array_props_list.append(f'n.{ap} = n.{ap} + properties.{ap}')
     on_match_array_props_string = ', '.join(on_match_array_props_list)
 
     q = CypherQuery()
     # add UNWIND
-    q.append(f"UNWIND ${property_parameter} AS properties")
+    q.append(f'UNWIND ${property_parameter} AS properties')
     # add MERGE
     q.append(merge_clause_with_properties(labels, merge_properties))
 
     # handle different ON CREATE SET and ON MATCH SET cases
     if not array_props and not preserve:
-        q.append("ON CREATE SET n = properties")
-        q.append("ON MATCH SET n += properties")
+        q.append('ON CREATE SET n = properties')
+        q.append('ON MATCH SET n += properties')
     elif not array_props and preserve:
-        q.append("ON CREATE SET n = properties")
-        q.append("ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)")
+        q.append('ON CREATE SET n = properties')
+        q.append('ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)')
     elif array_props and not preserve:
-        q.append("ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)")
-        q.append(f"ON CREATE SET {on_create_array_props_string}")
-        q.append("ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)")
-        q.append(f"ON MATCH SET {on_match_array_props_string}")
+        q.append('ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)')
+        q.append(f'ON CREATE SET {on_create_array_props_string}')
+        q.append('ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)')
+        q.append(f'ON MATCH SET {on_match_array_props_string}')
     elif array_props and preserve:
-        q.append("ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)")
-        q.append(f"ON CREATE SET {on_create_array_props_string}")
-        q.append("ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)")
+        q.append('ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)')
+        q.append(f'ON CREATE SET {on_create_array_props_string}')
+        q.append(
+            'ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)'
+        )
         if on_match_array_props_list:
-            q.append(f"ON MATCH SET {on_match_array_props_string}")
+            q.append(f'ON MATCH SET {on_match_array_props_string}')
 
     if additional_labels:
-        q.append(f"SET n:{':'.join(additional_labels)}")
-
+        q.append(f'SET n:{":".join(additional_labels)}')
 
     return q.query()

@@ -1,10 +1,10 @@
 """
 GraphIO utilities for query building, data processing, and configuration.
 """
+
 import datetime
 import logging
 from itertools import chain, islice
-from typing import List, Union
 
 from neo4j import DEFAULT_DATABASE, Driver
 from neo4j.time import Date as Neo4jDate
@@ -40,8 +40,8 @@ def create_single_index(graph, label, prop, database=None):
     :param prop: The property.
     """
 
-    log.debug(f"Create index {label}, {prop}")
-    q = f"CREATE INDEX IF NOT EXISTS FOR (n:{label}) ON (n.{prop})"
+    log.debug(f'Create index {label}, {prop}')
+    q = f'CREATE INDEX IF NOT EXISTS FOR (n:{label}) ON (n.{prop})'
     log.debug(q)
     run_query_return_results(graph, q, database=database)
 
@@ -56,9 +56,9 @@ def create_composite_index(graph, label, properties, database=None):
 
     property_list = []
     for prop in properties:
-        property_list.append(f"n.{prop}")
+        property_list.append(f'n.{prop}')
 
-    q = f"CREATE INDEX IF NOT EXISTS FOR (n:{label}) ON ({','.join(property_list)})"
+    q = f'CREATE INDEX IF NOT EXISTS FOR (n:{label}) ON ({",".join(property_list)})'
     log.debug(q)
     run_query_return_results(graph, q, database=database)
 
@@ -88,26 +88,22 @@ def convert_neo4j_types_to_python(data):
             minute=data.minute,
             second=data.second,
             microsecond=data.nanosecond // 1000,
-            tzinfo=datetime.timezone.utc if data.tzinfo else None
+            tzinfo=datetime.timezone.utc if data.tzinfo else None,
         )
     elif isinstance(data, Neo4jDate):
         # Convert Neo4j Date to Python date
-        return datetime.date(
-            year=data.year,
-            month=data.month,
-            day=data.day
-        )
+        return datetime.date(year=data.year, month=data.month, day=data.day)
 
     return data
 
 
-def get_label_string_from_list_of_labels(labels: Union[List[str], None]) -> str:
+def get_label_string_from_list_of_labels(labels: list[str] | None) -> str:
     """
     Get a label string from a list of labels. If the list is empty, return an empty string.
     :param labels: List of labels
     :return: Label string
     """
     if labels:
-        return f":{':'.join(labels)}"
+        return f':{":".join(labels)}'
     else:
-        return ""
+        return ''

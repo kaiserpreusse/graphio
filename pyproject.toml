@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "graphio"
-description = "Library to load data sets to Neo4j."
+description = "OGM and data loader for Neo4j."
 readme = "README.md"
 license = "Apache-2.0"
 authors = [

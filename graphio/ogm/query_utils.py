@@ -3,7 +3,9 @@ OGM-specific query building utilities.
 """
 
 
-def where_clause_with_properties(properties: dict, prop_name: str = None, node_variable: str = None):
+def where_clause_with_properties(
+    properties: dict, prop_name: str = None, node_variable: str = None
+):
     """
     n.sid = properties.sid
     AND n.name = properties.name
@@ -22,7 +24,7 @@ def where_clause_with_properties(properties: dict, prop_name: str = None, node_v
         node_variable = 'n'
 
     where_strings = []
-    for k, v in properties.items():
-        where_strings.append(f"{node_variable}.{k} = {prop_name}.{k}")
+    for k, _ in properties.items():
+        where_strings.append(f'{node_variable}.{k} = {prop_name}.{k}')
     where_string = ' AND '.join(where_strings)
     return where_string
