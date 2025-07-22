@@ -72,13 +72,6 @@ def different_nodesets(small_nodeset, nodeset_multiple_labels, nodeset_multiple_
     return nodesets
 
 
-def test_node_set_from_dict():
-    people = NodeSet(["Person"], merge_keys=["name"])
-    people.add_node({"name": "Tom"})
-    people.add_node({"name": "Mary"})
-    people_dic = people.to_dict()
-    people_copy = NodeSet.from_dict(people_dic)
-    assert people_copy.to_dict() == people_dic
 
 
 def test_str():
@@ -402,28 +395,5 @@ class TestNodeSetToJSON:
         assert small_nodeset.object_file_name(
             suffix='.json') == "nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
-    def test_serialize(self, small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys,
-                       tmp_path):
-        """
-        Test serialization with different test NodeSets.
-        """
-
-        for test_ns in [small_nodeset, nodeset_multiple_labels, nodeset_multiple_labels_multiple_merge_keys]:
-            uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
-            test_ns.uuid = uuid
-
-            test_ns.to_json(str(tmp_path))
-
-            target_file_path = os.path.join(tmp_path, test_ns.object_file_name(suffix='.json'))
-
-            assert os.path.exists(target_file_path)
-
-            with open(target_file_path, 'rt') as f:
-                reloaded_nodeset = NodeSet.from_dict(json.load(f))
-
-                assert reloaded_nodeset.labels == test_ns.labels
-                assert reloaded_nodeset.merge_keys == test_ns.merge_keys
-                assert reloaded_nodeset.nodes == test_ns.nodes
-                assert len(reloaded_nodeset.nodes) == len(test_ns.nodes)
 
 

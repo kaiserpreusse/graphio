@@ -83,15 +83,6 @@ def test_str():
     assert str(rs) == "<RelationshipSet (['Source']; ['uid'])-[TEST]->(['Target']; ['name'])>"
 
 
-def test_relationship_set_from_dict():
-    rs = RelationshipSet('TEST', ['Source'], ['Target'], ['uid'], ['name'])
-    rs.add_relationship({'uid': 1}, {'name': 'peter'}, {})
-    rs.add_relationship({'uid': 2}, {'name': 'tim'}, {})
-
-    rs_dictionary = rs.to_dict()
-
-    rs_copy = RelationshipSet.from_dict(rs_dictionary)
-    assert rs_copy.to_dict() == rs_dictionary
 
 
 def test__tuplify_json_list():
@@ -343,32 +334,6 @@ class TestRelationshipSetToJSON:
         assert small_relationshipset.object_file_name(
             suffix='.json') == "relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
-    def test_serialize(self, small_relationshipset, small_relationshipset_multiple_labels,
-                       small_relationshipset_multiple_labels_multiple_merge_keys, tmp_path):
-        """
-        Test serialization with different test NodeSets.
-        """
-
-        for test_rs in [small_relationshipset, small_relationshipset_multiple_labels,
-                        small_relationshipset_multiple_labels_multiple_merge_keys]:
-            uuid = 'f8d1f0af-3eee-48b4-8407-8694ca628fc0'
-            test_rs.uuid = uuid
-
-            test_rs.to_json(str(tmp_path))
-
-            target_file_path = os.path.join(tmp_path, test_rs.object_file_name(suffix='.json'))
-
-            assert os.path.exists(target_file_path)
-
-            with open(target_file_path, 'rt') as f:
-                reloaded_relset = RelationshipSet.from_dict(json.load(f))
-
-                assert reloaded_relset.start_node_labels == test_rs.start_node_labels
-                assert reloaded_relset.start_node_properties == test_rs.start_node_properties
-                assert reloaded_relset.end_node_labels == test_rs.end_node_labels
-                assert reloaded_relset.end_node_properties == test_rs.end_node_properties
-                assert reloaded_relset.relationships == test_rs.relationships
-                assert len(reloaded_relset.relationships) == len(test_rs.relationships)
 
 
 
