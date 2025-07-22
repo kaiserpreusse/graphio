@@ -6,7 +6,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from graphio import NodeSet, RelationshipSet
 from graphio.helper import convert_neo4j_types_to_python
-from graphio.queries import where_clause_with_properties
+from graphio.queries import where_clause_with_properties, get_label_string_from_list_of_labels
 
 log = logging.getLogger(__name__)
 
@@ -263,7 +263,7 @@ class Query:
         if self.source_instance:
             return [self.source_instance] if limit != 1 else self.source_instance
 
-        query = f"MATCH (n{step.node_class._label_match_string()})"
+        query = f"MATCH (n{get_label_string_from_list_of_labels(step.node_class._labels)})"
         conditions = []
         params = {}
 
@@ -304,12 +304,12 @@ class Query:
         if self.source_instance:
             # Instance-based query: MATCH (source)-[r:REL]->(target) WHERE source matches instance
             query = f"""WITH $properties AS properties
-MATCH (source{start_step.node_class._label_match_string()})-[r:{target_step.rel_type}]->(target{target_step.node_class._label_match_string()})
+MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})
 WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties', node_variable='source')}"""
             params = {"properties": self.source_instance.match_dict}
         else:
             # Class-based query: MATCH (source)-[r:REL]->(target) with source filters
-            query = f"MATCH (source{start_step.node_class._label_match_string()})-[r:{target_step.rel_type}]->(target{target_step.node_class._label_match_string()})"
+            query = f"MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})"
             params = {}
 
             # Add source node filters
@@ -596,9 +596,6 @@ class NodeModel(Base, metaclass=CustomMeta):
         self.merge_target_nodes()
         self.merge_relationships()
 
-    @classmethod
-    def _label_match_string(cls):
-        return ":" + ":".join(cls._labels)
 
     @classmethod
     def match(cls, *filter_ops) -> 'Query':
@@ -618,7 +615,7 @@ class NodeModel(Base, metaclass=CustomMeta):
             raise ValueError("Driver is not set. Use set_driver() to set the driver.")
 
         query = f"""WITH $properties AS properties
-        MATCH (n{self._label_match_string()})
+        MATCH (n{get_label_string_from_list_of_labels(self._labels)})
         WHERE {where_clause_with_properties(self.match_dict, 'properties', node_variable='n')}
         DETACH DELETE n
         """
@@ -783,7 +780,7 @@ class Relationship(BaseModel):
         if target:
 
             query = f"""WITH $properties AS properties, $target_properties AS target_properties
-            MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_class._label_match_string()})
+            MATCH (source{get_label_string_from_list_of_labels(self._parent_instance._labels)})-[r:{self.rel_type}]->(target{get_label_string_from_list_of_labels(target_class._labels)})
             WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')} \n"""
             if target:
                 query += f" AND {where_clause_with_properties(target.match_dict, 'target_properties', node_variable='target')} \n"
@@ -795,7 +792,7 @@ class Relationship(BaseModel):
 
         else:
             query = f"""WITH $properties AS properties
-            MATCH (source{self._parent_instance._label_match_string()})-[r:{self.rel_type}]->(target{target_class._label_match_string()})
+            MATCH (source{get_label_string_from_list_of_labels(self._parent_instance._labels)})-[r:{self.rel_type}]->(target{get_label_string_from_list_of_labels(target_class._labels)})
             WHERE {where_clause_with_properties(self._parent_instance.match_dict, 'properties', node_variable='source')}
             DELETE r
             """
