@@ -2,8 +2,6 @@ import logging
 from uuid import uuid4
 import os
 import json
-import csv
-import gzip
 from collections import defaultdict
 from typing import Set, List, Union
 
@@ -15,12 +13,6 @@ from graphio.config import config
 
 log = logging.getLogger(__name__)
 
-# dict with python types to casting functions in Cypher
-CYPHER_TYPE_TO_FUNCTION = {int: 'toInteger',
-                           float: 'toFloat'}
-
-TYPE_CONVERSION = {'int': int,
-                   'float': float}
 
 
 class NodeSet:
@@ -114,171 +106,10 @@ class NodeSet:
         ns.add_nodes(nodeset_dict["nodes"])
         return ns
 
-    def to_csv(self, filepath: str, quoting: int = None) -> str:
-        """
-        Create a CSV file for this nodeset. Header row is created with all properties.
-        Each row contains the properties of a node.
 
-        Example:
 
-        >>> nodeset = NodeSet(labels=["Person"], merge_keys=["name"])
-        >>> nodeset.add_node({"name": "Alice", "age": 33})
-        >>> nodeset.add_node({"name": "Bob", "age": 44})
-        >>> nodeset.to_csv("/tmp/Person_name.csv")
-        '/tmp/Person_name.csv'
 
-        name,age
-        Alice,33
-        Bob,44
 
-        :param filepath: Full path to the CSV file.
-        :param quoting: Optional quoting setting for csv writer (any of csv.QUOTE_MINIMAL, csv.QUOTE_NONE, csv.QUOTE_ALL etc).
-        """
-
-        if not quoting:
-            quoting = csv.QUOTE_MINIMAL
-
-        log.debug(f"Create CSV file {filepath} for NodeSet {self.labels}, {self.merge_keys}")
-
-        all_props = self.all_property_keys()
-
-        with open(filepath, 'w', newline='') as csvfile:
-            fieldnames = list(all_props)
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=quoting)
-
-            writer.writeheader()
-
-            for n in self.nodes:
-                writer.writerow(dict(n))
-
-        return filepath
-
-    def create_csv_query(self, filename: str = None, periodic_commit=1000):
-        """
-        Create a Cypher query to load a CSV file created with NodeSet.to_csv() into Neo4j (CREATE statement).
-
-        :param filename: Optional filename. A filename will be autocreated if not passed.
-        :param periodic_commit: Number of rows to commit in one transaction.
-        :return: Cypher query.
-        """
-
-        property_types = self._estimate_type_of_property_values()
-
-        if not filename:
-            filename = f"{self.object_file_name()}.csv"
-
-        q = "USING PERIODIC COMMIT {}\n".format(periodic_commit)
-        q += "LOAD CSV WITH HEADERS FROM 'file:///{}' AS line\n".format(filename)
-        q += "CREATE (n:{})\n".format(':'.join(self.labels))
-
-        props_list = []
-        for k in sorted(self.all_property_keys()):
-            prop_type = property_types[k]
-            if prop_type in CYPHER_TYPE_TO_FUNCTION:
-                props_list.append(f"n.{k} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{k})")
-            else:
-                props_list.append(f"n.{k} = line.{k}")
-
-        q += "SET {}".format(', '.join(props_list))
-
-        return q
-
-    def merge_csv_query(self, filename: str = None, periodic_commit=1000):
-        """
-        Create a Cypher query to load a CSV file created with NodeSet.to_csv() into Neo4j (MERGE statement).
-
-        :param filename: Optional filename. A filename will be autocreated if not passed.
-        :param periodic_commit: Number of rows to commit in one transaction.
-        :return: Cypher query.
-        """
-
-        property_types = self._estimate_type_of_property_values()
-
-        if not filename:
-            filename = f"{self.object_file_name()}.csv"
-
-        merge_csv_query_elements = []
-        for merge_key in self.merge_keys:
-            prop_type = property_types[merge_key]
-            if prop_type in CYPHER_TYPE_TO_FUNCTION:
-                merge_csv_query_elements.append(f"{merge_key}: {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{merge_key})")
-            else:
-                merge_csv_query_elements.append(f"{merge_key}: line.{merge_key}")
-        merge_csv_query_string = ','.join(merge_csv_query_elements)
-
-        q = "USING PERIODIC COMMIT {}\n".format(periodic_commit)
-        q += "LOAD CSV WITH HEADERS FROM 'file:///{}' AS line\n".format(filename)
-        q += f"MERGE (n:{':'.join(self.labels)} {{ {merge_csv_query_string} }})\n"
-
-        props_list = []
-        for k in sorted(self.all_property_keys()):
-            prop_type = property_types[k]
-            if prop_type in CYPHER_TYPE_TO_FUNCTION:
-                props_list.append(f"n.{k} = {CYPHER_TYPE_TO_FUNCTION[prop_type]}(line.{k})")
-            else:
-                props_list.append(f"n.{k} = line.{k}")
-
-        q += "SET {}".format(', '.join(props_list))
-
-        return q
-
-    def to_csv_json_set(self, csv_file_path, json_file_path, type_conversion: dict = None):
-        """
-        Write the default CSV/JSON file combination.
-
-        Needs paths to CSV and JSON file.
-
-        :param csv_file_path: Path to the CSV file.
-        :param json_file_path: Path to the JSON file.
-        :param type_conversion: Optional dictionary to convert types of properties.
-        """
-        self.to_csv(csv_file_path)
-        with open(json_file_path, 'w') as f:
-            json_dict = self.metadata_dict
-            if type_conversion:
-                json_dict['type_conversion'] = type_conversion
-            json.dump(json_dict, f)
-
-    @classmethod
-    def from_csv_json_set(cls, csv_file_path, json_file_path, load_items: bool = False,
-                          labels_key: str = None, mergekey_key: str = None):
-        """
-        Read the default CSV/JSON file combination. Needs paths to CSV and JSON file.
-
-        JSON keys can be overwritten by passing the respective parameters.
-
-        :param csv_file_path: Path to the CSV file.
-        :param json_file_path: Path to the JSON file.
-        :param load_items: Yield items from file (False, default) or load them to memory (True).
-        :return: The NodeSet.
-        """
-        if not labels_key:
-            labels_key = 'labels'
-        if not mergekey_key:
-            mergekey_key = 'merge_keys'
-
-        with open(json_file_path) as f:
-            metadata = json.load(f)
-
-        # map properties
-        property_map = None
-        if 'property_map' in metadata:
-            # replace mergekeys if necessary
-            property_map = metadata['property_map']
-            metadata[mergekey_key] = [property_map[x] if x in property_map else x for x in metadata[mergekey_key]]
-
-        # type conversion
-        type_conversion = metadata.get('type_conversion', None)
-
-        # NodeSet instance
-        nodeset = cls(metadata[labels_key], merge_keys=metadata[mergekey_key])
-
-        if load_items:
-            nodeset.nodes = _read_nodes(csv_file_path, property_map, type_conversion)
-        else:
-            nodeset.nodes = _yield_node(csv_file_path, property_map, type_conversion)
-
-        return nodeset
 
     def object_file_name(self, suffix: str = None) -> str:
         """
@@ -384,35 +215,6 @@ class NodeSet:
 
         return all_props
 
-    def _estimate_type_of_property_values(self):
-        """
-        To create data from CSV we need to know the type of all node properties.
-
-        This function tries to find the type and falls back to string if it's not consistent. For performance reasons
-        this function is limited to the first 1000 nodes.
-
-        :return:
-        """
-        property_types = {}
-        for p in self.all_property_keys():
-            this_type = None
-            for node in self.nodes[:1000]:
-                try:
-                    value = node[p]
-                    type_of_value = type(value)
-                except KeyError:
-                    type_of_value = None
-
-                if not this_type:
-                    this_type = type_of_value
-                else:
-                    if this_type != type_of_value:
-                        this_type = str
-                        break
-
-            property_types[p] = this_type
-
-        return property_types
 
     def create_index(self, graph, database=None):
         """
@@ -428,81 +230,3 @@ class NodeSet:
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys, database)
 
-
-def _read_nodes(csv_filepath, property_map, type_conversion=None):
-    """
-    Instead of recreating the entire RelationShip set in memory this function yields
-    one relationship at a time.
-
-    :param csv_filepath: Path to the CSV file.
-    :param property_map: Property map to rename properties.
-    :return: One node property dict per iteration.
-    """
-
-    if csv_filepath.endswith('.gz'):
-        csvfile = gzip.open(csv_filepath, 'rt')
-    else:
-        csvfile = open(csv_filepath, newline='')
-    lines = csvfile.readlines()
-    csvfile.close()
-
-    # get header line
-    header = lines[0].strip().split(',')
-    header = [x.replace('"', '') for x in header]
-
-    log.debug(f"Header: {header}")
-
-    if property_map:
-        log.debug(f"Replace header {header}")
-        header = [property_map[x] if x in property_map else x for x in header]
-        log.debug(f"With header {header}")
-
-    nodes = []
-    rdr = csv.DictReader(lines[1:], fieldnames=header)
-    for node in rdr:
-        if type_conversion:
-            for node_key, node_value in node.items():
-                if node_key in type_conversion:
-                    node[node_key] = TYPE_CONVERSION[type_conversion[node_key]](node_value)
-        nodes.append(node)
-
-    return nodes
-
-
-def _yield_node(csv_filepath, property_map, type_conversion=None):
-    """
-    Instead of recreating the entire RelationShip set in memory this function yields
-    one relationship at a time.
-
-    :param csv_filepath: Path to the CSV file.
-    :param property_map: Property map to rename properties.
-    :return: One node property dict per iteration.
-    """
-
-    if csv_filepath.endswith('.gz'):
-        csvfile = gzip.open(csv_filepath, 'rt')
-    else:
-        csvfile = open(csv_filepath, newline='')
-
-    # get header line
-    header = None
-    while not header:
-        line = csvfile.readline()
-        if not line.startswith('#'):
-            header = line.strip().split(',')
-            header = [x.replace('"', '') for x in header]
-    log.debug(f"Header: {header}")
-
-    if property_map:
-        log.debug(f"Replace header {header}")
-        header = [property_map[x] if x in property_map else x for x in header]
-        log.debug(f"With header {header}")
-
-    rdr = csv.DictReader([row for row in csvfile if not row.startswith('#')], fieldnames=header)
-    for node in rdr:
-        if type_conversion:
-            for k, v in node.items():
-                if k in type_conversion:
-                    node[k] = TYPE_CONVERSION[type_conversion[k]](v)
-        yield node
-    csvfile.close()
