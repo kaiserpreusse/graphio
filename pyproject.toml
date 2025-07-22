@@ -8,7 +8,7 @@ description = "OGM and data loader for Neo4j."
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
-    {name = "Martin Preusse", email = "mail@martinpreusse.de"}
+    {name = "Martin Preusse"}
 ]
 keywords = ["NEO4J"]
 classifiers = [
@@ -33,10 +33,6 @@ Repository = "https://github.com/kaiserpreusse/graphio"
 Issues = "https://github.com/kaiserpreusse/graphio/issues"
 
 [project.optional-dependencies]
-test = [
-    "pytest",
-    "hypothesis",
-]
 docs = [
     "mkdocs-material",
     "mkdocstrings-python",

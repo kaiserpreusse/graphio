@@ -51,7 +51,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        uv sync --extra test --extra dev
+        uv sync --extra dev
     
     - name: Lint with ruff
       run: |
