@@ -10,6 +10,7 @@ build:
       - pip install uv
       # Install docs dependencies from pyproject.toml
       - uv pip install --system -e ".[docs]"
-    post_build:
-      # Build docs manually with our installed mkdocs
-      - mkdocs build --clean --site-dir $READTHEDOCS_OUTPUT/html
+
+mkdocs:
+  configuration: mkdocs.yml
+  fail_on_warning: false
