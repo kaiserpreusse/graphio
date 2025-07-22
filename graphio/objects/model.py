@@ -1,19 +1,15 @@
 import logging
-from typing import List, ClassVar, Dict, Any, Optional, Type, Union, Set, Tuple, TypeVar, Generic
+from typing import List, ClassVar, Dict, Any, Optional, Tuple
 
 from neo4j import Driver
 from pydantic import BaseModel, PrivateAttr
 
 from graphio import NodeSet, RelationshipSet
-from graphio.queries import where_clause_with_properties
 from graphio.helper import convert_neo4j_types_to_python
+from graphio.queries import where_clause_with_properties
 
 log = logging.getLogger(__name__)
 
-# Type variables for better typing
-T = TypeVar('T', bound='NodeModel')
-
-# Simple model registry - replaces complex Registry class
 _MODEL_REGISTRY = {}
 
 
