@@ -92,7 +92,7 @@ pip install graphio
 
 ## What's Next?
 
-- **New to GraphIO?** → [Getting Started](getting_started/index.md) - Learn both approaches
+- **New to Graphio?** → [Getting Started](getting_started/index.md) - Learn both approaches
 - **Need comprehensive docs?** → [User Guide](details/ogm.md) - Deep dive into OGM and bulk loading
 - **API reference?** → [API Reference](api_reference/nodeset.md) - Complete method reference
 

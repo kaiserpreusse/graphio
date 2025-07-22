@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to GraphIO! Choose the approach that fits your use case:
+Welcome to Graphio! Choose the approach that fits your use case:
 
 === "OGM"
     For applications with complex data models and queries. [Learn more →](ogm.md)
@@ -31,7 +31,7 @@ Regardless of which approach you choose, you'll need:
    docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:latest
    ```
 
-2. **GraphIO installed**
+2. **Graphio installed**
    ```bash
    pip install graphio
    ```
@@ -43,4 +43,4 @@ Regardless of which approach you choose, you'll need:
 - **Building for production?** → Start with [Hybrid Approach](hybrid.md)
 
 !!! tip "Pro Tip"
-    You're not locked into one approach! GraphIO is designed so you can use OGM and bulk loading together in the same project. Many users start with one approach and add the other as their needs grow.
+    You're not locked into one approach! Graphio is designed so you can use OGM and bulk loading together in the same project. Many users start with one approach and add the other as their needs grow.

@@ -1,6 +1,6 @@
 # Bulk Loading
 
-Bulk loading with `NodeSet` and `RelationshipSet` is GraphIO's high-performance approach for loading large datasets into Neo4j. This guide covers advanced patterns, optimization techniques, and best practices.
+Bulk loading with `NodeSet` and `RelationshipSet` is Graphio's high-performance approach for loading large datasets into Neo4j. This guide covers advanced patterns, optimization techniques, and best practices.
 
 ## Overview
 
@@ -304,7 +304,7 @@ employments.add_relationship(
 ```
 
 !!! warning "Important"
-    GraphIO does not validate that nodes referenced in relationships actually exist. Ensure proper loading order: nodes before relationships.
+    Graphio does not validate that nodes referenced in relationships actually exist. Ensure proper loading order: nodes before relationships.
 
 ---
 

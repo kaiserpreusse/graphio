@@ -10,7 +10,7 @@
    docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:latest
    ```
 
-2. **Install GraphIO**:
+2. **Install Graphio**:
    ```bash
    pip install graphio
    ```
@@ -74,7 +74,7 @@ Base.create_indexes()
 
 ## What You've Learned
 
-✅ How to define Pydantic-based models with GraphIO  
+✅ How to define Pydantic-based models with Graphio  
 ✅ How to create nodes and relationships  
 ✅ How to query data using intuitive syntax  
 ✅ How to optimize with indexes  

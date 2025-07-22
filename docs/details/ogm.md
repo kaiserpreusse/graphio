@@ -1,6 +1,6 @@
 # Object Graph Mapper (OGM)
 
-GraphIO's Object Graph Mapper provides an intuitive, Pydantic-based approach for modeling complex graph data. Build applications with type safety, relationship traversal, and powerful querying capabilities.
+Graphio's Object Graph Mapper provides an intuitive, Pydantic-based approach for modeling complex graph data. Build applications with type safety, relationship traversal, and powerful querying capabilities.
 
 ## Overview
 
@@ -33,7 +33,7 @@ driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password
 Base.set_driver(driver)
 
 class Person(NodeModel):
-    # GraphIO configuration
+    # Graphio configuration
     _labels = ['Person']
     _merge_keys = ['email']
     
@@ -755,7 +755,7 @@ def create_social_network():
     charlie = User(username='charlie_brown', email='charlie@example.com', full_name='Charlie Brown')
     
     # Create posts
-    post1 = Post(post_id='post_001', content='Hello GraphIO!')
+    post1 = Post(post_id='post_001', content='Hello Graphio!')
     post2 = Post(post_id='post_002', content='Learning Neo4j with Python')
     
     # Build relationships
