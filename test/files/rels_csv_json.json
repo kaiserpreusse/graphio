@@ -1,9 +1,0 @@
-{
-  "start_node_labels": ["Test"],
-  "end_node_labels": ["Test"],
-  "start_node_properties": ["test_id"],
-  "start_node_type_conversion": {"test_id": "int"},
-  "end_node_properties": ["test_id"],
-  "end_node_type_conversion": {"test_id": "int"},
-  "rel_type": "RELATIONSHIP"
-}
