@@ -5,7 +5,7 @@ import os
 from typing import Set, List
 
 from graphio.utils import chunks, create_single_index, create_composite_index, run_query_return_results, get_label_string_from_list_of_labels, BATCHSIZE
-from graphio.bulk.queries import CypherQuery, ArrayProperty
+from graphio.bulk.query_utils import CypherQuery, ArrayProperty
 
 log = logging.getLogger(__name__)
 

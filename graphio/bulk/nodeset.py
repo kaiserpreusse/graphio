@@ -8,7 +8,7 @@ from typing import Set, List, Union
 from neo4j import Driver, DEFAULT_DATABASE
 
 from graphio.utils import chunks, create_single_index, create_composite_index, run_query_return_results, get_label_string_from_list_of_labels, BATCHSIZE
-from graphio.bulk.queries import CypherQuery, merge_clause_with_properties
+from graphio.bulk.query_utils import CypherQuery, merge_clause_with_properties
 
 log = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from graphio.bulk import NodeSet, RelationshipSet
 from graphio.utils import convert_neo4j_types_to_python, get_label_string_from_list_of_labels
-from graphio.ogm.queries import where_clause_with_properties
+from graphio.ogm.query_utils import where_clause_with_properties
 
 log = logging.getLogger(__name__)
 
