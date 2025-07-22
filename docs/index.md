@@ -1,58 +1,100 @@
 # Graphio
 
-**Graphio** is a Python library designed for efficient interaction with Neo4j.
-It provides a simple **Object Graph Mapper (OGM)** to work with
-individual nodes and relationships and **simplifies bulk data loading**.
+**Graphio** makes loading data into Neo4j fast and intuitive. Use the Pydantic-based **Object Graph Mapper** for complex applications and **bulk loading** for high-performance data ingestion — or combine both approaches in the same project for maximum flexibility.
 
-The graphio OGM is based on Pydantic and provides a simple way to define a data
-model and use it to load data into Neo4j.
-Bulk data loading is facilitated by the `NodeSet` and `RelationshipSet` classes,
-which organize nodes and relationships for streamlined data ingestion.
+## Quick Example
 
-Graphio also supports serializing data to JSON and CSV formats. This feature
-is particularly useful for debugging or
-saving graph-ready datasets for future use.
+=== "OGM (Object-Oriented)"
 
-Graphio relies on the official Neo4j Python driver for its connection to Neo4j,
-ensuring compatibility and performance.
+    ```python
+    from graphio import NodeModel, Relationship, Base
+    from neo4j import GraphDatabase
+    
+    # Set up connection
+    driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
+    Base.set_driver(driver)
+    
+    # Define model
+    class Person(NodeModel):
+        _labels = ['Person']
+        _merge_keys = ['name']
+        
+        name: str
+        age: int
+        
+        friends: Relationship = Relationship('Person', 'FRIENDS_WITH', 'Person')
+    
+    # Use it
+    alice = Person(name='Alice', age=30)
+    bob = Person(name='Bob', age=25)
+    alice.friends.add(bob)
+    alice.merge()
+    ```
+
+=== "Bulk Loading (High Performance)"
+
+    ```python  
+    from graphio import NodeSet, RelationshipSet
+    from neo4j import GraphDatabase
+    
+    # Set up connection
+    driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
+    
+    # Define data containers
+    people = NodeSet(['Person'], merge_keys=['name'])
+    friendships = RelationshipSet('FRIENDS_WITH', ['Person'], ['Person'], ['name'], ['name'])
+    
+    # Add data
+    people.add_node({'name': 'Alice', 'age': 30})
+    people.add_node({'name': 'Bob', 'age': 25})
+    friendships.add_relationship({'name': 'Alice'}, {'name': 'Bob'})
+    
+    # Bulk load to Neo4j
+    people.create(driver)
+    friendships.create(driver)
+    ```
+
+=== "Hybrid Approach (Best of Both)"
+
+    ```python
+    from graphio import NodeModel, Base
+    from neo4j import GraphDatabase
+    
+    # Set up connection
+    driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
+    Base.set_driver(driver)
+    
+    # Define OGM model for structure and validation
+    class Person(NodeModel):
+        _labels = ['Person']
+        _merge_keys = ['email']
+        name: str
+        email: str
+    
+    # Get bulk container directly from OGM model
+    people = Person.dataset()  # Automatically uses Person's labels and merge_keys
+    
+    for person_data in large_dataset:
+        # Validate with OGM, load with bulk
+        Person(**person_data)  # Validates data
+        people.add_node(person_data)
+    people.create(driver)
+    
+    # Use OGM for application logic
+    alice = Person.match(Person.email == 'alice@example.com').first()
+    ```
 
 ## Install
 
-```shell
+```bash
 pip install graphio
 ```
 
-## tl;dr
+## What's Next?
 
-```python
-from graphio import NodeModel, Relationship, Base
-from neo4j import GraphDatabase
+- **New to GraphIO?** → [Getting Started](getting_started/index.md) - Learn both approaches
+- **Need comprehensive docs?** → [User Guide](details/ogm.md) - Deep dive into OGM and bulk loading
+- **API reference?** → [API Reference](api_reference/nodeset.md) - Complete method reference
 
-driver = GraphDatabase.driver('neo4j://localhost:7687',
-                              auth=('neo4j', 'password'))
-
-Base.set_driver(driver)
-
-class Person(NodeModel):
-    # Graphio specific declarations
-    _labels = ['Person']
-    _merge_keys = ['name']
-    
-    # Pydantic model declarations
-    name: str
-    age: int
-    
-    # Relationships
-    likes: Relationship = Relationship('Person', 'LIKES', 'Person')
-            
-
-# Create a person
-peter = Person(name='Peter', age=42)
-peter.merge()
-
-# Create another Person, make sure they LIKE each other
-john = Person(name='John', age=35)
-john.likes.add(peter, {'since': 'forever'})
-john.merge()
-
-```
+!!! tip "Pro Tip"
+    Most production applications use **both approaches**: OGM for application logic and bulk loading for data ingestion. They complement each other perfectly!

@@ -29,8 +29,8 @@ theme:
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default 
-      primary: blue grey
-      accent: deep orange
+      primary: indigo
+      accent: teal
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -38,8 +38,8 @@ theme:
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue grey
-      accent: deep orange
+      primary: indigo
+      accent: teal
       toggle:
         icon: material/brightness-4
         name: Switch to system preference
@@ -54,6 +54,9 @@ extra:
       link: https://github.com/kaiserpreusse/graphio
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/graphio/
+
+extra_css:
+  - stylesheets/extra.css
 markdown_extensions:
   # Table of contents
   - toc:
@@ -92,12 +95,18 @@ nav:
   - Home: index.md
   - Getting Started:
       - Overview: getting_started/index.md
+      - OGM Track: getting_started/ogm.md
+      - Bulk Loading Track: getting_started/bulk.md
+      - Hybrid Approach: getting_started/hybrid.md
   - User Guide:
       - OGM: details/ogm.md
-      - Data Sets: details/datasets.md
+      - Bulk Loading: details/bulk.md
   - API Reference:
       - NodeSet: api_reference/nodeset.md
       - RelationshipSet: api_reference/relationshipset.md
+      - NodeModel: api_reference/nodemodel.md
+      - Relationship: api_reference/relationship.md
+      - Base: api_reference/base.md
 plugins:
 - mkdocstrings:
     handlers:
@@ -105,3 +114,18 @@ plugins:
         options:
           allow_inspection: true
           docstring_style: sphinx
+          show_source: false
+          show_root_heading: true
+          show_root_full_path: false
+          show_category_heading: false
+          show_symbol_type_heading: false
+          show_symbol_type_toc: true
+          members_order: source
+          group_by_category: false
+          show_signature: true
+          show_signature_annotations: true
+          separate_signature: true
+          line_length: 80
+          merge_init_into_class: true
+          show_if_no_docstring: false
+          heading_level: 2

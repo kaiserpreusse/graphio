@@ -1,0 +1,33 @@
+/* API Reference Improvements */
+
+/* Make function signatures smaller and more readable */
+.doc-heading code {
+    font-size: 0.95em !important;
+    font-weight: 600;
+}
+
+/* Subtle separation between API methods */
+.doc-object {
+    margin-bottom: 2.5em !important;
+}
+
+/* Smaller headings for API methods */
+.doc-object-name {
+    font-size: 1.3em !important;
+}
+
+/* Better spacing for parameters */
+.doc-section {
+    margin-top: 1.5em !important;
+}
+
+/* Make parameter tables more compact */
+.doc table {
+    font-size: 0.9em;
+}
+
+/* Compact parameter lists */
+.doc-section-title {
+    font-weight: 600;
+    margin-bottom: 0.5em;
+}
