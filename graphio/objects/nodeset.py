@@ -14,7 +14,6 @@ from graphio.config import config
 log = logging.getLogger(__name__)
 
 
-
 class NodeSet:
     """
     Container for a set of Nodes with the same labels and the same properties that define uniqueness.
@@ -94,23 +93,6 @@ class NodeSet:
     def metadata_dict(self):
         return {"labels": self.labels, "merge_keys": self.merge_keys}
 
-    def to_dict(self):
-        """
-        Create dictionary defining the nodeset.
-        """
-        return {"labels": self.labels, "merge_keys": self.merge_keys, "nodes": self.nodes}
-
-    @classmethod
-    def from_dict(cls, nodeset_dict, batch_size=None):
-        ns = cls(labels=nodeset_dict["labels"], merge_keys=nodeset_dict["merge_keys"])
-        ns.add_nodes(nodeset_dict["nodes"])
-        return ns
-
-
-
-
-
-
     def object_file_name(self, suffix: str = None) -> str:
         """
         Create a unique name for this NodeSet that indicates content. Pass an optional suffix.
@@ -126,19 +108,6 @@ class NodeSet:
         if suffix:
             basename += suffix
         return basename
-
-    def to_json(self, target_dir: str, filename: str = None):
-        """
-        Serialize NodeSet to a JSON file in a target directory.
-
-        This function is meant for dumping/reloading and not to create a general transport
-        format. The function will likely be optimized for disk space or compressed in future.
-        """
-        if not filename:
-            filename = self.object_file_name(suffix='.json')
-        path = os.path.join(target_dir, filename)
-        with open(path, 'wt') as f:
-            json.dump(self.to_dict(), f, indent=4)
 
     def create(self, graph: Driver, database: str = DEFAULT_DATABASE, batch_size=None):
         """
@@ -215,7 +184,6 @@ class NodeSet:
 
         return all_props
 
-
     def create_index(self, graph, database=None):
         """
         Create indices for all label/merge ky combinations as well as a composite index if multiple merge keys exist.
@@ -229,4 +197,3 @@ class NodeSet:
                 # composite indexes
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys, database)
-

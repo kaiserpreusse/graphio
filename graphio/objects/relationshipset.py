@@ -11,7 +11,6 @@ from graphio.config import config
 log = logging.getLogger(__name__)
 
 
-
 def tuplify_json_list(list_object: list) -> tuple:
     """
     JSON.dump() stores tuples as JSON lists. This function receives a list (with sub lists)
@@ -38,8 +37,9 @@ class RelationshipSet:
     Container for a set of Relationships with the same type of start and end nodes.
     """
 
-    def __init__(self, rel_type: str, start_node_labels: List[str], end_node_labels: List[str], start_node_properties: List[str], end_node_properties: List[str],
-                 default_props: dict=None):
+    def __init__(self, rel_type: str, start_node_labels: List[str], end_node_labels: List[str],
+                 start_node_properties: List[str], end_node_properties: List[str],
+                 default_props: dict = None):
         """
 
         :param rel_type: Realtionship type.
@@ -117,7 +117,6 @@ class RelationshipSet:
 
         return all_props
 
-
     @property
     def metadata_dict(self):
         return {"rel_type": self.rel_type,
@@ -125,31 +124,6 @@ class RelationshipSet:
                 "end_node_labels": self.end_node_labels,
                 "start_node_properties": self.start_node_properties,
                 "end_node_properties": self.end_node_properties}
-
-    def to_dict(self):
-        return {"rel_type": self.rel_type,
-                "start_node_labels": self.start_node_labels,
-                "end_node_labels": self.end_node_labels,
-                "start_node_properties": self.start_node_properties,
-                "end_node_properties": self.end_node_properties,
-                "unique": self.unique,
-                "relationships": self.relationships}
-
-    @classmethod
-    def from_dict(cls, relationship_dict):
-        rs = cls(rel_type=relationship_dict["rel_type"],
-                 start_node_labels=relationship_dict["start_node_labels"],
-                 end_node_labels=relationship_dict["end_node_labels"],
-                 start_node_properties=relationship_dict["start_node_properties"],
-                 end_node_properties=relationship_dict["end_node_properties"])
-        rs.unique = relationship_dict["unique"]
-        rs.relationships = [tuplify_json_list(r) for r in relationship_dict["relationships"]]
-
-        return rs
-
-
-
-
 
     def object_file_name(self, suffix: str = None) -> str:
         """
@@ -166,19 +140,6 @@ class RelationshipSet:
         if suffix:
             basename += suffix
         return basename
-
-    def to_json(self, target_dir, filename: str = None):
-        """
-        Serialize NodeSet to a JSON file in a target directory.
-
-        This function is meant for dumping/reloading and not to create a general transport
-        format. The function will likely be optimized for disk space or compressed in future.
-        """
-        if not filename:
-            filename = self.object_file_name(suffix='.json')
-        path = os.path.join(target_dir, filename)
-        with open(path, 'wt') as f:
-            json.dump(self.to_dict(), f, indent=4)
 
     def create(self, graph, database=None, batch_size=None):
         """
@@ -249,4 +210,3 @@ class RelationshipSet:
             # composite indexes
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties, database=database)
-
