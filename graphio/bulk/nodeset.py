@@ -8,7 +8,8 @@ from typing import Set, List, Union
 from neo4j import Driver, DEFAULT_DATABASE
 
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
-from graphio.queries import nodes_merge_factory, nodes_create_factory
+from graphio.bulk.queries import CypherQuery, merge_clause_with_properties
+from graphio.queries import get_label_string_from_list_of_labels
 from graphio.config import config
 
 log = logging.getLogger(__name__)
@@ -197,3 +198,77 @@ class NodeSet:
                 # composite indexes
                 if len(self.merge_keys) > 1:
                     create_composite_index(graph, label, self.merge_keys, database)
+
+
+# NodeSet-specific query factories
+def nodes_create_factory(labels, property_parameter=None, additional_labels=None):
+    if not property_parameter:
+        property_parameter = 'props'
+
+    if additional_labels:
+        labels = labels + additional_labels
+
+    label_string = get_label_string_from_list_of_labels(labels)
+
+    q = CypherQuery(f"UNWIND ${property_parameter} AS properties",
+                    f"CREATE (n{label_string})",
+                    "SET n = properties")
+
+    return q.query()
+
+
+def nodes_merge_factory(labels, merge_properties, array_props=None, preserve=None, property_parameter=None,
+                        additional_labels=None):
+    """
+    Generate a :code:`MERGE` query based on the combination of paremeters.
+    """
+    if not array_props:
+        array_props = []
+
+    if not preserve:
+        preserve = []
+
+    if not property_parameter:
+        property_parameter = 'props'
+
+    on_create_array_props_list = []
+    for ap in array_props:
+        on_create_array_props_list.append(f"n.{ap} = [properties.{ap}]")
+    on_create_array_props_string = ', '.join(on_create_array_props_list)
+
+    on_match_array_props_list = []
+    for ap in array_props:
+        if ap not in preserve:
+            on_match_array_props_list.append(f"n.{ap} = n.{ap} + properties.{ap}")
+    on_match_array_props_string = ', '.join(on_match_array_props_list)
+
+    q = CypherQuery()
+    # add UNWIND
+    q.append(f"UNWIND ${property_parameter} AS properties")
+    # add MERGE
+    q.append(merge_clause_with_properties(labels, merge_properties))
+
+    # handle different ON CREATE SET and ON MATCH SET cases
+    if not array_props and not preserve:
+        q.append("ON CREATE SET n = properties")
+        q.append("ON MATCH SET n += properties")
+    elif not array_props and preserve:
+        q.append("ON CREATE SET n = properties")
+        q.append("ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)")
+    elif array_props and not preserve:
+        q.append("ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)")
+        q.append(f"ON CREATE SET {on_create_array_props_string}")
+        q.append("ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)")
+        q.append(f"ON MATCH SET {on_match_array_props_string}")
+    elif array_props and preserve:
+        q.append("ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)")
+        q.append(f"ON CREATE SET {on_create_array_props_string}")
+        q.append("ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)")
+        if on_match_array_props_list:
+            q.append(f"ON MATCH SET {on_match_array_props_string}")
+
+    if additional_labels:
+        q.append(f"SET n:{':'.join(additional_labels)}")
+
+
+    return q.query()

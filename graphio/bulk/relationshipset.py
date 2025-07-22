@@ -5,7 +5,8 @@ import os
 from typing import Set, List
 
 from graphio.helper import chunks, create_single_index, create_composite_index, run_query_return_results
-from graphio.queries import rels_create_factory, rels_merge_factory, rels_params_from_objects
+from graphio.bulk.queries import CypherQuery, ArrayProperty
+from graphio.queries import get_label_string_from_list_of_labels
 from graphio.config import config
 
 log = logging.getLogger(__name__)
@@ -210,3 +211,148 @@ class RelationshipSet:
             # composite indexes
             if len(self.end_node_properties) > 1:
                 create_composite_index(graph, label, self.end_node_properties, database=database)
+
+
+# RelationshipSet-specific query factories
+def rels_params_from_objects(relationships, property_identifier=None):
+    """
+    Format Relationship properties into a one level dictionary matching the query generated in
+    `query_create_rels_from_list`. This is necessary because you cannot access nested dictionairies
+    in the UNWIND query.
+
+    UNWIND { rels } AS rel
+    MATCH (a:Gene), (b:GeneSymbol)
+    WHERE a.sid = rel.start_sid AND b.sid = rel.end_sid AND b.taxid = rel.end_taxid
+    CREATE (a)-[r:MAPS]->(b)
+    SET r = rel.properties
+
+    Call with params:
+        {'start_sid': 1, 'end_sid': 2, 'end_taxid': '9606', 'properties': {'foo': 'bar} }
+
+    :param relationships: List of Relationships.
+    :return: List of parameter dictionaries.
+    """
+    if not property_identifier:
+        property_identifier = 'rels'
+
+    output = []
+
+    for r in relationships:
+        d = {}
+        for k, v in r[0].items():
+            d['start_{}'.format(k)] = v
+        for k, v in r[1].items():
+            d['end_{}'.format(k)] = v
+        d['properties'] = r[2]
+        output.append(d)
+
+    return {property_identifier: output}
+
+
+def rels_create_factory(start_node_labels, end_node_labels, start_node_properties,
+                        end_node_properties, rel_type, property_identifier=None):
+    """
+    Create relationship query with explicit arguments.
+
+    UNWIND $rels AS rel
+    MATCH (a:Gene), (b:GeneSymbol)
+    WHERE a.sid = rel.start_sid AND b.sid = rel.end_sid AND b.taxid = rel.end_taxid
+    CREATE (a)-[r:MAPS]->(b)
+    SET r = rel.properties
+
+    Call with params:
+        {'start_sid': 1, 'end_sid': 2, 'end_taxid': '9606', 'properties': {'foo': 'bar} }
+
+    Within UNWIND you cannot access nested dictionaries such as 'rel.start_node.sid'. Thus the
+    parameters are created in a separate function.
+
+    :param relationship: A Relationship object to create the query.
+    :param property_identifier: The variable used in UNWIND.
+    :return: Query
+    """
+
+    if not property_identifier:
+        property_identifier = 'rels'
+
+    start_node_label_string = get_label_string_from_list_of_labels(start_node_labels)
+    end_node_label_string = get_label_string_from_list_of_labels(end_node_labels)
+
+    q = CypherQuery()
+    q.append(f"UNWIND ${property_identifier} AS rel")
+    q.append(f"MATCH (a{start_node_label_string}), (b{end_node_label_string})")
+
+    # collect WHERE clauses
+    where_clauses = []
+    for property in start_node_properties:
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.start_{property} IN a.{property}')
+        else:
+            where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+    for property in end_node_properties:
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.end_{property} IN b.{property}')
+        else:
+            where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+
+    q.append("WHERE " + ' AND '.join(where_clauses))
+
+    q.append(f"CREATE (a)-[r:{rel_type}]->(b)")
+    q.append("SET r = rel.properties")
+
+    return q.query()
+
+
+def rels_merge_factory(start_node_labels, end_node_labels, start_node_properties,
+                       end_node_properties, rel_type, property_identifier=None):
+    """
+    Merge relationship query with explicit arguments.
+
+    Note: The MERGE on relationships does not take relationship properties into account!
+
+    UNWIND $rels AS rel
+    MATCH (a:Gene), (b:GeneSymbol)
+    WHERE a.sid = rel.start_sid AND b.sid = rel.end_sid AND b.taxid = rel.end_taxid
+    MERGE (a)-[r:MAPS]->(b)
+    SET r = rel.properties
+
+    Call with params:
+        {'start_sid': 1, 'end_sid': 2, 'end_taxid': '9606', 'properties': {'foo': 'bar} }
+
+    Within UNWIND you cannot access nested dictionaries such as 'rel.start_node.sid'. Thus the
+    parameters are created in a separate function.
+
+    :param relationship: A Relationship object to create the query.
+    :param property_identifier: The variable used in UNWIND.
+    :return: Query
+    """
+
+    if not property_identifier:
+        property_identifier = 'rels'
+
+    start_node_label_string = get_label_string_from_list_of_labels(start_node_labels)
+    end_node_label_string = get_label_string_from_list_of_labels(end_node_labels)
+
+    q = CypherQuery()
+    q.append(f"UNWIND ${property_identifier} AS rel")
+    q.append(f"MATCH (a{start_node_label_string}), (b{end_node_label_string})")
+
+    # collect WHERE clauses
+    where_clauses = []
+    for property in start_node_properties:
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.start_{property} IN a.{property}')
+        else:
+            where_clauses.append('a.{0} = rel.start_{0}'.format(property))
+    for property in end_node_properties:
+        if isinstance(property, ArrayProperty):
+            where_clauses.append(f'rel.end_{property} IN b.{property}')
+        else:
+            where_clauses.append('b.{0} = rel.end_{0}'.format(property))
+
+    q.append("WHERE " + ' AND '.join(where_clauses))
+
+    q.append(f"MERGE (a)-[r:{rel_type}]->(b)")
+    q.append("ON CREATE SET r = rel.properties")
+    q.append("ON MATCH SET r += rel.properties")
+
+    return q.query()
