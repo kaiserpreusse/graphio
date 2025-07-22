@@ -178,15 +178,10 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings-python" },
 ]
-test = [
-    { name = "hypothesis" },
-    { name = "pytest" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'" },
-    { name = "hypothesis", marker = "extra == 'test'" },
     { name = "mkdocs-material", marker = "extra == 'dev'" },
     { name = "mkdocs-material", marker = "extra == 'docs'" },
     { name = "mkdocstrings-python", marker = "extra == 'dev'" },
@@ -194,10 +189,9 @@ requires-dist = [
     { name = "neo4j", specifier = ">=5.25.0" },
     { name = "pydantic", specifier = "<3" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'test'" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
-provides-extras = ["test", "docs", "dev"]
+provides-extras = ["docs", "dev"]
 
 [[package]]
 name = "griffe"
