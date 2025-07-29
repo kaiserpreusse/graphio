@@ -2,7 +2,7 @@ import logging
 from typing import Any, ClassVar
 
 from neo4j import Driver
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 from graphio.bulk import NodeSet, RelationshipSet
 from graphio.ogm.query_utils import where_clause_with_properties
@@ -437,8 +437,7 @@ class NodeModel(Base, metaclass=CustomMeta):
     _merge_keys: ClassVar[list[str]] = []
     _relationships: ClassVar[dict[str, 'Relationship']] = {}
 
-    class Config:
-        extra = 'allow'
+    model_config = ConfigDict(extra='allow')
 
     def __init__(self, **data):
         super().__init__(**data)
