@@ -120,7 +120,6 @@ class NodeSet:
         for properties in list_of_properties:
             self.add_node(properties, force=force)
 
-
     @property
     def metadata_dict(self):
         return {'labels': self.labels, 'merge_keys': self.merge_keys}
