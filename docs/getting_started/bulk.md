@@ -30,7 +30,7 @@ driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password
 ```python
 # Define node containers
 people = NodeSet(['Person'], merge_keys=['email'])
-companies = NodeSet(['Company'], merge_keys=['name'])
+companies = NodeSet(['Company'], merge_keys=['name'], deduplicate=True)  # Prevent duplicate companies
 
 # Define relationship container
 employments = RelationshipSet(
@@ -84,6 +84,7 @@ print(f"Loaded {len(people.nodes)} people and {len(companies.nodes)} companies")
 ✅ How to batch data for efficient loading  
 ✅ How to create indexes for performance  
 ✅ Proper loading order (nodes before relationships)  
+✅ How to prevent duplicates with built-in deduplication  
 
 ## Next Steps
 

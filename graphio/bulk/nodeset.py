@@ -29,8 +29,20 @@ class NodeSet:
         append_props: list[str] = None,
         additional_labels: list[str] = None,
         indexed: bool = False,
+        deduplicate: bool = False,
     ):
-        """ """
+        """
+        Initialize a NodeSet for bulk loading nodes to Neo4j.
+
+        :param labels: Node labels to apply to all nodes in this set
+        :param merge_keys: Properties that define node uniqueness for MERGE operations
+        :param default_props: Properties applied to all nodes by default
+        :param preserve: Properties that should not be overwritten during MERGE operations
+        :param append_props: Properties that should be appended as arrays during MERGE
+        :param additional_labels: Additional labels to apply during CREATE/MERGE operations
+        :param indexed: Whether indexes have been created for this NodeSet
+        :param deduplicate: If True, automatically prevents duplicate nodes based on merge_keys
+        """
         self.labels = labels
         self.merge_keys = merge_keys
         self.default_props = default_props or {}
@@ -38,10 +50,14 @@ class NodeSet:
         self.append_props = append_props or []
         self.indexed = indexed
         self.additional_labels = additional_labels or []
+        self.deduplicate = deduplicate
 
         self.uuid = str(uuid4())
 
         self.nodes = []
+
+        # Index for deduplication
+        self._merge_key_index = set() if deduplicate else None
 
     def __str__(self):
         return f'<NodeSet ({self.labels}; {self.merge_keys})>'
@@ -55,12 +71,16 @@ class NodeSet:
         """
         return tuple([node_dict[key] for key in self.merge_keys])
 
-    def add_node(self, properties):
+    def add_node(self, properties, force=False):
         """
         Create a node in this NodeSet.
 
+        When deduplicate=True, nodes with duplicate merge_keys are skipped unless force=True.
+
         :param properties: Node properties as dict or OGM instance.
         :type properties: dict or NodeModel instance
+        :param force: Force adding the node even if deduplicate is True and a duplicate exists.
+        :type force: bool
         """
         # Handle OGM instances
         if hasattr(properties, 'model_dump'):  # Pydantic v2
@@ -76,41 +96,30 @@ class NodeSet:
         if self.default_props:
             node_props = {**self.default_props, **node_props}
 
+        # Check for duplicates if deduplicate is enabled and force is False
+        if self.deduplicate and not force and self._merge_key_index is not None:
+            merge_key_id = self._merge_key_id(node_props)
+            if merge_key_id in self._merge_key_index:
+                return  # Skip duplicate
+            self._merge_key_index.add(merge_key_id)
+
         self.nodes.append(node_props)
 
-    def add(self, properties):
+    def add(self, properties, force=False):
         """
         Add a node to this NodeSet (alias for add_node).
 
         :param properties: Node properties as dict or OGM instance.
         :type properties: dict or NodeModel instance
+        :param force: Force adding the node even if deduplicate is True and a duplicate exists.
+        :type force: bool
         """
-        return self.add_node(properties)
+        return self.add_node(properties, force=force)
 
-    def add_nodes(self, list_of_properties):
+    def add_nodes(self, list_of_properties, force=False):
         for properties in list_of_properties:
-            self.add_node(properties)
+            self.add_node(properties, force=force)
 
-    def add_unique(self, properties):
-        """
-        Add a node to this NodeSet only if a node with the same `merge_keys` does not exist yet.
-
-        Note: Right now this function iterates all nodes in the NodeSet. This is of course slow for large
-        numbers of nodes. A better solution would be to create an 'index' as is done for RelationshipSet.
-
-        :param properties: Node properties.
-        :type properties: dict
-        """
-
-        compare_values = frozenset([properties[key] for key in self.merge_keys])
-
-        for other_node_properties in self.nodes:
-            this_values = frozenset([other_node_properties[key] for key in self.merge_keys])
-            if this_values == compare_values:
-                return None
-
-        # add node if not found
-        self.add_node(properties)
 
     @property
     def metadata_dict(self):

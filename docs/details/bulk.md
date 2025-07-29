@@ -93,15 +93,66 @@ people.add({'name': 'Alice', 'email': 'alice@example.com'})  # Duplicate allowed
 len(people.nodes)  # Returns 2
 ```
 
-**Option 2: Prevent duplicates (slower)**
+**Option 2: Built-in deduplication (fast)**
 ```python
-people.add_unique({'name': 'Alice', 'email': 'alice@example.com'})
-people.add_unique({'name': 'Alice', 'email': 'alice@example.com'})  # Ignored
+# Enable deduplication at NodeSet creation
+people = NodeSet(['Person'], merge_keys=['email'], deduplicate=True)
+
+people.add({'name': 'Alice', 'email': 'alice@example.com'})
+people.add({'name': 'Alice', 'email': 'alice@example.com'})  # Skipped automatically
 len(people.nodes)  # Returns 1
+
+# Override deduplication with force parameter
+people.add({'name': 'Alice', 'email': 'alice@example.com'}, force=True)  # Added despite duplicate
+len(people.nodes)  # Returns 2
 ```
 
-!!! warning
-    `add_unique()` checks all existing nodes, making it unsuitable for large datasets (>1000 nodes).
+!!! tip "Performance Note"
+    The built-in `deduplicate=True` option uses an efficient internal index and is suitable for large datasets.
+
+#### Advanced Deduplication Patterns
+
+**Mixed deduplication within the same NodeSet:**
+```python
+# Process multiple data sources with different deduplication needs
+customers = NodeSet(['Customer'], merge_keys=['email'], deduplicate=True)
+
+# Source A: Clean data, allow deduplication
+for record in clean_customer_data:
+    customers.add(record)  # Automatically deduplicated
+
+# Source B: Known to have intentional duplicates (e.g., for counting)
+for record in duplicate_tracking_data:
+    customers.add(record, force=True)  # Force add despite duplicates
+```
+
+**Multiple merge keys deduplication:**
+```python
+# Deduplicate on compound keys
+locations = NodeSet(['Location'], merge_keys=['country', 'city'], deduplicate=True)
+
+locations.add({'country': 'Germany', 'city': 'Munich', 'population': 1500000})
+locations.add({'country': 'Germany', 'city': 'Berlin', 'population': 3700000})
+locations.add({'country': 'Germany', 'city': 'Munich', 'population': 1600000})  # Skipped - same country+city
+
+len(locations.nodes)  # Returns 2 (Munich and Berlin)
+```
+
+**Batch operations with deduplication:**
+```python
+# add_nodes() also respects deduplication settings
+people = NodeSet(['Person'], merge_keys=['email'], deduplicate=True)
+
+batch_data = [
+    {'name': 'Alice', 'email': 'alice@example.com'},
+    {'name': 'Bob', 'email': 'bob@example.com'},
+    {'name': 'Alice', 'email': 'alice@example.com'},  # Will be skipped
+    {'name': 'Charlie', 'email': 'charlie@example.com'}
+]
+
+people.add_nodes(batch_data)  # Automatically deduplicates during batch add
+len(people.nodes)  # Returns 3 (Alice, Bob, Charlie)
+```
 
 ---
 
@@ -319,9 +370,9 @@ def load_employee_data(csv_file, driver):
     # Read source data
     df = pd.read_csv(csv_file)
     
-    # Create containers
+    # Create containers with built-in deduplication
     employees = NodeSet(['Person', 'Employee'], merge_keys=['employee_id'])
-    departments = NodeSet(['Department'], merge_keys=['name'])
+    departments = NodeSet(['Department'], merge_keys=['name'], deduplicate=True)  # Deduplicate departments
     works_in = RelationshipSet('WORKS_IN', ['Employee'], ['Department'], 
                               ['employee_id'], ['name'])
     
@@ -335,8 +386,8 @@ def load_employee_data(csv_file, driver):
             'hire_date': row['start_date']
         })
         
-        # Add department
-        departments.add_unique({  # Use unique to avoid duplicates
+        # Add department - automatically deduplicated
+        departments.add({
             'name': row['department'],
             'budget': row['dept_budget']
         })
@@ -383,7 +434,7 @@ This example demonstrates:
 
 2. **💾 Memory Management**  
    - Process very large datasets in chunks
-   - Use `add_unique()` sparingly (only for small datasets)
+   - Use `deduplicate=True` for automatic duplicate prevention
 
 3. **🔍 Data Quality**
    - Validate data before adding to containers
