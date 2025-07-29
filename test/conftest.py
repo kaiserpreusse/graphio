@@ -56,7 +56,11 @@ def test_environment(reset_registry, clear_graph, set_driver):
 def graph(request, wait_for_neo4j):
     if request.param['lib'] == 'neodriver':
         uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
-        yield GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
+        driver = GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
+        try:
+            yield driver
+        finally:
+            driver.close()
 
 
 @pytest.fixture
@@ -127,8 +131,11 @@ def wait_for_neo4j():
                 # get Graph, bolt connection to localhost is default
                 uri = f"{v['uri_prefix']}://{v['host']}:{v['ports'][2]}"
                 driver = GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
-                with driver.session() as s:
-                    s.run("MATCH (n) RETURN n LIMIT 1")
+                try:
+                    with driver.session() as s:
+                        s.run("MATCH (n) RETURN n LIMIT 1")
+                finally:
+                    driver.close()
             connected = True
 
         except ServiceUnavailable:
