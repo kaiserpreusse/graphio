@@ -176,14 +176,27 @@ class Query:
             relationship = start_step.node_class._relationships[name]
             from graphio.ogm.model import Base
 
-            target_class = Base.get_class_by_name(relationship.target)
-            if not target_class:
-                raise ValueError(f'Could not find target class {relationship.target}')
+            # Detect if this is a reverse relationship (querying from target to source)
+            # For self-referencing relationships (source == target), always use normal direction
+            start_node_name = start_step.node_class.__name__
+            is_reverse = (start_node_name == relationship.target and 
+                         relationship.source != relationship.target)
+            
+            if is_reverse:
+                # Reverse relationship: querying from target back to source
+                target_class = Base.get_class_by_name(relationship.source)
+                if not target_class:
+                    raise ValueError(f'Could not find source class {relationship.source}')
+            else:
+                # Normal relationship: querying from source to target
+                target_class = Base.get_class_by_name(relationship.target)
+                if not target_class:
+                    raise ValueError(f'Could not find target class {relationship.target}')
 
-            # Create new Query with 1-hop path
+            # Create new Query with 1-hop path, storing the reverse flag in rel_type as a tuple
             new_path = [
                 start_step,  # Keep the start step with its filters
-                PathStep(target_class, rel_type=relationship.rel_type),
+                PathStep(target_class, rel_type=(relationship.rel_type, is_reverse)),
             ]
 
             # Return a RelationshipTraversal helper that supports both filter() and rel_filter()
@@ -306,16 +319,30 @@ class Query:
         start_step = self.path[0]
         target_step = self.path[1]
 
+        # Extract relationship type and direction
+        if isinstance(target_step.rel_type, tuple):
+            rel_type, is_reverse = target_step.rel_type
+        else:
+            rel_type, is_reverse = target_step.rel_type, False
+        
+        # Build relationship pattern based on direction
+        if is_reverse:
+            # Reverse: (source)<-[r:REL]-(target)
+            rel_pattern = f'(source{get_label_string_from_list_of_labels(start_step.node_class._labels)})<-[r:{rel_type}]-(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})'
+        else:
+            # Normal: (source)-[r:REL]->(target)
+            rel_pattern = f'(source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})'
+
         # Build Cypher query
         if self.source_instance:
-            # Instance-based query: MATCH (source)-[r:REL]->(target) WHERE source matches instance
+            # Instance-based query
             query = f"""WITH $properties AS properties
-MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})
+MATCH {rel_pattern}
 WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties', node_variable='source')}"""
             params = {'properties': self.source_instance.match_dict}
         else:
-            # Class-based query: MATCH (source)-[r:REL]->(target) with source filters
-            query = f'MATCH (source{get_label_string_from_list_of_labels(start_step.node_class._labels)})-[r:{target_step.rel_type}]->(target{get_label_string_from_list_of_labels(target_step.node_class._labels)})'
+            # Class-based query
+            query = f'MATCH {rel_pattern}'
             params = {}
 
             # Add source node filters
@@ -725,8 +752,28 @@ class Relationship(BaseModel):
         if not base:
             raise ValueError('Could not determine Base class')
 
-        target_class = base.get_class_by_name(self.target)
         source_class = base.get_class_by_name(self.source)
+        target_class = base.get_class_by_name(self.target)
+
+        # Detect if this is a reverse relationship
+        # For self-referencing relationships (source == target), always use normal direction
+        if self._parent_instance:
+            parent_class_name = self._parent_instance.__class__.__name__
+            is_reverse = (parent_class_name == self.target and 
+                         self.source != self.target)
+            
+            if is_reverse:
+                # Swap source and target for reverse relationships
+                query_source_class = target_class
+                query_target_class = source_class
+            else:
+                query_source_class = source_class
+                query_target_class = target_class
+        else:
+            # For class-level queries, assume normal direction
+            query_source_class = source_class
+            query_target_class = target_class
+            is_reverse = False
 
         # Start with existing rel_filters plus new ones
         rel_filters = list(getattr(self, '_rel_filters', []))
@@ -738,11 +785,11 @@ class Relationship(BaseModel):
 
         # Create 1-hop query path with relationship filters
         path = [
-            PathStep(source_class),
-            PathStep(target_class, rel_type=self.rel_type, rel_filters=rel_filters),
+            PathStep(query_source_class),
+            PathStep(query_target_class, rel_type=(self.rel_type, is_reverse), rel_filters=rel_filters),
         ]
 
-        return Query(source_class, source_instance=self._parent_instance, path=path)
+        return Query(query_source_class, source_instance=self._parent_instance, path=path)
 
     def match(self, *filter_ops):
         """
@@ -761,19 +808,39 @@ class Relationship(BaseModel):
         if not base:
             raise ValueError('Could not determine Base class')
 
-        target_class = base.get_class_by_name(self.target)
         source_class = base.get_class_by_name(self.source)
+        target_class = base.get_class_by_name(self.target)
+
+        # Detect if this is a reverse relationship
+        # For self-referencing relationships (source == target), always use normal direction
+        if self._parent_instance:
+            parent_class_name = self._parent_instance.__class__.__name__
+            is_reverse = (parent_class_name == self.target and 
+                         self.source != self.target)
+            
+            if is_reverse:
+                # Swap source and target for reverse relationships
+                query_source_class = target_class
+                query_target_class = source_class
+            else:
+                query_source_class = source_class
+                query_target_class = target_class
+        else:
+            # For class-level queries, assume normal direction
+            query_source_class = source_class
+            query_target_class = target_class
+            is_reverse = False
 
         # Create 1-hop query path: source -> relationship -> target
         path = [
-            PathStep(source_class),
+            PathStep(query_source_class),
             PathStep(
-                target_class, rel_type=self.rel_type, rel_filters=getattr(self, '_rel_filters', [])
+                query_target_class, rel_type=(self.rel_type, is_reverse), rel_filters=getattr(self, '_rel_filters', [])
             ),
         ]
 
         # Create query with instance context and add any node filters
-        query = Query(source_class, source_instance=self._parent_instance, path=path)
+        query = Query(query_source_class, source_instance=self._parent_instance, path=path)
         if filter_ops:
             query = query.filter(*filter_ops)
         return query
