@@ -580,6 +580,90 @@ class TestRelationshipCreateMerge:
         result = run_query_return_results(graph, "MATCH ()-[r:LIVES_IN]->() RETURN r")
         assert len(result) == 0
 
+    def test_reverse_relationship_creation_same_result(self, graph, test_base):
+        """Test that creating relationships from both sides produces the same result"""
+        
+        class Supplier(NodeModel):
+            _labels = ['Supplier']
+            _merge_keys = ['name']
+            name: str
+            
+            supplier_lists: Relationship = Relationship('Supplier', 'HAS_SUPPLIER_LIST', 'SupplierList')
+
+        class SupplierList(NodeModel):
+            _labels = ['SupplierList']
+            _merge_keys = ['id']
+            id: str
+            filename: str
+            
+            from_supplier: Relationship = Relationship('Supplier', 'HAS_SUPPLIER_LIST', 'SupplierList')
+        
+        # Test 1: Create from Supplier side
+        supplier1 = Supplier(name="ACME Corp")
+        supplier_list1 = SupplierList(id="list-123", filename="products.csv")
+        supplier1.supplier_lists.add(supplier_list1)
+        supplier1.merge()
+        
+        # Test 2: Create from SupplierList side
+        supplier2 = Supplier(name="TechCorp")
+        supplier_list2 = SupplierList(id="list-456", filename="services.csv")
+        supplier_list2.from_supplier.add(supplier2)
+        supplier_list2.merge()
+        
+        # Both should create relationships in the same direction
+        result = run_query_return_results(graph, """
+            MATCH (s:Supplier)-[r:HAS_SUPPLIER_LIST]->(sl:SupplierList) 
+            RETURN s.name, sl.id 
+            ORDER BY s.name
+        """)
+        
+        assert len(result) == 2
+        assert result[0][0] == "ACME Corp"
+        assert result[0][1] == "list-123"
+        assert result[1][0] == "TechCorp"
+        assert result[1][1] == "list-456"
+        
+        # Verify no relationships in wrong direction
+        result = run_query_return_results(graph, "MATCH (sl:SupplierList)-[r:HAS_SUPPLIER_LIST]->(s:Supplier) RETURN count(r)")
+        assert result[0][0] == 0
+
+    def test_reverse_relationship_creation_from_both_sides(self, graph, test_base):
+        """Test that creating relationships from both sides works correctly"""
+        
+        class Company(NodeModel):
+            _labels = ['Company']
+            _merge_keys = ['name']
+            name: str
+            
+            departments: Relationship = Relationship('Company', 'HAS_DEPARTMENT', 'Department')
+
+        class Department(NodeModel):
+            _labels = ['Department']
+            _merge_keys = ['name']
+            name: str
+            
+            company: Relationship = Relationship('Company', 'HAS_DEPARTMENT', 'Department')
+        
+        # Create relationship from department side
+        company = Company(name="TechCorp")
+        department = Department(name="Engineering")
+        
+        department.company.add(company)
+        department.merge()
+        
+        # Verify relationship was created in correct direction
+        result = run_query_return_results(graph, """
+            MATCH (c:Company)-[r:HAS_DEPARTMENT]->(d:Department) 
+            RETURN c.name, d.name
+        """)
+        assert len(result) == 1
+        assert result[0][0] == "TechCorp"
+        assert result[0][1] == "Engineering"
+        
+        # Verify no reverse direction relationships exist
+        result = run_query_return_results(graph, "MATCH (d:Department)-[r:HAS_DEPARTMENT]->(c:Company) RETURN count(r)")
+        assert result[0][0] == 0
+
 
 class TestNodeModelMatch:
 
@@ -1582,6 +1666,167 @@ class TestRelationshipMatch:
         # Test first match with no relationships
         first_friend = alice.friends.match().first()
         assert first_friend is None
+
+    def test_reverse_relationship_querying_basic(self, graph, test_base):
+        """Test basic reverse relationship querying functionality"""
+        
+        class Author(NodeModel):
+            _labels = ['Author']
+            _merge_keys = ['name']
+            name: str
+            
+            books: Relationship = Relationship('Author', 'WROTE', 'Book')
+
+        class Book(NodeModel):
+            _labels = ['Book']
+            _merge_keys = ['title']
+            title: str
+            
+            # Same relationship definition - should work in reverse
+            author: Relationship = Relationship('Author', 'WROTE', 'Book')
+        
+        # Create test data from author side only
+        author = Author(name="Isaac Asimov")
+        book1 = Book(title="Foundation")
+        book2 = Book(title="I, Robot")
+        
+        author.books.add(book1)
+        author.books.add(book2)
+        author.merge()
+        
+        # Test forward querying (should work as before)
+        loaded_author = Author.match(Author.name == "Isaac Asimov").first()
+        books = loaded_author.books.match().all()
+        assert len(books) == 2
+        book_titles = {book.title for book in books}
+        assert book_titles == {"Foundation", "I, Robot"}
+        
+        # Test reverse querying (new functionality)
+        loaded_book = Book.match(Book.title == "Foundation").first()
+        authors = loaded_book.author.match().all()
+        assert len(authors) == 1
+        assert authors[0].name == "Isaac Asimov"
+
+    def test_reverse_relationship_querying_with_filters(self, graph, test_base):
+        """Test reverse relationship querying with filters"""
+        
+        class Customer(NodeModel):
+            _labels = ['Customer']
+            _merge_keys = ['email']
+            email: str
+            name: str
+            age: int
+            
+            orders: Relationship = Relationship('Customer', 'PLACED', 'Order')
+
+        class Order(NodeModel):
+            _labels = ['Order']
+            _merge_keys = ['id']
+            id: str
+            amount: float
+            
+            customer: Relationship = Relationship('Customer', 'PLACED', 'Order')
+        
+        # Create test data
+        customer1 = Customer(email="alice@example.com", name="Alice", age=30)
+        customer2 = Customer(email="bob@example.com", name="Bob", age=25)
+        
+        order1 = Order(id="order-1", amount=100.0)
+        order2 = Order(id="order-2", amount=200.0)
+        order3 = Order(id="order-3", amount=50.0)
+        
+        customer1.orders.add(order1)
+        customer1.orders.add(order2)
+        customer2.orders.add(order3)
+        
+        customer1.merge()
+        customer2.merge()
+        
+        # Test reverse query with filters on target node
+        loaded_order = Order.match(Order.id == "order-1").first()
+        customers = loaded_order.customer.match(Customer.age > 28).all()
+        assert len(customers) == 1
+        assert customers[0].name == "Alice"
+        
+        # Test reverse query that should return empty
+        loaded_order = Order.match(Order.id == "order-3").first()
+        customers = loaded_order.customer.match(Customer.age > 28).all()
+        assert len(customers) == 0
+
+    def test_reverse_relationship_querying_with_relationship_properties(self, graph, test_base):
+        """Test reverse relationship querying with relationship property filters"""
+        
+        class Student(NodeModel):
+            _labels = ['Student']
+            _merge_keys = ['id']
+            id: str
+            name: str
+            
+            enrollments: Relationship = Relationship('Student', 'ENROLLED_IN', 'Course')
+
+        class Course(NodeModel):
+            _labels = ['Course']
+            _merge_keys = ['code']
+            code: str
+            name: str
+            
+            students: Relationship = Relationship('Student', 'ENROLLED_IN', 'Course')
+        
+        # Create test data with relationship properties
+        student = Student(id="s123", name="Alice")
+        course1 = Course(code="CS101", name="Intro to CS")
+        course2 = Course(code="CS201", name="Data Structures")
+        
+        # Add relationships with properties
+        student.enrollments.add(course1, {"grade": "A", "semester": "Fall2023"})
+        student.enrollments.add(course2, {"grade": "B+", "semester": "Spring2024"})
+        student.merge()
+        
+        # Test reverse query with relationship filters
+        loaded_course = Course.match(Course.code == "CS101").first()
+        students = loaded_course.students.filter(RelField("grade") == "A").match().all()
+        assert len(students) == 1
+        assert students[0].name == "Alice"
+        
+        # Test reverse query with relationship filters that don't match
+        loaded_course = Course.match(Course.code == "CS201").first()
+        students = loaded_course.students.filter(RelField("grade") == "A").match().all()
+        assert len(students) == 0
+
+    def test_reverse_relationship_does_not_affect_self_referencing(self, graph, test_base):
+        """Test that reverse relationship detection doesn't break self-referencing relationships"""
+        
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['name']
+            name: str
+            
+            # Self-referencing relationship should always work normally
+            friends: Relationship = Relationship('Person', 'FRIENDS', 'Person')
+            mentors: Relationship = Relationship('Person', 'MENTORS', 'Person')
+        
+        # Create test data
+        alice = Person(name="Alice")
+        bob = Person(name="Bob")
+        charlie = Person(name="Charlie")
+        
+        # Alice is friends with Bob, Bob mentors Charlie
+        alice.friends.add(bob)
+        bob.mentors.add(charlie)
+        
+        alice.merge()
+        bob.merge()
+        
+        # Test that self-referencing relationships work normally
+        loaded_alice = Person.match(Person.name == "Alice").first()
+        friends = loaded_alice.friends.match().all()
+        assert len(friends) == 1
+        assert friends[0].name == "Bob"
+        
+        loaded_bob = Person.match(Person.name == "Bob").first()
+        mentees = loaded_bob.mentors.match().all()
+        assert len(mentees) == 1
+        assert mentees[0].name == "Charlie"
 
 
 class TestRelationshipPropertyFiltering:
