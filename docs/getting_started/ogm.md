@@ -46,6 +46,9 @@ class Company(NodeModel):
     
     name: str
     industry: str
+    
+    # Bidirectional relationship - same definition, queryable from Company
+    employees: Relationship = Relationship('Person', 'WORKS_AT', 'Company')
 ```
 
 ## Step 3: Create and Query Data
@@ -60,9 +63,13 @@ alice = Person(name='Alice Smith', email='alice@example.com', age=30)
 alice.works_at.add(acme, {'position': 'Developer', 'since': '2023'})
 alice.merge()
 
-# Query data
+# Query data both directions
 developers = Person.match(Person.age > 25).all()
 alice_company = alice.works_at.match().first()
+
+# Bidirectional querying (new feature!)
+acme_employees = acme.employees.match().all()  # Query from Company to Person
+print(f"ACME has {len(acme_employees)} employees")
 ```
 
 ## Step 4: Create Indexes (Performance)

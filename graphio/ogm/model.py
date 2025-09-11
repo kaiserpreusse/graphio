@@ -179,9 +179,11 @@ class Query:
             # Detect if this is a reverse relationship (querying from target to source)
             # For self-referencing relationships (source == target), always use normal direction
             start_node_name = start_step.node_class.__name__
-            is_reverse = (start_node_name == relationship.target and 
-                         relationship.source != relationship.target)
-            
+            is_reverse = (
+                start_node_name == relationship.target
+                and relationship.source != relationship.target
+            )
+
             if is_reverse:
                 # Reverse relationship: querying from target back to source
                 target_class = Base.get_class_by_name(relationship.source)
@@ -324,7 +326,7 @@ class Query:
             rel_type, is_reverse = target_step.rel_type
         else:
             rel_type, is_reverse = target_step.rel_type, False
-        
+
         # Build relationship pattern based on direction
         if is_reverse:
             # Reverse: (source)<-[r:REL]-(target)
@@ -488,14 +490,14 @@ class NodeModel(Base, metaclass=CustomMeta):
 
     def _validate_merge_keys(self):
         for key in self.__class__._merge_keys:
-            if key not in self.model_fields:
+            if key not in self.__class__.model_fields:
                 raise ValueError(f"Merge key '{key}' is not a valid model field.")
 
     @property
     def _additional_properties(self) -> dict:
         extra_fields = {}
         for extra_field in self.model_fields_set:
-            if extra_field not in self.model_fields:
+            if extra_field not in self.__class__.model_fields:
                 extra_fields[extra_field] = getattr(self, extra_field)
         return extra_fields
 
@@ -503,7 +505,7 @@ class NodeModel(Base, metaclass=CustomMeta):
     def _all_properties(self) -> dict:
         # get all properties that are not relationships
         properties = {}
-        for field in self.model_fields:
+        for field in self.__class__.model_fields:
             attr = getattr(self, field)
             if not isinstance(attr, Relationship):
                 properties[field] = getattr(self, field)
@@ -759,9 +761,8 @@ class Relationship(BaseModel):
         # For self-referencing relationships (source == target), always use normal direction
         if self._parent_instance:
             parent_class_name = self._parent_instance.__class__.__name__
-            is_reverse = (parent_class_name == self.target and 
-                         self.source != self.target)
-            
+            is_reverse = parent_class_name == self.target and self.source != self.target
+
             if is_reverse:
                 # Swap source and target for reverse relationships
                 query_source_class = target_class
@@ -786,7 +787,9 @@ class Relationship(BaseModel):
         # Create 1-hop query path with relationship filters
         path = [
             PathStep(query_source_class),
-            PathStep(query_target_class, rel_type=(self.rel_type, is_reverse), rel_filters=rel_filters),
+            PathStep(
+                query_target_class, rel_type=(self.rel_type, is_reverse), rel_filters=rel_filters
+            ),
         ]
 
         return Query(query_source_class, source_instance=self._parent_instance, path=path)
@@ -815,9 +818,8 @@ class Relationship(BaseModel):
         # For self-referencing relationships (source == target), always use normal direction
         if self._parent_instance:
             parent_class_name = self._parent_instance.__class__.__name__
-            is_reverse = (parent_class_name == self.target and 
-                         self.source != self.target)
-            
+            is_reverse = parent_class_name == self.target and self.source != self.target
+
             if is_reverse:
                 # Swap source and target for reverse relationships
                 query_source_class = target_class
@@ -835,7 +837,9 @@ class Relationship(BaseModel):
         path = [
             PathStep(query_source_class),
             PathStep(
-                query_target_class, rel_type=(self.rel_type, is_reverse), rel_filters=getattr(self, '_rel_filters', [])
+                query_target_class,
+                rel_type=(self.rel_type, is_reverse),
+                rel_filters=getattr(self, '_rel_filters', []),
             ),
         ]
 

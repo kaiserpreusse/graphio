@@ -66,6 +66,10 @@ alice.create()  # Always creates new node
 
 ### Defining Relationships
 
+GraphIO supports both **unidirectional** and **bidirectional** relationship definitions, making it easy to query relationships from both sides.
+
+#### Basic Relationship Definition
+
 ```python
 from graphio import Relationship
 
@@ -97,6 +101,64 @@ class City(NodeModel):
     population: int
 ```
 
+#### Bidirectional Relationships (New Feature!)
+
+**GraphIO automatically detects reverse relationships**, allowing you to define the same relationship from both node types for intuitive bidirectional querying:
+
+```python
+class Author(NodeModel):
+    _labels = ['Author']
+    _merge_keys = ['name']
+    
+    name: str
+    birth_year: int
+    
+    # Forward relationship: Author -> Book
+    books: Relationship = Relationship('Author', 'WROTE', 'Book')
+
+class Book(NodeModel):
+    _labels = ['Book']
+    _merge_keys = ['isbn']
+    
+    title: str
+    isbn: str
+    published_year: int
+    
+    # Reverse relationship: same definition, but queryable from Book
+    author: Relationship = Relationship('Author', 'WROTE', 'Book')
+
+class Company(NodeModel):
+    _labels = ['Company']
+    _merge_keys = ['name']
+    
+    name: str
+    industry: str
+    
+    # Forward relationship
+    employees: Relationship = Relationship('Company', 'EMPLOYS', 'Person')
+
+class Person(NodeModel):
+    _labels = ['Person']
+    _merge_keys = ['email']
+    
+    name: str
+    email: str
+    
+    # Reverse relationship - same relationship type, different query direction
+    employer: Relationship = Relationship('Company', 'EMPLOYS', 'Person')
+```
+
+**Key Benefits:**
+- ✅ **Same relationship definition** - no need for separate relationship types
+- ✅ **Automatic direction detection** - GraphIO figures out the direction based on the querying node
+- ✅ **Consistent database structure** - creates the same relationships regardless of which side initiates
+- ✅ **Intuitive querying** - query from whichever side makes sense for your use case
+
+**How it works:**
+- Both definitions create the same relationship in Neo4j: `(Author)-[:WROTE]->(Book)`
+- GraphIO automatically detects when you're querying from the "target" side and reverses the query direction
+- Self-referencing relationships (e.g., `Person -> Person`) always work normally
+
 ### Working with Relationships
 
 ```python
@@ -115,23 +177,142 @@ alice.merge()  # Saves alice and all its relationships
 
 ### Relationship Queries
 
+#### Basic Relationship Queries
+
 ```python
-# Find all companies Alice works at
+# Find all companies Alice works at (forward direction)
 alice_companies = alice.works_at.match().all()
 
 # Filter relationship properties
-current_job = alice.works_at.match().where('r.since > "2023-01-01"').all()
+from graphio import RelField
+current_job = alice.works_at.filter(RelField('since') > '2023-01-01').match().all()
 
 # Filter target node properties  
 tech_companies = alice.works_at.match(Company.industry == 'Technology').all()
+```
 
-# Chain relationship traversals (multi-hop queries not yet implemented)
-# Note: Complex traversals require custom Cypher queries
+#### Bidirectional Relationship Queries (New!)
+
+With bidirectional relationships, you can query from either side using natural syntax:
+
+```python
+# Create some data first
+author = Author(name="Isaac Asimov", birth_year=1920)
+book1 = Book(title="Foundation", isbn="978-0553293357", published_year=1951)
+book2 = Book(title="I, Robot", isbn="978-0553382563", published_year=1950)
+
+# Create relationships (can be done from either side!)
+author.books.add(book1)
+author.books.add(book2)
+author.merge()
+
+# Query 1: Forward direction (Author -> Books)
+asimov = Author.match(Author.name == "Isaac Asimov").first()
+asimov_books = asimov.books.match().all()
+print([book.title for book in asimov_books])  # ['Foundation', 'I, Robot']
+
+# Query 2: Reverse direction (Book -> Author) - Same relationship!
+foundation = Book.match(Book.title == "Foundation").first()
+book_author = foundation.author.match().first()
+print(book_author.name)  # 'Isaac Asimov'
+
+# Query 3: Bidirectional filtering
+# Find books by authors born before 1925
+old_author_books = Book.match().author.match(Author.birth_year < 1925).all()
+
+# Find authors of books published after 1950
+recent_book_authors = Author.match().books.match(Book.published_year > 1950).all()
+```
+
+#### Advanced Bidirectional Queries
+
+```python
+# Company-Employee example
+class Company(NodeModel):
+    _labels = ['Company']
+    _merge_keys = ['name']
+    name: str
+    industry: str
+    employees: Relationship = Relationship('Company', 'EMPLOYS', 'Person')
+
+class Person(NodeModel):
+    _labels = ['Person']
+    _merge_keys = ['email']
+    name: str
+    email: str
+    age: int
+    employer: Relationship = Relationship('Company', 'EMPLOYS', 'Person')
+
+# Create test data
+company = Company(name="TechCorp", industry="Technology")
+alice = Person(name="Alice Smith", email="alice@example.com", age=30)
+bob = Person(name="Bob Jones", email="bob@example.com", age=25)
+
+# Add relationships with properties
+company.employees.add(alice, {'position': 'Senior Developer', 'salary': 100000})
+company.employees.add(bob, {'position': 'Junior Developer', 'salary': 70000})
+company.merge()
+
+# Forward queries: Company -> Employees
+tech_corp = Company.match(Company.name == "TechCorp").first()
+all_employees = tech_corp.employees.match().all()
+senior_employees = tech_corp.employees.filter(RelField('position').contains('Senior')).match().all()
+
+# Reverse queries: Person -> Company  
+alice = Person.match(Person.email == "alice@example.com").first()
+alice_employer = alice.employer.match().first()
+print(f"{alice.name} works at {alice_employer.name}")
+
+# Query employees by company industry (bidirectional)
+tech_employees = Person.match().employer.match(Company.industry == "Technology").all()
+
+# Query companies with young employees (bidirectional)
+companies_with_young_staff = Company.match().employees.match(Person.age < 30).all()
+```
+
+#### Self-Referencing Relationships
+
+Self-referencing relationships work exactly as before (unaffected by reverse relationship detection):
+
+```python
+class Person(NodeModel):
+    _labels = ['Person']
+    _merge_keys = ['email']
+    name: str
+    email: str
+    
+    # Self-referencing relationships work normally
+    friends: Relationship = Relationship('Person', 'FRIENDS_WITH', 'Person')
+    mentors: Relationship = Relationship('Person', 'MENTORS', 'Person')
+
+alice = Person(name="Alice", email="alice@example.com")
+bob = Person(name="Bob", email="bob@example.com")
+charlie = Person(name="Charlie", email="charlie@example.com")
+
+alice.friends.add(bob)
+bob.mentors.add(charlie)
+alice.merge()
+bob.merge()
+
+# Self-referencing queries work as expected
+alice_friends = alice.friends.match().all()
+bob_mentors = bob.mentors.match().all()
+```
+
+#### Complex Traversals
+
+For complex multi-hop traversals, use custom Cypher queries:
+
+```python
 from graphio.ogm.model import CypherQuery
-colleagues_query = CypherQuery(
-    "MATCH (alice:Person {email: $email})-[:WORKS_AT]->(:Company)<-[:WORKS_AT]-(colleague:Person) RETURN DISTINCT colleague", 
-    email=alice.email
-)
+
+# Find colleagues (people who work at the same company as Alice)
+colleagues_query = CypherQuery("""
+    MATCH (alice:Person {email: $email})-[:EMPLOYS]-(company:Company)-[:EMPLOYS]-(colleague:Person)
+    WHERE colleague.email <> $email
+    RETURN DISTINCT colleague
+""", email="alice@example.com")
+
 alice_colleagues = Person.match(colleagues_query).all()
 ```
 
@@ -845,20 +1026,31 @@ This example demonstrates:
    - Use meaningful merge_keys for your domain
    - Leverage Pydantic validation for data quality
    - Define relationships clearly with proper labels
+   - **Use bidirectional relationships** for intuitive application development
 
 2. **🚀 Performance**
    - Create indexes before querying (use `Base.model_create_index()`)
    - Use merge_keys for lookups when possible
    - Combine OGM with bulk loading for large datasets
+   - **Bidirectional relationships have no performance impact** - same underlying database structure
 
 3. **🔍 Queries**
    - Use specific filters on indexed properties
    - Leverage relationship traversal for complex queries
+   - **Query from whichever side makes sense** for your use case with bidirectional relationships
    - Handle errors gracefully (connection, validation, query)
 
 4. **📁 Organization**
    - Keep models in separate modules for large projects
    - Use the global registry for cross-model operations
    - Document your relationship patterns clearly
+   - **Be consistent with bidirectional relationship naming** (e.g., `books`/`author`, `employees`/`employer`)
+
+5. **🔗 Bidirectional Relationships (New!)**
+   - **When to use**: Any relationship you might want to query from both sides
+   - **Same relationship definition**: Use identical relationship parameters on both models  
+   - **Automatic detection**: GraphIO automatically detects reverse relationships
+   - **Creation flexibility**: Create relationships from either side - same result
+   - **Self-referencing relationships**: Work exactly as before (no reverse detection)
 
 For high-performance bulk data loading, see the [Bulk Loading Guide](bulk.md).

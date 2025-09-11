@@ -14,7 +14,7 @@
     driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
     Base.set_driver(driver)
     
-    # Define model
+    # Define models with relationships
     class Person(NodeModel):
         _labels = ['Person']
         _merge_keys = ['name']
@@ -23,12 +23,27 @@
         age: int
         
         friends: Relationship = Relationship('Person', 'FRIENDS_WITH', 'Person')
+        works_at: Relationship = Relationship('Person', 'WORKS_AT', 'Company')
+
+    class Company(NodeModel):
+        _labels = ['Company']
+        _merge_keys = ['name']
+        
+        name: str
+        industry: str
+        
+        # Same relationship - query from either direction
+        employees: Relationship = Relationship('Person', 'WORKS_AT', 'Company')
     
     # Use it
     alice = Person(name='Alice', age=30)
-    bob = Person(name='Bob', age=25)
-    alice.friends.add(bob)
+    acme = Company(name='ACME Corp', industry='Technology')
+    alice.works_at.add(acme)
     alice.merge()
+    
+    # Query from either side
+    alice_company = alice.works_at.match().first()
+    acme_employees = acme.employees.match().all()
     ```
 
 === "Bulk Loading (High Performance)"

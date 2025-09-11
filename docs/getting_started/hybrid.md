@@ -53,7 +53,7 @@ class Product(NodeModel):
     category: str
     
     # For application queries and bulk relationships
-    purchased_by: Relationship = Relationship('Product', 'PURCHASED_BY', 'Customer')
+    purchased_by: Relationship = Relationship('Customer', 'PURCHASED', 'Product')
 
 class Customer(NodeModel):
     _labels = ['Customer']
@@ -62,6 +62,9 @@ class Customer(NodeModel):
     email: str
     name: str
     membership_level: str = 'basic'
+    
+    # Bidirectional relationship - same relationship, different query direction
+    purchases: Relationship = Relationship('Customer', 'PURCHASED', 'Product')
 
 # Create indexes using OGM structure
 Base.model_create_index()
