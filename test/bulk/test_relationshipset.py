@@ -335,6 +335,98 @@ class TestRelationshipSetToJSON:
             suffix='.json') == "relationshipset_Test_TEST_Foo_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
 
+class TestRelationshipSetBatchSize:
+    """Test batch size correctness for RelationshipSet"""
+    
+    def test_relationshipset_create_batch_size_exactness(self, graph, clear_graph, create_nodes_test):
+        """Test that batch_size=10 processes exactly 10 relationships per batch"""
+        ns1, ns2, ns3 = create_nodes_test
+        
+        rs = RelationshipSet('BATCH_TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+        
+        # Add 27 relationships (will create 3 batches: 10, 10, 7)
+        for i in range(27):
+            rs.add({'uuid': i}, {'uuid': i}, {'batch_test': True})
+        
+        batch_sizes = []
+        
+        from graphio.utils import chunks
+        original_chunks_func = chunks
+        
+        def counting_chunks(iterable, size=10):
+            """Wrapper to count items in each batch"""
+            for batch in original_chunks_func(iterable, size):
+                batch_list = list(batch)
+                batch_sizes.append(len(batch_list))
+                yield batch_list
+        
+        # Patch chunks function temporarily
+        import graphio.bulk.relationshipset
+        graphio.bulk.relationshipset.chunks = counting_chunks
+        
+        try:
+            # Create with batch_size=10
+            rs.create(graph, batch_size=10)
+            
+            # Verify batch sizes
+            assert len(batch_sizes) == 3, f"Expected 3 batches, got {len(batch_sizes)}"
+            assert batch_sizes[0] == 10, f"First batch should be 10, got {batch_sizes[0]}"
+            assert batch_sizes[1] == 10, f"Second batch should be 10, got {batch_sizes[1]}"
+            assert batch_sizes[2] == 7, f"Third batch should be 7, got {batch_sizes[2]}"
+            
+            # Verify total relationships created
+            result = run_query_return_results(graph, "MATCH ()-[r:BATCH_TEST]->() RETURN count(r)")
+            assert result[0][0] == 27, f"Expected 27 relationships, got {result[0][0]}"
+            
+        finally:
+            # Restore original chunks function
+            graphio.bulk.relationshipset.chunks = original_chunks_func
+    
+    def test_relationshipset_merge_batch_size_exactness(self, graph, clear_graph, create_nodes_test):
+        """Test that merge operations also respect exact batch size"""
+        ns1, ns2, ns3 = create_nodes_test
+        
+        rs = RelationshipSet('BATCH_MERGE_TEST', ['Test'], ['Foo'], ['uuid'], ['uuid'])
+        
+        # Add 22 relationships (will create 3 batches: 10, 10, 2)
+        for i in range(22):
+            rs.add({'uuid': i}, {'uuid': i}, {'batch_merge_test': True})
+        
+        batch_sizes = []
+        
+        from graphio.utils import chunks
+        original_chunks_func = chunks
+        
+        def counting_chunks(iterable, size=10):
+            """Wrapper to count items in each batch"""
+            for batch in original_chunks_func(iterable, size):
+                batch_list = list(batch)
+                batch_sizes.append(len(batch_list))
+                yield batch_list
+        
+        # Patch chunks function temporarily  
+        import graphio.bulk.relationshipset
+        graphio.bulk.relationshipset.chunks = counting_chunks
+        
+        try:
+            # Merge with batch_size=10
+            rs.merge(graph, batch_size=10)
+            
+            # Verify batch sizes
+            assert len(batch_sizes) == 3, f"Expected 3 batches, got {len(batch_sizes)}"
+            assert batch_sizes[0] == 10, f"First batch should be 10, got {batch_sizes[0]}"
+            assert batch_sizes[1] == 10, f"Second batch should be 10, got {batch_sizes[1]}"
+            assert batch_sizes[2] == 2, f"Third batch should be 2, got {batch_sizes[2]}"
+            
+            # Verify total relationships created
+            result = run_query_return_results(graph, "MATCH ()-[r:BATCH_MERGE_TEST]->() RETURN count(r)")
+            assert result[0][0] == 22, f"Expected 22 relationships, got {result[0][0]}"
+            
+        finally:
+            # Restore original chunks function
+            graphio.bulk.relationshipset.chunks = original_chunks_func
+
+
 class TestRelationshipSetOGMInstances:
     """Test RelationshipSet with OGM instances"""
     

@@ -391,6 +391,98 @@ class TestNodeSetToJSON:
             suffix='.json') == "nodeset_Test_uuid_f8d1f0af-3eee-48b4-8407-8694ca628fc0.json"
 
 
+class TestBatchSize:
+    """Test batch size correctness"""
+    
+    def test_nodeset_batch_size_exactness(self, graph, clear_graph):
+        """Test that batch_size=10 processes exactly 10 items per batch"""
+        ns = NodeSet(['BatchTest'], merge_keys=['uuid'])
+        
+        # Add 25 nodes (will create 3 batches: 10, 10, 5)
+        for i in range(25):
+            ns.add({'uuid': i, 'value': f'item_{i}'})
+        
+        # Mock the batch processing to count items per batch
+        original_chunks = ns.chunks if hasattr(ns, 'chunks') else None
+        batch_sizes = []
+        
+        from graphio.utils import chunks
+        original_chunks_func = chunks
+        
+        def counting_chunks(iterable, size=10):
+            """Wrapper to count items in each batch"""
+            for batch in original_chunks_func(iterable, size):
+                batch_list = list(batch)
+                batch_sizes.append(len(batch_list))
+                yield batch_list
+        
+        # Patch chunks function temporarily
+        import graphio.bulk.nodeset
+        graphio.bulk.nodeset.chunks = counting_chunks
+        
+        try:
+            # Create with batch_size=10
+            ns.create(graph, batch_size=10)
+            
+            # Verify batch sizes
+            assert len(batch_sizes) == 3, f"Expected 3 batches, got {len(batch_sizes)}"
+            assert batch_sizes[0] == 10, f"First batch should be 10, got {batch_sizes[0]}"
+            assert batch_sizes[1] == 10, f"Second batch should be 10, got {batch_sizes[1]}"
+            assert batch_sizes[2] == 5, f"Third batch should be 5, got {batch_sizes[2]}"
+            
+            # Verify total nodes created
+            from graphio.utils import run_query_return_results
+            result = run_query_return_results(graph, "MATCH (n:BatchTest) RETURN count(n)")
+            assert result[0][0] == 25, f"Expected 25 nodes, got {result[0][0]}"
+            
+        finally:
+            # Restore original chunks function
+            graphio.bulk.nodeset.chunks = original_chunks_func
+    
+    def test_nodeset_merge_batch_size_exactness(self, graph, clear_graph):
+        """Test that merge operations also respect exact batch size"""
+        ns = NodeSet(['BatchTestMerge'], merge_keys=['uuid'])
+        
+        # Add 23 nodes (will create 3 batches: 10, 10, 3)
+        for i in range(23):
+            ns.add({'uuid': i, 'value': f'item_{i}'})
+        
+        batch_sizes = []
+        
+        from graphio.utils import chunks
+        original_chunks_func = chunks
+        
+        def counting_chunks(iterable, size=10):
+            """Wrapper to count items in each batch"""
+            for batch in original_chunks_func(iterable, size):
+                batch_list = list(batch)
+                batch_sizes.append(len(batch_list))
+                yield batch_list
+        
+        # Patch chunks function temporarily
+        import graphio.bulk.nodeset
+        graphio.bulk.nodeset.chunks = counting_chunks
+        
+        try:
+            # Merge with batch_size=10
+            ns.merge(graph, batch_size=10)
+            
+            # Verify batch sizes
+            assert len(batch_sizes) == 3, f"Expected 3 batches, got {len(batch_sizes)}"
+            assert batch_sizes[0] == 10, f"First batch should be 10, got {batch_sizes[0]}"
+            assert batch_sizes[1] == 10, f"Second batch should be 10, got {batch_sizes[1]}"
+            assert batch_sizes[2] == 3, f"Third batch should be 3, got {batch_sizes[2]}"
+            
+            # Verify total nodes created
+            from graphio.utils import run_query_return_results
+            result = run_query_return_results(graph, "MATCH (n:BatchTestMerge) RETURN count(n)")
+            assert result[0][0] == 23, f"Expected 23 nodes, got {result[0][0]}"
+            
+        finally:
+            # Restore original chunks function
+            graphio.bulk.nodeset.chunks = original_chunks_func
+
+
 class TestNodeSetOGMInstances:
     """Test NodeSet with OGM instances"""
     
