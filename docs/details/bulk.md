@@ -286,6 +286,9 @@ people.merge(driver)
 
 ### Advanced Merge Options
 
+!!! warning "APOC Required"
+    The `preserve` and `append_props` features require the APOC library to be installed in your Neo4j database. These features use `apoc.map.removeKeys()` and other APOC utilities.
+
 **Preserve specific properties during merge:**
 ```python
 # Don't overwrite 'created_date' and 'original_source' on existing nodes
@@ -293,7 +296,7 @@ people.merge(driver, preserve=['created_date', 'original_source'])
 
 # Equivalent Cypher behavior:
 # ON CREATE SET n += properties
-# ON MATCH SET n += properties EXCEPT created_date, original_source
+# ON MATCH SET n += apoc.map.removeKeys(properties, ['created_date', 'original_source'])
 ```
 
 **Append to array properties:**
