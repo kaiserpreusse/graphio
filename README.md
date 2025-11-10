@@ -11,6 +11,7 @@ OGM and data loader for Neo4j with two main approaches:
 
 - **OGM (Object Graph Mapper)**: Pydantic-based models with Neo4j integration for complex data models and applications
 - **Datasets (NodeSet/RelationshipSet)**: Bulk data containers optimized for fast data loading and testing
+- **Multi-Database Support**: Full support for Neo4j Enterprise Edition multi-database feature
 
 ## Documentation
 
@@ -41,6 +42,8 @@ from neo4j import GraphDatabase
 # Set up connection
 driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
 Base.set_driver(driver)
+# Optional: Set target database (Enterprise Edition)
+# Base.set_database('production')
 
 # Define OGM model for structure and validation
 class Person(NodeModel):

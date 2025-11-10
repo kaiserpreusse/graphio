@@ -537,6 +537,52 @@ class Person(NodeModel):
 
 ---
 
+## Multi-Database Support (Enterprise Edition)
+
+!!! note "Enterprise Edition Only"
+    Multi-database support is only available in Neo4j Enterprise Edition. Community Edition supports only a single database (typically `neo4j`).
+
+### Configuration
+
+Set a default database for all operations:
+
+```python
+from graphio import Base
+
+# Set default database (optional)
+Base.set_database('production')  # All operations use 'production' database
+```
+
+All OGM node operations accept an optional `database` parameter to override the default:
+
+```python
+# Use default database
+person.create()
+person.merge()
+person.delete()
+
+# Override for specific operation
+person.create(database='staging')
+person.merge(database='production')
+```
+
+Queries use the configured database:
+
+```python
+Base.set_database('analytics')
+results = Person.match(Person.age > 25).all()  # Queries 'analytics' database
+```
+
+Bulk operations also support the `database` parameter:
+
+```python
+people = NodeSet(['Person'], merge_keys=['email'])
+people.create(driver, database='production')
+people.merge(driver, database='staging')
+```
+
+---
+
 ## Integration with Bulk Loading
 
 **The OGM and bulk loading are designed to work together seamlessly.** Use OGM models to define structure and validation, then leverage bulk loading for high-performance data operations when needed.

@@ -24,6 +24,9 @@ from neo4j import GraphDatabase
 # Connect to Neo4j
 driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
 Base.set_driver(driver)
+
+# Optional: Set a specific database (Enterprise Edition only)
+# Base.set_database('mydb')  # All operations will use 'mydb' database
 ```
 
 ## Step 2: Define Your Models

@@ -1,7 +1,7 @@
 import logging
 from typing import Any, ClassVar
 
-from neo4j import Driver
+from neo4j import DEFAULT_DATABASE, Driver
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 from graphio.bulk import NodeSet, RelationshipSet
@@ -145,12 +145,13 @@ class RelationshipTraversal:
 class Query:
     """Unified query builder for graph traversal patterns (0-hop and 1-hop)"""
 
-    def __init__(self, start_class, source_instance=None, path=None):
+    def __init__(self, start_class, source_instance=None, path=None, database=None):
         self.start_class = start_class
         self.source_instance = (
             source_instance  # For instance-based queries like alice.knows.match()
         )
         self.path = path or [PathStep(start_class)]  # Always start with the initial node
+        self.database = database
 
     @property
     def current_step(self):
@@ -202,7 +203,7 @@ class Query:
             ]
 
             # Return a RelationshipTraversal helper that supports both filter() and rel_filter()
-            return RelationshipTraversal(Query(self.start_class, self.source_instance, new_path))
+            return RelationshipTraversal(Query(self.start_class, self.source_instance, new_path, self.database))
 
         raise AttributeError(f"'{start_step.node_class.__name__}' has no relationship '{name}'")
 
@@ -232,7 +233,7 @@ class Query:
                 raise ValueError(f'Unsupported filter type: {type(f)}')
 
         new_path[-1] = new_step
-        return Query(self.start_class, self.source_instance, new_path)
+        return Query(self.start_class, self.source_instance, new_path, self.database)
 
     def match(self, *filter_ops):
         """Alias for filter() to maintain compatibility"""
@@ -305,8 +306,9 @@ class Query:
         log.debug(query)
 
         # Execute query
+        db = self.database if self.database else self.start_class.get_database()
         results = []
-        with step.node_class._driver.session() as session:
+        with step.node_class._driver.session(database=db) as session:
             result = session.run(query, params)
             for record in result:
                 node = record['n']
@@ -385,8 +387,9 @@ WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties
             query += f' LIMIT {limit}'
 
         # Execute query
+        db = self.database if self.database else self.start_class.get_database()
         results = []
-        with target_step.node_class._driver.session() as session:
+        with target_step.node_class._driver.session(database=db) as session:
             result = session.run(query, params)
             for record in result:
                 node = record['target']
@@ -398,8 +401,9 @@ WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties
 
     def _execute_cypher_query(self, cypher_query):
         """Execute a CypherQuery and return results"""
+        db = self.database if self.database else self.start_class.get_database()
         nodes = []
-        with self.start_class._driver.session() as session:
+        with self.start_class._driver.session(database=db) as session:
             result = session.run(cypher_query.query, cypher_query.params)
             for record in result:
                 if 'n' not in record.keys():
@@ -419,6 +423,7 @@ class Base(BaseModel, metaclass=CustomMeta):
     """Static base class for all Neo4j ORM models"""
 
     _driver = None
+    _database = None
 
     @classmethod
     def discover_models(cls):
@@ -441,6 +446,17 @@ class Base(BaseModel, metaclass=CustomMeta):
         if cls._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         return cls._driver
+
+    @classmethod
+    def set_database(cls, database: str):
+        """Set the default database for all OGM operations"""
+        cls._database = database
+        return cls
+
+    @classmethod
+    def get_database(cls):
+        """Get the configured database or DEFAULT_DATABASE"""
+        return cls._database if cls._database else DEFAULT_DATABASE
 
     @classmethod
     def get_class_by_name(cls, name):
@@ -562,83 +578,87 @@ class NodeModel(Base, metaclass=CustomMeta):
                 result[key] = getattr(self, key)
         return result
 
-    def create_target_nodes(self):
+    def create_target_nodes(self, database=None):
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         for rel in self.relationships:
             if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
                 for other_node, _ in rel.nodes:
-                    other_node.create()
+                    other_node.create(database=database)
 
-    def create_relationships(self) -> None:
+    def create_relationships(self, database=None) -> None:
         """Create relationships for this node."""
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
+        db = database if database else Base.get_database()
         for rel in self.relationships:
             # relationships
             if self.__class__.__name__ == rel.source:
                 for other_node, properties in rel.nodes:
                     relset = rel.dataset()
                     relset.add_relationship(self.match_dict, other_node.match_dict, properties)
-                    relset.create(Base._driver)
+                    relset.create(Base._driver, database=db)
             elif self.__class__.__name__ == rel.target:
                 for other_node, properties in rel.nodes:
                     relset = rel.dataset()
                     relset.add_relationship(other_node.match_dict, self.match_dict, properties)
-                    relset.create(Base._driver)
+                    relset.create(Base._driver, database=db)
 
-    def create_node(self):
+    def create_node(self, database=None):
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
+        db = database if database else Base.get_database()
         ns = self.nodeset()
 
         ns.add_node(self._all_properties)
-        ns.create(Base._driver)
+        ns.create(Base._driver, database=db)
 
-    def create(self):
+    def create(self, database=None):
         """A full create on a node including relationships and target nodes."""
-        self.create_node()
-        self.create_target_nodes()
-        self.create_relationships()
+        self.create_node(database=database)
+        self.create_target_nodes(database=database)
+        self.create_relationships(database=database)
 
-    def merge_target_nodes(self):
+    def merge_target_nodes(self, database=None):
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
         for rel in self.relationships:
             if self.__class__.__name__ == rel.source or self.__class__.__name__ == rel.target:
                 for other_node, _ in rel.nodes:
-                    other_node.merge()
+                    other_node.merge(database=database)
 
-    def merge_relationships(self) -> None:
+    def merge_relationships(self, database=None) -> None:
         """Merge relationships for this node."""
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
+        db = database if database else Base.get_database()
         for rel in self.relationships:
             # relationships
             if self.__class__.__name__ == rel.source:
                 relset = rel.dataset()
                 for other_node, properties in rel.nodes:
                     relset.add_relationship(self.match_dict, other_node.match_dict, properties)
-                relset.merge(Base._driver)
+                relset.merge(Base._driver, database=db)
             elif self.__class__.__name__ == rel.target:
                 relset = rel.dataset()
                 for other_node, properties in rel.nodes:
                     relset.add_relationship(other_node.match_dict, self.match_dict, properties)
-                relset.merge(Base._driver)
+                relset.merge(Base._driver, database=db)
 
-    def merge_node(self):
+    def merge_node(self, database=None):
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
+        db = database if database else Base.get_database()
         ns = self.nodeset()
 
         ns.add_node(self._all_properties)
-        ns.merge(Base._driver)
+        ns.merge(Base._driver, database=db)
 
-    def merge(self):
+    def merge(self, database=None):
         """A full merge on a node including relationships and target nodes."""
-        self.merge_node()
-        self.merge_target_nodes()
-        self.merge_relationships()
+        self.merge_node(database=database)
+        self.merge_target_nodes(database=database)
+        self.merge_relationships(database=database)
 
     @classmethod
     def match(cls, *filter_ops) -> 'Query':
@@ -653,9 +673,10 @@ class NodeModel(Base, metaclass=CustomMeta):
             query = query.filter(*filter_ops)
         return query
 
-    def delete(self):
+    def delete(self, database=None):
         if Base._driver is None:
             raise ValueError('Driver is not set. Use set_driver() to set the driver.')
+        db = database if database else Base.get_database()
 
         query = f"""WITH $properties AS properties
         MATCH (n{get_label_string_from_list_of_labels(self._labels)})
@@ -666,7 +687,7 @@ class NodeModel(Base, metaclass=CustomMeta):
         log.debug(query)
         log.debug(self.match_dict)
 
-        with Base._driver.session() as session:
+        with Base._driver.session(database=db) as session:
             session.run(query, properties=self.match_dict)
 
 
@@ -849,7 +870,7 @@ class Relationship(BaseModel):
             query = query.filter(*filter_ops)
         return query
 
-    def delete(self, target=None):
+    def delete(self, target=None, database=None):
         """
         Delete all relationships of this type between the source and target nodes.
         """
@@ -857,6 +878,7 @@ class Relationship(BaseModel):
         if not base:
             raise ValueError('Could not determine Base class')
         driver = base.get_driver()
+        db = database if database else base.get_database()
         target_class = base.get_class_by_name(self.target)
 
         # if target instance is provided, delete only the relationship between the source and target
@@ -869,7 +891,7 @@ class Relationship(BaseModel):
             query += 'DELETE r'
             log.debug(query)
 
-            with driver.session() as session:
+            with driver.session(database=db) as session:
                 session.run(
                     query,
                     properties=self._parent_instance.match_dict,
@@ -884,5 +906,5 @@ class Relationship(BaseModel):
             """
             log.debug(query)
 
-            with driver.session() as session:
+            with driver.session(database=db) as session:
                 session.run(query, properties=self._parent_instance.match_dict)

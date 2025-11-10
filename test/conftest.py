@@ -71,6 +71,7 @@ def test_base():
     from graphio.ogm.model import Base
     # Reset any class attributes that might carry over between tests
     Base._driver = None
+    Base._database = None
     return Base
 
 
@@ -149,3 +150,41 @@ def wait_for_neo4j():
 @pytest.fixture
 def root_dir(request):
     return request.config.rootdir
+
+
+##############################################################
+# Fixtures for Enterprise Edition database testing
+##############################################################
+
+@pytest.fixture
+def neo4j_edition(graph):
+    """Detect Neo4j edition - Community or Enterprise"""
+    with graph.session() as session:
+        result = session.run("CALL dbms.components() YIELD edition RETURN edition")
+        return result.single()['edition'].lower()
+
+
+@pytest.fixture
+def skip_if_community(neo4j_edition):
+    """Skip test if running on Community edition"""
+    if 'enterprise' not in neo4j_edition:
+        pytest.skip("Requires Neo4j Enterprise Edition (multi-database support)")
+
+
+@pytest.fixture
+def test_database(graph, skip_if_community):
+    """
+    Create a test database for Enterprise tests. Auto-cleanup on teardown.
+    This fixture automatically skips on Community edition.
+    """
+    db_name = "graphiotest"
+
+    # Create database
+    with graph.session(database="system") as session:
+        session.run(f"CREATE DATABASE {db_name} IF NOT EXISTS WAIT")
+
+    yield db_name
+
+    # Cleanup - drop database
+    with graph.session(database="system") as session:
+        session.run(f"DROP DATABASE {db_name} IF EXISTS WAIT")

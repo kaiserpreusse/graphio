@@ -1,6 +1,6 @@
 # Base API Reference
 
-The `Base` class manages the global driver connection and model registry for the OGM system.
+The `Base` class manages the global driver connection, database configuration, and model registry for the OGM system.
 
 ## Class Definition
 
@@ -9,6 +9,8 @@ The `Base` class manages the global driver connection and model registry for the
       members:
         - set_driver
         - get_driver
+        - set_database
+        - get_database
         - discover_models
         - get_registry
         - registry

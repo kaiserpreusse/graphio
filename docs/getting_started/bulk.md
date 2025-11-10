@@ -23,6 +23,9 @@ from neo4j import GraphDatabase
 
 # Connect to Neo4j
 driver = GraphDatabase.driver('neo4j://localhost:7687', auth=('neo4j', 'password'))
+
+# Optional: For Enterprise Edition, you can specify a database
+# database = 'mydb'  # All operations can target this specific database
 ```
 
 ## Step 2: Define Data Containers
@@ -49,6 +52,10 @@ employments = RelationshipSet(
 people.add({'name': 'Alice Smith', 'email': 'alice@example.com', 'age': 30})
 people.add({'name': 'Bob Johnson', 'email': 'bob@example.com', 'age': 25})
 
+# You can also specify OGM instances if using hybrid approach
+# from your_models import Person
+# people.add(Person(name='Alice', email='alice@example.com', age=30))
+
 companies.add({'name': 'ACME Corp', 'industry': 'Technology'})
 
 # Add relationships
@@ -74,6 +81,11 @@ companies.create_index(driver)
 companies.create(driver)  # Load companies first
 people.create(driver)     # Then people
 employments.create(driver)  # Finally relationships
+
+# For Enterprise Edition, specify target database:
+# companies.create(driver, database='production')
+# people.create(driver, database='production')
+# employments.create(driver, database='production')
 
 print(f"Loaded {len(people.nodes)} people and {len(companies.nodes)} companies")
 ```
