@@ -464,11 +464,12 @@ class Base(BaseModel, metaclass=CustomMeta):
         return _MODEL_REGISTRY.get(name)
 
     @classmethod
-    def model_create_index(cls):
-        """Create indexes for all models"""
+    def model_create_index(cls, database=None):
+        """Create indexes for all models in the specified database"""
+        db = database if database else Base.get_database()
         for model in _MODEL_REGISTRY.values():
             if hasattr(model, 'create_index'):
-                model.create_index()
+                model.create_index(database=db)
 
 
 class NodeModel(Base, metaclass=CustomMeta):
@@ -553,8 +554,10 @@ class NodeModel(Base, metaclass=CustomMeta):
         return cls.nodeset()
 
     @classmethod
-    def create_index(cls):
-        cls.nodeset().create_index(Base._driver)
+    def create_index(cls, database=None):
+        """Create indexes for this model in the specified database"""
+        db = database if database else Base.get_database()
+        cls.nodeset().create_index(Base._driver, database=db)
 
     @property
     def relationships(self) -> list['Relationship']:

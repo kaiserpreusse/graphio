@@ -581,6 +581,24 @@ people.create(driver, database='production')
 people.merge(driver, database='staging')
 ```
 
+### Index Creation
+
+Index creation also respects the database setting:
+
+```python
+Base.set_database('production')
+
+# Create indexes for specific model
+Person.create_index()  # Uses 'production' database
+
+# Create indexes for all models
+Base.model_create_index()  # Uses 'production' database
+
+# Override database for index creation
+Person.create_index(database='staging')
+Base.model_create_index(database='staging')
+```
+
 ---
 
 ## Integration with Bulk Loading

@@ -251,3 +251,68 @@ class TestDatabaseParameter:
             record = result.single()
             assert record is not None
             assert record['since'] == 2020
+
+    def test_index_creation_with_database(self, graph, test_database, skip_if_community):
+        """Test that indexes are created in the correct database"""
+
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+
+        # Set database and create index
+        Base.set_database(test_database)
+        Person.create_index()
+
+        # Verify index exists in test database
+        with graph.session(database=test_database) as session:
+            result = session.run("SHOW INDEXES YIELD name, labelsOrTypes, properties")
+            indexes = list(result)
+
+            # Check that Person:email index exists
+            person_email_indexes = [
+                idx for idx in indexes
+                if idx.get('labelsOrTypes') and 'Person' in idx['labelsOrTypes']
+                and idx.get('properties') and 'email' in idx['properties']
+            ]
+            assert len(person_email_indexes) > 0, f"No Person:email index found. Indexes: {indexes}"
+
+    def test_model_create_index_with_database(self, graph, test_database, skip_if_community):
+        """Test that Base.model_create_index() creates indexes in correct database"""
+
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['email']
+            name: str
+            email: str
+
+        class Company(NodeModel):
+            _labels = ['Company']
+            _merge_keys = ['name']
+            name: str
+            industry: str
+
+        # Set database and create all indexes
+        Base.set_database(test_database)
+        Base.model_create_index()
+
+        # Verify indexes exist in test database
+        with graph.session(database=test_database) as session:
+            result = session.run("SHOW INDEXES YIELD name, labelsOrTypes, properties")
+            indexes = list(result)
+
+            # Check that both model indexes exist
+            person_indexes = [
+                idx for idx in indexes
+                if idx.get('labelsOrTypes') and 'Person' in idx['labelsOrTypes']
+                and idx.get('properties') and 'email' in idx['properties']
+            ]
+            company_indexes = [
+                idx for idx in indexes
+                if idx.get('labelsOrTypes') and 'Company' in idx['labelsOrTypes']
+                and idx.get('properties') and 'name' in idx['properties']
+            ]
+
+            assert len(person_indexes) > 0, f"No Person:email index found. Indexes: {indexes}"
+            assert len(company_indexes) > 0, f"No Company:name index found. Indexes: {indexes}"
