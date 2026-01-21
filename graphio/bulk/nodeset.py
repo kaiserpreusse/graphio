@@ -83,12 +83,12 @@ class NodeSet:
         :type force: bool
         """
         # Handle OGM instances
-        if hasattr(properties, 'model_dump'):  # Pydantic v2
+        if hasattr(properties, '_all_properties'):  # NodeModel with filtered properties
+            node_props = properties._all_properties
+        elif hasattr(properties, 'model_dump'):  # Pydantic v2
             node_props = properties.model_dump()
         elif hasattr(properties, 'dict'):  # Pydantic v1
             node_props = properties.dict()
-        elif hasattr(properties, '_all_properties'):  # Custom property method
-            node_props = properties._all_properties
         else:
             node_props = properties  # Regular dict
 

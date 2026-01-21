@@ -25,8 +25,11 @@ test:
 test-all:
 	@for py in 3.10 3.11 3.12 3.13 3.14; do \
 		echo "=== Testing Python $$py ===" && \
-		uv run --python $$py --isolated pytest || exit 1; \
+		uv sync --python $$py --extra dev --quiet && \
+		uv run --python $$py pytest || exit 1; \
 	done
+	@echo "=== Restoring default environment ==="
+	@uv sync --extra dev
 
 lint:
 	uv run ruff check graphio/
