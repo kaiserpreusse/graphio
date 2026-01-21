@@ -429,8 +429,8 @@ WHERE {where_clause_with_properties(self.source_instance.match_dict, 'properties
 class Base(BaseModel, metaclass=CustomMeta):
     """Static base class for all Neo4j ORM models"""
 
-    _driver = None
-    _database = None
+    _driver: ClassVar[Driver | None] = None
+    _database: ClassVar[str | None] = None
 
     @classmethod
     def discover_models(cls):

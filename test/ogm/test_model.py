@@ -2749,3 +2749,53 @@ class TestPydanticCompatibility:
         assert props['age'] == 30
         # Should NOT have Relationship
         assert 'knows' not in props
+
+
+class TestBaseClassVars:
+    """Test that Base class variables are proper ClassVars, not PrivateAttr.
+
+    On Python 3.14 with Pydantic 2.12+, underscore-prefixed attributes like
+    `_database = None` are automatically treated as PrivateAttr. This causes
+    issues when accessing them at the class level - they return the descriptor
+    object instead of None.
+
+    These tests ensure _driver and _database are properly typed as ClassVar
+    to prevent this issue.
+    """
+
+    def test_database_is_not_private_attr(self, test_base):
+        """Test that Base._database is None, not a PrivateAttr descriptor."""
+        from pydantic.fields import ModelPrivateAttr
+        from neo4j import DEFAULT_DATABASE
+
+        # Reset to ensure clean state
+        test_base.set_database(None)
+
+        # _database should be None, not a ModelPrivateAttr
+        assert test_base._database is None
+        assert not isinstance(test_base._database, ModelPrivateAttr)
+
+        # get_database() should return DEFAULT_DATABASE when _database is None
+        assert test_base.get_database() == DEFAULT_DATABASE
+
+    def test_driver_is_not_private_attr(self, test_base):
+        """Test that Base._driver is a Driver or None, not a PrivateAttr descriptor."""
+        from pydantic.fields import ModelPrivateAttr
+
+        # _driver should be a Driver instance (set by fixture), not ModelPrivateAttr
+        assert not isinstance(test_base._driver, ModelPrivateAttr)
+        # Should be able to call get_driver() without error
+        driver = test_base.get_driver()
+        assert driver is not None
+
+    def test_set_and_get_database(self, test_base):
+        """Test that set_database/get_database work correctly."""
+        from neo4j import DEFAULT_DATABASE
+
+        # Set a custom database
+        test_base.set_database("testdb")
+        assert test_base.get_database() == "testdb"
+
+        # Reset to None - should fall back to DEFAULT_DATABASE
+        test_base.set_database(None)
+        assert test_base.get_database() == DEFAULT_DATABASE
