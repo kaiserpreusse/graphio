@@ -2568,6 +2568,184 @@ class TestRelationshipDataset:
         assert result[0][0] == 3
         
         # Verify relationship properties
-        result = run_query_return_results(graph, 
+        result = run_query_return_results(graph,
             "MATCH (a:Person {email: 'alice@example.com'})-[r:KNOWS]->(b:Person {email: 'bob@example.com'}) RETURN r.since")
         assert result[0][0] == '2020'
+
+
+class TestRelationshipDescriptor:
+    """
+    Tests for Relationship descriptor behavior.
+
+    Relationship fields must work as descriptors:
+    - Class-level access (Person.knows) returns the Relationship with dataset() method
+    - Instance-level access (person.knows) returns a Relationship bound to that instance
+
+    This is critical for Pydantic 2.12+ compatibility where field defaults are
+    stored in FieldInfo.default rather than on the class directly.
+    """
+
+    def test_class_level_relationship_has_dataset(self, test_base):
+        """Class-level Relationship access should have dataset() method."""
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        # Class-level access should return Relationship with dataset()
+        assert hasattr(Person.knows, 'dataset')
+        dataset = Person.knows.dataset()
+        assert dataset is not None
+
+    def test_instance_relationship_has_parent(self, test_base):
+        """Instance-level Relationship should have _parent_instance set."""
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        alice = Person(name='Alice')
+
+        # Instance-level access should have _parent_instance pointing to the instance
+        assert alice.knows._parent_instance is alice
+
+    def test_separate_instances_have_separate_relationships(self, test_base):
+        """Each instance should have its own Relationship with correct parent."""
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+
+        # Each instance has its own relationship
+        assert alice.knows._parent_instance is alice
+        assert bob.knows._parent_instance is bob
+        assert alice.knows is not bob.knows
+
+
+class TestPydanticCompatibility:
+    """
+    Tests to verify that NodeModel works correctly as a Pydantic model.
+
+    NodeModel extends Pydantic's BaseModel, so standard Pydantic features
+    like field validation, custom validators, and serialization should work.
+    """
+
+    def test_field_constraints(self, test_base):
+        """Field() constraints like ge, le, min_length should work."""
+        from pydantic import Field, ValidationError
+
+        class Person(NodeModel):
+            name: str = Field(min_length=1)
+            age: int = Field(ge=0, le=150)
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        # Valid data should work
+        p = Person(name='Alice', age=30)
+        assert p.name == 'Alice'
+        assert p.age == 30
+
+        # Invalid age (too high) should fail
+        with pytest.raises(ValidationError):
+            Person(name='Bob', age=200)
+
+        # Invalid age (negative) should fail
+        with pytest.raises(ValidationError):
+            Person(name='Charlie', age=-1)
+
+    def test_custom_validator(self, test_base):
+        """Custom field validators should work."""
+        from pydantic import field_validator, ValidationError
+
+        class Person(NodeModel):
+            name: str
+            email: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            @field_validator('email')
+            @classmethod
+            def email_must_contain_at(cls, v):
+                if '@' not in v:
+                    raise ValueError('email must contain @')
+                return v
+
+        # Valid email should work
+        p = Person(name='Alice', email='alice@example.com')
+        assert p.email == 'alice@example.com'
+
+        # Invalid email should fail
+        with pytest.raises(ValidationError):
+            Person(name='Bob', email='invalid-email')
+
+    def test_model_dump(self, test_base):
+        """model_dump() should work and return node properties."""
+        class Person(NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        p = Person(name='Alice', age=30)
+        dump = p.model_dump()
+
+        # Should contain the basic fields
+        assert dump['name'] == 'Alice'
+        assert dump['age'] == 30
+        # Note: 'knows' will be included in model_dump() but filtered out
+        # by _all_properties when adding to NodeSet
+
+    def test_model_copy(self, test_base):
+        """model_copy() should create a copy with updated fields."""
+        class Person(NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+        p = Person(name='Alice', age=30)
+        p_copy = p.model_copy(update={'age': 31})
+
+        # Original unchanged
+        assert p.age == 30
+        # Copy has new value
+        assert p_copy.age == 31
+        assert p_copy.name == 'Alice'
+
+    def test_all_properties_excludes_relationships(self, test_base):
+        """_all_properties should exclude Relationship fields for Neo4j storage."""
+        class Person(NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        p = Person(name='Alice', age=30)
+        props = p._all_properties
+
+        # Should have regular fields
+        assert props['name'] == 'Alice'
+        assert props['age'] == 30
+        # Should NOT have Relationship
+        assert 'knows' not in props
