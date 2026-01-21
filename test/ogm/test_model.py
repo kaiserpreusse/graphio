@@ -2799,3 +2799,34 @@ class TestBaseClassVars:
         # Reset to None - should fall back to DEFAULT_DATABASE
         test_base.set_database(None)
         assert test_base.get_database() == DEFAULT_DATABASE
+
+    def test_database_and_driver_are_classvars(self):
+        """Test that Base._database and _driver are typed as ClassVar.
+
+        This test catches a bug where on Python 3.14 with Pydantic 2.12+,
+        underscore-prefixed class attributes like `_database = None` become
+        ModelPrivateAttr descriptors if not annotated as ClassVar.
+
+        Without ClassVar, accessing Base._database before any set_database()
+        call returns the descriptor object (truthy) instead of None, causing
+        get_database() to return the descriptor instead of DEFAULT_DATABASE.
+
+        By checking the annotations include ClassVar, we ensure the fix is
+        in place without needing to reload modules.
+        """
+        from typing import ClassVar, get_origin
+        from graphio.ogm.model import Base
+
+        # Check that _database is annotated as ClassVar
+        assert '_database' in Base.__annotations__, \
+            "_database should be in Base.__annotations__"
+        db_annotation = Base.__annotations__['_database']
+        assert get_origin(db_annotation) is ClassVar, \
+            f"_database should be ClassVar, got {db_annotation}"
+
+        # Check that _driver is annotated as ClassVar
+        assert '_driver' in Base.__annotations__, \
+            "_driver should be in Base.__annotations__"
+        driver_annotation = Base.__annotations__['_driver']
+        assert get_origin(driver_annotation) is ClassVar, \
+            f"_driver should be ClassVar, got {driver_annotation}"
