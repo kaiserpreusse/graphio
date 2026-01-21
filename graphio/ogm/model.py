@@ -99,11 +99,14 @@ class CustomMeta(BaseModel.__class__):
         if name not in ('Base', 'NodeModel'):
             if hasattr(cls, 'model_fields'):
                 for field_name in cls.model_fields:
-                    # Skip fields that are already descriptors (like Relationship instances)
-                    existing_attr = getattr(cls, field_name, None)
-                    if existing_attr is not None and hasattr(existing_attr, '__get__'):
-                        continue
-                    setattr(cls, field_name, QueryFieldDescriptor(field_name))
+                    # Check if the field's default value is a descriptor (like Relationship)
+                    field_info = cls.model_fields[field_name]
+                    default_value = field_info.default
+                    if default_value is not None and hasattr(default_value, '__get__'):
+                        # Restore the descriptor to the class so it works properly
+                        setattr(cls, field_name, default_value)
+                    else:
+                        setattr(cls, field_name, QueryFieldDescriptor(field_name))
 
         # Simple import-time registration - replaces complex Registry
         if name not in ('Base', 'NodeModel'):
@@ -494,6 +497,20 @@ class NodeModel(Base, metaclass=CustomMeta):
         for k, v in data.items():
             setattr(self, k, v)
         self._validate_merge_keys()
+        self._init_relationships()
+
+    def _init_relationships(self):
+        """Initialize relationship instances with parent reference."""
+        for rel_name, rel_descriptor in getattr(self.__class__, '_relationships', {}).items():
+            # Create a copy of the relationship with this instance as parent
+            rel_copy = Relationship(
+                source=rel_descriptor.source,
+                rel_type=rel_descriptor.rel_type,
+                target=rel_descriptor.target,
+            )
+            rel_copy._parent_instance = self
+            # Store directly in __dict__ to be found before the descriptor
+            self.__dict__[rel_name] = rel_copy
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
