@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/graphio)](https://pypi.org/project/graphio)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Neo4j](https://img.shields.io/badge/Neo4j-5-blue)](https://neo4j.com)
-[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-green)](https://python.com)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-green)](https://python.org)
 [![Downloads](https://pepy.tech/badge/graphio)](https://pepy.tech/project/graphio)
 
 OGM and data loader for Neo4j with two main approaches:
