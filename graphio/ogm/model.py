@@ -99,6 +99,10 @@ class CustomMeta(BaseModel.__class__):
         if name not in ('Base', 'NodeModel'):
             if hasattr(cls, 'model_fields'):
                 for field_name in cls.model_fields:
+                    # Skip fields that are already descriptors (like Relationship instances)
+                    existing_attr = getattr(cls, field_name, None)
+                    if existing_attr is not None and hasattr(existing_attr, '__get__'):
+                        continue
                     setattr(cls, field_name, QueryFieldDescriptor(field_name))
 
         # Simple import-time registration - replaces complex Registry
