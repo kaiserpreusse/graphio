@@ -24,7 +24,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "neo4j>=5.25.0",
-    "pydantic<3",
+    "pydantic>=2.12,<3",
 ]
 dynamic = ["version"]
 
