@@ -1,0 +1,50 @@
+{
+  "name": "GraphIO - Python with uv",
+
+  // Use docker-compose to start devcontainer + Neo4j services
+  "dockerComposeFile": "../docker-compose.yml",
+
+  // Which service to use as the devcontainer
+  "service": "devcontainer",
+
+  // Workspace folder inside the container
+  "workspaceFolder": "/workspaces/graphio",
+
+  // Shutdown behavior - stop all services when closing VS Code
+  "shutdownAction": "stopCompose",
+
+  // Install uv package manager via community feature
+  "features": {
+    "ghcr.io/va-h/devcontainers-features/uv:1": {
+      "version": "latest"
+    }
+  },
+
+  // Essential VS Code extensions
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "anthropic.claude-code",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/workspaces/graphio/.venv/bin/python",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
+
+  // Critical: Docker volumes don't support hardlinks
+  "remoteEnv": {
+    "UV_LINK_MODE": "copy"
+  },
+
+  // Install dependencies after container creation
+  "postCreateCommand": "uv sync --extra dev"
+}

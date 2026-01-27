@@ -19,24 +19,45 @@ DRIVER = os.getenv('DRIVER', None)
 
 if RUN_ENVIRONMENT == 'github_actions':
     NEO4J_VERSIONS = [
-        {'host': 'localhost', 'version': '5-community', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '5-enterprise', 'ports': (7475, 7473, 7688), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
+        {
+            'host': 'localhost',
+            'version': '5-community',
+            'ports': (7474, 7473, 7687),
+            'uri_prefix': 'bolt',
+            'lib': 'neodriver',
+        },
+        {
+            'host': 'localhost',
+            'version': '5-enterprise',
+            'ports': (7475, 7473, 7688),
+            'uri_prefix': 'bolt',
+            'lib': 'neodriver',
+        },
     ]
 
 else:
     NEO4J_VERSIONS = [
-        {'host': 'localhost', 'version': '5-community', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '5-enterprise', 'ports': (14474, 14473, 14687), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
+        {
+            'host': 'neo4j_5_community',
+            'version': '5-community',
+            'ports': (7474, 7473, 7687),  # Internal docker network ports
+            'uri_prefix': 'bolt',
+            'lib': 'neodriver',
+        },
+        {
+            'host': 'neo4j_5_enterprise',
+            'version': '5-enterprise',
+            'ports': (7474, 7473, 7687),  # Internal docker network ports
+            'uri_prefix': 'bolt',
+            'lib': 'neodriver',
+        },
     ]
 
 import pytest
 
+
 # Make fixture execution order explicit
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture(scope='function', autouse=True)
 def test_environment(reset_registry, clear_graph, set_driver):
     """
     Meta-fixture to ensure fixtures run in the correct order:
@@ -48,15 +69,17 @@ def test_environment(reset_registry, clear_graph, set_driver):
     # It just ensures execution order through dependencies
     yield
 
+
 ##############################################################
 # Fixtures used in tests
 ##############################################################
 
+
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request, wait_for_neo4j):
     if request.param['lib'] == 'neodriver':
-        uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
-        driver = GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
+        uri = f'{request.param["uri_prefix"]}://{request.param["host"]}:{request.param["ports"][2]}'
+        driver = GraphDatabase.driver(uri, auth=('neo4j', NEO4J_PASSWORD))
         try:
             yield driver
         finally:
@@ -69,6 +92,7 @@ def test_base():
     Creates a clean Base class for testing.
     """
     from graphio.ogm.model import Base
+
     # Reset any class attributes that might carry over between tests
     Base._driver = None
     Base._database = None
@@ -79,12 +103,14 @@ def test_base():
 # Fixtures to reset test environment between tests
 ##############################################################
 
+
 @pytest.fixture(scope='function')
 def reset_registry():
     """
     Pytest fixture to reset the registry between tests.
     """
     from graphio.ogm.model import _MODEL_REGISTRY
+
     # Store original registry state
     original = _MODEL_REGISTRY.copy()
     # Reset for test
@@ -100,11 +126,11 @@ def clear_graph(graph):
     """Clear all data in the graph before each test."""
     if isinstance(graph, Driver):
         with graph.session() as s:
-            s.run("MATCH (n) DETACH DELETE n")
+            s.run('MATCH (n) DETACH DELETE n')
     yield
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope='function')
 def set_driver(graph, test_base):
     """
     Pytest fixture to set the driver for the Base model.
@@ -130,18 +156,18 @@ def wait_for_neo4j():
             # throw a ServiceUnavailable error
             for v in NEO4J_VERSIONS:
                 # get Graph, bolt connection to localhost is default
-                uri = f"{v['uri_prefix']}://{v['host']}:{v['ports'][2]}"
-                driver = GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
+                uri = f'{v["uri_prefix"]}://{v["host"]}:{v["ports"][2]}'
+                driver = GraphDatabase.driver(uri, auth=('neo4j', NEO4J_PASSWORD))
                 try:
                     with driver.session() as s:
-                        s.run("MATCH (n) RETURN n LIMIT 1")
+                        s.run('MATCH (n) RETURN n LIMIT 1')
                 finally:
                     driver.close()
             connected = True
 
         except ServiceUnavailable:
             retries += 1
-            log.warning(f"Connection unavailable on try {retries}. Try again in 1 second.")
+            log.warning(f'Connection unavailable on try {retries}. Try again in 1 second.')
             if retries > max_retries:
                 break
             sleep(1)
@@ -156,11 +182,12 @@ def root_dir(request):
 # Fixtures for Enterprise Edition database testing
 ##############################################################
 
+
 @pytest.fixture
 def neo4j_edition(graph):
     """Detect Neo4j edition - Community or Enterprise"""
     with graph.session() as session:
-        result = session.run("CALL dbms.components() YIELD edition RETURN edition")
+        result = session.run('CALL dbms.components() YIELD edition RETURN edition')
         return result.single()['edition'].lower()
 
 
@@ -168,7 +195,7 @@ def neo4j_edition(graph):
 def skip_if_community(neo4j_edition):
     """Skip test if running on Community edition"""
     if 'enterprise' not in neo4j_edition:
-        pytest.skip("Requires Neo4j Enterprise Edition (multi-database support)")
+        pytest.skip('Requires Neo4j Enterprise Edition (multi-database support)')
 
 
 @pytest.fixture
@@ -177,14 +204,14 @@ def test_database(graph, skip_if_community):
     Create a test database for Enterprise tests. Auto-cleanup on teardown.
     This fixture automatically skips on Community edition.
     """
-    db_name = "graphiotest"
+    db_name = 'graphiotest'
 
     # Create database
-    with graph.session(database="system") as session:
-        session.run(f"CREATE DATABASE {db_name} IF NOT EXISTS WAIT")
+    with graph.session(database='system') as session:
+        session.run(f'CREATE DATABASE {db_name} IF NOT EXISTS WAIT')
 
     yield db_name
 
     # Cleanup - drop database
-    with graph.session(database="system") as session:
-        session.run(f"DROP DATABASE {db_name} IF EXISTS WAIT")
+    with graph.session(database='system') as session:
+        session.run(f'DROP DATABASE {db_name} IF EXISTS WAIT')

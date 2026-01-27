@@ -1,4 +1,14 @@
 services:
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/python:3.12
+    volumes:
+      - .:/workspaces/graphio:cached
+    working_dir: /workspaces/graphio
+    command: sleep infinity
+    depends_on:
+      - neo4j_5_community
+      - neo4j_5_enterprise
+
   neo4j_5_community:
     image: neo4j:5-community
     container_name: graphio_test_neo4j_5_community
@@ -10,6 +20,7 @@ services:
     ports:
       - 13687:7687
       - 13474:7474
+
   neo4j_5_enterprise:
     image: neo4j:5-enterprise
     container_name: graphio_test_neo4j_5_enterprise
