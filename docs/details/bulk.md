@@ -49,6 +49,37 @@ employees = NodeSet(['Person', 'Employee'], merge_keys=['employee_id'])
 employees.add({'name': 'Alice', 'employee_id': 'E001', 'department': 'Engineering'})
 ```
 
+### Additional Labels
+
+Use `additional_labels` to add extra labels to nodes **after** a MERGE, without including them in the MERGE pattern. This is useful when multiple datasets produce nodes with the same identity but you want to tag some of them with a more specific label.
+
+```python
+# Merge on the shared label
+items = NodeSet(['Item'], merge_keys=['id'])
+items.add({'id': '1', 'name': 'First'})
+items.merge(driver)
+```
+
+```python
+# Merge on the same label and key, but add an extra label
+special_items = NodeSet(['Item'], merge_keys=['id'], additional_labels=['Featured'])
+special_items.add({'id': '1', 'name': 'First', 'priority': 'high'})
+special_items.merge(driver)
+```
+
+```cypher
+-- Generated Cypher
+MERGE (n:Item { id: properties.id })
+ON CREATE SET n = properties
+ON MATCH SET n += properties
+SET n:Featured
+```
+
+Because `additional_labels` are applied via `SET` after the MERGE, they accumulate. If the same node is merged from different NodeSets with different `additional_labels`, the node ends up with all of them.
+
+!!! tip
+    `additional_labels` also works with `create()`. In that case, the additional labels are included directly in the `CREATE` clause.
+
 ### Merge Keys and Uniqueness
 
 Merge keys define node uniqueness for MERGE operations:
