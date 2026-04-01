@@ -303,6 +303,44 @@ class TestRelationshipSetMerge:
 
         assert result[0][0] == 100
 
+    def test_relationshipset_merge_append_props(self, graph, create_nodes_test):
+        """
+        Merge a relationshipset with append_props, merge again and check that values accumulate in a list.
+        """
+        rs = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+
+        for i in range(100):
+            rs.add({'uuid': i}, {'uuid': i}, {'source': 'source_a', 'note': 'first'})
+
+        rs.merge(graph)
+
+        # check count
+        result = run_query_return_results(graph, "MATCH ()-[r:TEST_APPEND]->() RETURN count(r)")
+        assert result[0][0] == 100
+
+        # check that source is a list with one element
+        result = run_query_return_results(graph, "MATCH ()-[r:TEST_APPEND]->() WHERE r.source = ['source_a'] RETURN count(r)")
+        assert result[0][0] == 100
+
+        # merge again with different source value
+        rs2 = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        for i in range(100):
+            rs2.add({'uuid': i}, {'uuid': i}, {'source': 'source_b', 'note': 'second'})
+
+        rs2.merge(graph)
+
+        # count should stay the same
+        result = run_query_return_results(graph, "MATCH ()-[r:TEST_APPEND]->() RETURN count(r)")
+        assert result[0][0] == 100
+
+        # source should now contain both values
+        result = run_query_return_results(graph, "MATCH ()-[r:TEST_APPEND]->() WHERE 'source_a' IN r.source AND 'source_b' IN r.source RETURN count(r)")
+        assert result[0][0] == 100
+
+        # non-append property should be overwritten
+        result = run_query_return_results(graph, "MATCH ()-[r:TEST_APPEND]->() WHERE r.note = 'second' RETURN count(r)")
+        assert result[0][0] == 100
+
     def test_relationshipset_merge_string_and_array_props(self, graph, create_nodes_test):
 
         rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])

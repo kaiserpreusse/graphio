@@ -47,6 +47,7 @@ class RelationshipSet:
         start_node_properties: list[str],
         end_node_properties: list[str],
         default_props: dict = None,
+        append_props: list[str] = None,
     ):
         """
 
@@ -55,6 +56,7 @@ class RelationshipSet:
         :param end_node_labels: Labels of the end node.
         :param start_node_properties: Property keys to identify the start node.
         :param end_node_properties: Properties to identify the end node.
+        :param append_props: Properties that should be appended as arrays during MERGE
         """
 
         self.rel_type = rel_type
@@ -71,6 +73,7 @@ class RelationshipSet:
         self.start_node_properties = start_node_properties
         self.end_node_properties = end_node_properties
         self.default_props = default_props
+        self.append_props = append_props or []
 
         self.fixed_order_start_node_properties = tuple(self.start_node_properties)
         self.fixed_order_end_node_properties = tuple(self.end_node_properties)
@@ -212,10 +215,16 @@ class RelationshipSet:
                 query_parameters = rels_params_from_objects(batch)
                 session.execute_write(create_batch, query_parameters)
 
-    def merge(self, graph, database=None, batch_size=None):
+    def merge(self, graph, database=None, batch_size=None, append_props=None):
         """
-        Create relationships in this RelationshipSet
+        Merge relationships in this RelationshipSet.
+
+        :param append_props: Properties that should be appended as arrays during MERGE.
         """
+        # overwrite if append_props is passed
+        if append_props:
+            self.append_props = append_props
+
         if not batch_size:
             batch_size = BATCHSIZE
         log.debug(f'Batch Size: {batch_size}')
@@ -227,11 +236,12 @@ class RelationshipSet:
             self.start_node_properties,
             self.end_node_properties,
             self.rel_type,
+            append_props=self.append_props,
         )
 
         # Define transaction function once
         def merge_batch(tx, batch_params):
-            result = tx.run(q, **batch_params)
+            result = tx.run(q, **batch_params, append_props=self.append_props)
             result.consume()
             return []
 
@@ -367,6 +377,7 @@ def rels_merge_factory(
     end_node_properties,
     rel_type,
     property_identifier=None,
+    append_props=None,
 ):
     """
     Merge relationship query with explicit arguments.
@@ -387,8 +398,12 @@ def rels_merge_factory(
 
     :param relationship: A Relationship object to create the query.
     :param property_identifier: The variable used in UNWIND.
+    :param append_props: Properties that should be appended as arrays during MERGE.
     :return: Query
     """
+
+    if not append_props:
+        append_props = []
 
     if not property_identifier:
         property_identifier = 'rels'
@@ -416,7 +431,20 @@ def rels_merge_factory(
     q.append('WHERE ' + ' AND '.join(where_clauses))
 
     q.append(f'MERGE (a)-[r:{rel_type}]->(b)')
-    q.append('ON CREATE SET r = rel.properties')
-    q.append('ON MATCH SET r += rel.properties')
+
+    if not append_props:
+        q.append('ON CREATE SET r = rel.properties')
+        q.append('ON MATCH SET r += rel.properties')
+    else:
+        on_create_array_props_list = [f'r.{ap} = [rel.properties.{ap}]' for ap in append_props]
+        on_create_array_props_string = ', '.join(on_create_array_props_list)
+
+        on_match_array_props_list = [f'r.{ap} = r.{ap} + rel.properties.{ap}' for ap in append_props]
+        on_match_array_props_string = ', '.join(on_match_array_props_list)
+
+        q.append('ON CREATE SET r = apoc.map.removeKeys(rel.properties, $append_props)')
+        q.append(f'ON CREATE SET {on_create_array_props_string}')
+        q.append('ON MATCH SET r += apoc.map.removeKeys(rel.properties, $append_props)')
+        q.append(f'ON MATCH SET {on_match_array_props_string}')
 
     return q.query()

@@ -244,11 +244,40 @@ survey_responses = RelationshipSet(
 
 # Every relationship gets survey and method automatically
 survey_responses.add(
-    {'user_id': 'U001'}, 
-    {'product_id': 'P456'}, 
+    {'user_id': 'U001'},
+    {'product_id': 'P456'},
     {'rating': 5}
 )
 ```
+
+### Append Properties on Relationships
+
+Just like `NodeSet`, `RelationshipSet` supports `append_props` to accumulate values in a list across multiple merges. This is useful when the same relationship is merged from different data sources and you want to track all values instead of overwriting.
+
+```python
+# Track sources that contributed to each relationship
+citations = RelationshipSet(
+    'CITES', ['Paper'], ['Paper'],
+    ['doi'], ['doi'],
+    append_props=['source']
+)
+
+citations.add({'doi': '10.1/a'}, {'doi': '10.1/b'}, {'source': 'pubmed', 'score': 0.9})
+citations.merge(driver)
+# Result: source=['pubmed'], score=0.9
+
+citations2 = RelationshipSet(
+    'CITES', ['Paper'], ['Paper'],
+    ['doi'], ['doi'],
+    append_props=['source']
+)
+citations2.add({'doi': '10.1/a'}, {'doi': '10.1/b'}, {'source': 'scopus', 'score': 0.95})
+citations2.merge(driver)
+# Result: source=['pubmed', 'scopus'], score=0.95 (score overwritten, source appended)
+```
+
+!!! warning "APOC Required"
+    `append_props` on `RelationshipSet` uses `apoc.map.removeKeys()`, same as `NodeSet`.
 
 ---
 
@@ -330,7 +359,7 @@ people.merge(driver, preserve=['created_date', 'original_source'])
 # ON MATCH SET n += apoc.map.removeKeys(properties, ['created_date', 'original_source'])
 ```
 
-**Append to array properties:**
+**Append to array properties (works on both NodeSet and RelationshipSet):**
 ```python
 # Append to 'tags' array instead of replacing
 articles = NodeSet(['Article'], merge_keys=['id'], append_props=['tags'])

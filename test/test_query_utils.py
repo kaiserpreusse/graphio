@@ -114,6 +114,17 @@ MERGE (a)-[r:LIKES]->(b)
 ON CREATE SET r = rel.properties
 ON MATCH SET r += rel.properties"""
 
+    def test_rels_merge_append_props(self):
+        q = rels_merge_factory(['Person'], ['Movie'], ['name'], ['title'], "LIKES", append_props=['source', 'score'])
+        assert q == """UNWIND $rels AS rel
+MATCH (a:Person), (b:Movie)
+WHERE a.name = rel.start_name AND b.title = rel.end_title
+MERGE (a)-[r:LIKES]->(b)
+ON CREATE SET r = apoc.map.removeKeys(rel.properties, $append_props)
+ON CREATE SET r.source = [rel.properties.source], r.score = [rel.properties.score]
+ON MATCH SET r += apoc.map.removeKeys(rel.properties, $append_props)
+ON MATCH SET r.source = r.source + rel.properties.source, r.score = r.score + rel.properties.score"""
+
 
 class TestMatchClauses:
     """
