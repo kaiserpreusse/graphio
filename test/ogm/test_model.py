@@ -2633,6 +2633,292 @@ class TestRelationshipDescriptor:
         assert bob.knows._parent_instance is bob
         assert alice.knows is not bob.knows
 
+    def test_per_instance_node_list_isolation(self, test_base):
+        """
+        Adding a target node to one instance's relationship MUST NOT leak into
+        another instance's relationship.
+
+        This is the actual data-leakage scenario the per-instance design is meant
+        to prevent. The existing `is not` test only checks object identity; it
+        does not catch a regression where two instances share the same
+        `Relationship.nodes` list reference. If `Relationship.__get__` ever
+        returned the class-level descriptor itself (or two different copies that
+        happened to share their `nodes` list), this test would fail.
+
+        Implementation expectation: `Relationship.__get__` builds a fresh
+        Relationship per instance, and `Relationship.__init__` initialises a
+        per-instance empty `nodes` list (see `Relationship.__init__` in
+        graphio/ogm/model.py).
+        """
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+        carol = Person(name='Carol')
+
+        alice.knows.add(bob, {'since': 2020})
+
+        assert alice.knows.nodes == [(bob, {'since': 2020})]
+        assert bob.knows.nodes == []
+        assert carol.knows.nodes == []
+        # And the class-level descriptor remains pristine (its nodes list is
+        # separate from any instance-level copy).
+        assert Person.knows.nodes == []
+
+    def test_repeated_attribute_access_returns_same_object(self, test_base):
+        """
+        Two consecutive accesses of the same instance attribute must return the
+        SAME Relationship object, not two independent copies.
+
+        Without this guarantee, the obvious user pattern
+
+            alice.knows.add(bob)
+            alice.knows.add(carol)
+
+        would silently lose the first call: each `alice.knows` would synthesise
+        a fresh Relationship and the previously-appended node would be discarded.
+
+        Implementation expectation: `Relationship.__get__` caches the per-instance
+        copy under a synthesised key (`_rel_<rel_type>_<id(descriptor)>`) on the
+        instance's `__dict__` after first access, and returns the cached object
+        on subsequent calls.
+        """
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+        carol = Person(name='Carol')
+
+        # Identity must be stable across repeated access.
+        first = alice.knows
+        second = alice.knows
+        assert first is second
+
+        # Mutations through one alias must be visible through any other alias.
+        alice.knows.add(bob)
+        alice.knows.add(carol)
+        assert len(alice.knows.nodes) == 2
+        assert (bob, {}) in alice.knows.nodes
+        assert (carol, {}) in alice.knows.nodes
+
+    def test_inherited_relationship_works_on_subclass_instance(self, test_base):
+        """
+        Relationships declared on a base class must be reachable from instances
+        of derived classes, with the correct `_parent_instance` and per-instance
+        node-list semantics.
+
+        Why this is a separate test: `__init_subclass__` populates
+        `cls._relationships` only from `cls.__dict__` — it does NOT flatten
+        relationships from parent classes into the subclass's `_relationships`
+        dict. The descriptor is only reachable on a subclass instance via
+        Python's normal MRO attribute lookup, which then triggers
+        `Relationship.__get__`. This is the path most likely to break under any
+        future change to either descriptor handling or the metaclass.
+        """
+        class Animal(NodeModel):
+            name: str
+
+            _labels = ['Animal']
+            _merge_keys = ['name']
+
+            owns: Relationship = Relationship('Animal', 'OWNS', 'Item')
+
+        class Dog(Animal):
+            _labels = ['Dog', 'Animal']
+            _merge_keys = ['name']
+
+        class Item(NodeModel):
+            name: str
+            _labels = ['Item']
+            _merge_keys = ['name']
+
+        rex = Dog(name='Rex')
+        ball = Item(name='ball')
+
+        # Inherited relationship descriptor is reachable.
+        assert hasattr(rex, 'owns')
+        # _parent_instance is the Dog instance, not the Animal class or anything else.
+        assert rex.owns._parent_instance is rex
+        # Per-instance state works the same as for own-class relationships.
+        rex.owns.add(ball)
+        assert rex.owns.nodes == [(ball, {})]
+
+        other_dog = Dog(name='Buddy')
+        assert other_dog.owns.nodes == []  # No leakage across Dog instances.
+
+    def test_constructor_rejects_relationship_named_kwarg(self, test_base):
+        """
+        Passing a relationship-named kwarg to the constructor must be rejected
+        with `AttributeError`.
+
+        Mechanism: `NodeModel.__init_subclass__` annotates every Relationship
+        field as `ClassVar[Relationship]` (see graphio/ogm/model.py line ~527),
+        which makes Pydantic 2.12+ refuse instance-level assignment to it.
+        Pydantic raises a precise error explaining that the attribute is a
+        ClassVar.
+
+        Why we pin this rather than allowing it: relationships are schema
+        metadata, not per-instance state. Allowing `Person(knows=...)` would
+        invite users to confuse the schema-defining descriptor with instance-
+        level node accumulation (`alice.knows.add(bob)`). The hard rejection
+        keeps that distinction clean. Under the old eager-init path the kwarg
+        would have been silently discarded — strictly worse, because the user
+        gets no signal that their input was ignored.
+        """
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        custom = Relationship('Person', 'KNOWS', 'Person')
+        with pytest.raises(AttributeError, match='ClassVar'):
+            Person(name='Alice', knows=custom)
+
+        # Construction without the kwarg must still work (regression guard:
+        # the ClassVar annotation should not break the normal happy path).
+        alice = Person(name='Alice')
+        assert alice.knows.source == 'Person'
+        assert alice.knows.rel_type == 'KNOWS'
+        assert alice.knows.target == 'Person'
+
+    def test_relationships_property_reflects_accessed_relationships(self, test_base):
+        """
+        The `NodeModel.relationships` property iterates `self.__dict__` and
+        collects every value that `isinstance(v, Relationship)`. After the
+        refactor, relationships are populated lazily on first attribute access,
+        so the property's contents grow as the caller touches more relationship
+        attributes.
+
+        This test pins that semantics. Two consequences worth being explicit
+        about:
+
+        - Immediately after construction, no relationships have been accessed,
+          so the property is empty.
+        - After accessing `alice.knows`, the lazy copy is cached on the instance
+          (under a synthesised key), so the property reports it.
+
+        Callers (`create_relationships`, `merge_relationships`) only need
+        relationships that actually carry pending `nodes` to do useful work;
+        skipping untouched relationships is correct, not lossy.
+        """
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+            likes: Relationship = Relationship('Person', 'LIKES', 'Person')
+
+        alice = Person(name='Alice')
+        bob = Person(name='Bob')
+
+        # Before any descriptor access, the relationships property is empty.
+        assert alice.relationships == []
+
+        # Touching `knows` materialises only that relationship.
+        alice.knows.add(bob)
+        rels = alice.relationships
+        assert len(rels) == 1
+        assert rels[0].rel_type == 'KNOWS'
+
+        # Touching `likes` materialises the second relationship as well.
+        alice.likes.add(bob)
+        rel_types = sorted(r.rel_type for r in alice.relationships)
+        assert rel_types == ['KNOWS', 'LIKES']
+
+    def test_hasattr_returns_true_before_first_access(self, test_base):
+        """
+        `hasattr(instance, 'knows')` must return True even before the
+        relationship has been accessed.
+
+        Why: callers (and IDEs introspecting models) rely on attribute presence
+        as a schema check. The descriptor protocol guarantees this — Python's
+        attribute lookup machinery calls `__get__` for `hasattr`, which builds
+        the lazy copy. We pin this so a future change cannot silently break
+        introspection.
+        """
+        class Person(NodeModel):
+            name: str
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        alice = Person(name='Alice')
+        # Brand-new instance, no attribute has been touched yet.
+        assert hasattr(alice, 'knows')
+        # The hasattr triggers __get__, so the lazy copy is now cached;
+        # access from here must be stable (covered by other tests).
+
+    def test_pydantic_round_trip_does_not_break_relationship_access(self, test_base):
+        """
+        Standard Pydantic operations (`model_dump`, `model_copy`) must not
+        crash, and the resulting object must still expose a working
+        Relationship descriptor.
+
+        We deliberately do NOT assert that `model_copy()` rebinds
+        `_parent_instance` to the copy: Pydantic's `model_copy` is a shallow
+        copy of `__dict__`, so the cached descriptor entry
+        (`_rel_<rel_type>_<id(descriptor)>`) is propagated as-is and still
+        references the original instance. That is a known Pydantic
+        gotcha, not a NodeModel regression — the same was true under the old
+        eager-init implementation. Fixing it would require a custom
+        `__deepcopy__` / `__copy__` on NodeModel that walks per-instance
+        relationship state, which is out of scope for this refactor.
+
+        What we DO pin:
+
+        - `model_dump()` returns a dict containing the regular scalar fields.
+          We do not assert on the presence/shape of the `knows` key, since
+          that is governed by Pydantic's serialisation rules for
+          BaseModel-typed fields and may evolve.
+        - `model_copy()` succeeds and the resulting object's descriptor still
+          resolves to a Relationship with the right schema (source, rel_type,
+          target).
+        """
+        class Person(NodeModel):
+            name: str
+            age: int
+
+            _labels = ['Person']
+            _merge_keys = ['name']
+
+            knows: Relationship = Relationship('Person', 'KNOWS', 'Person')
+
+        alice = Person(name='Alice', age=30)
+        bob = Person(name='Bob', age=31)
+        alice.knows.add(bob)
+
+        # model_dump must work and surface the regular fields.
+        dump = alice.model_dump()
+        assert dump['name'] == 'Alice'
+        assert dump['age'] == 30
+
+        # model_copy returns a model whose relationship descriptor still resolves
+        # to a Relationship with the correct schema. Parent rebinding is
+        # explicitly NOT contracted (see docstring above).
+        alice_copy = alice.model_copy()
+        assert alice_copy.knows.source == 'Person'
+        assert alice_copy.knows.rel_type == 'KNOWS'
+        assert alice_copy.knows.target == 'Person'
+
 
 class TestPydanticCompatibility:
     """

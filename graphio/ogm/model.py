@@ -497,20 +497,6 @@ class NodeModel(Base, metaclass=CustomMeta):
         for k, v in data.items():
             setattr(self, k, v)
         self._validate_merge_keys()
-        self._init_relationships()
-
-    def _init_relationships(self):
-        """Initialize relationship instances with parent reference."""
-        for rel_name, rel_descriptor in getattr(self.__class__, '_relationships', {}).items():
-            # Create a copy of the relationship with this instance as parent
-            rel_copy = Relationship(
-                source=rel_descriptor.source,
-                rel_type=rel_descriptor.rel_type,
-                target=rel_descriptor.target,
-            )
-            rel_copy._parent_instance = self
-            # Store directly in __dict__ to be found before the descriptor
-            self.__dict__[rel_name] = rel_copy
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
