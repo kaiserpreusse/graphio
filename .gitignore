@@ -23,6 +23,8 @@ eggs/
 .eggs/
 lib/
 venv/
+.venv/
+.venv-py*/
 lib64/
 parts/
 sdist/

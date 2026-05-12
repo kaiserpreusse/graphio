@@ -23,13 +23,24 @@ test:
 	uv run pytest
 
 test-all:
-	@for py in 3.10 3.11 3.12 3.13 3.14; do \
-		echo "=== Testing Python $$py ===" && \
-		uv sync --python $$py --extra dev --quiet && \
-		uv run --python $$py pytest || exit 1; \
-	done
-	@echo "=== Restoring default environment ==="
-	@uv sync --extra dev
+	@unset VIRTUAL_ENV; \
+	FAILED=""; \
+	for py in 3.10 3.11 3.12 3.13 3.14; do \
+		printf "\n=== Python $$py ===\n"; \
+		UV_PROJECT_ENVIRONMENT=.venv-py$$py uv sync --python $$py --extra dev --quiet; \
+		if UV_PROJECT_ENVIRONMENT=.venv-py$$py uv run --python $$py pytest -q; then \
+			:; \
+		else \
+			FAILED="$$FAILED $$py"; \
+		fi; \
+	done; \
+	printf "\n"; \
+	if [ -z "$$FAILED" ]; then \
+		echo "All Python versions passed."; \
+	else \
+		echo "FAILED on:$$FAILED"; \
+		exit 1; \
+	fi
 
 lint:
 	uv run ruff check graphio/

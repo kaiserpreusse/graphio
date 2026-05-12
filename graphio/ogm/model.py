@@ -497,6 +497,46 @@ class NodeModel(Base, metaclass=CustomMeta):
         for k, v in data.items():
             setattr(self, k, v)
         self._validate_merge_keys()
+        self._init_relationships()
+
+    def _init_relationships(self):
+        """
+        Patch ``_parent_instance`` on Relationship copies that Pydantic has
+        already placed in ``self.__dict__``.
+
+        Behavior depends on the Python + Pydantic combination at runtime:
+
+        - Python <= 3.13 / older Pydantic: ``super().__init__`` does NOT
+          pre-populate ``__dict__`` for descriptor-typed default fields, so
+          the loop here finds nothing and is a no-op. Subsequent
+          ``instance.knows`` access goes through ``Relationship.__get__``,
+          which lazily creates a per-instance copy with the correct
+          ``_parent_instance``.
+
+        - Python 3.14 + Pydantic 2.12+: Pydantic eagerly deep-copies every
+          field default (including Relationship defaults) into
+          ``instance.__dict__``. The deep copy gives each instance its own
+          ``nodes`` list (so per-instance isolation works) but leaves
+          ``_parent_instance`` as ``None`` because Pydantic has no way to
+          know it should point back to the model instance. The loop here
+          sets ``_parent_instance`` on those Pydantic-supplied copies.
+
+        This is intentionally a minimal repair: we do NOT rebuild the
+        Relationship objects (Pydantic already constructed them), only
+        patch the one field Pydantic doesn't know about. That keeps the
+        cost on 3.14 to a single attribute write per relationship instead
+        of a full Pydantic constructor call.
+
+        We iterate ``__dict__`` rather than ``cls._relationships`` because
+        the latter only contains relationships defined directly on the
+        class — inherited Relationship fields would be missed. Pydantic's
+        default copying covers the inherited fields as well, so iterating
+        ``__dict__`` catches everything Pydantic placed there regardless
+        of which class in the MRO declared the field.
+        """
+        for value in list(self.__dict__.values()):
+            if isinstance(value, Relationship):
+                value._parent_instance = self
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
