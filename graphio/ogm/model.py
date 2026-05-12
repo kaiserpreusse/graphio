@@ -90,28 +90,155 @@ class RelField:
         return FilterOp(self.field_name, 'CONTAINS', value)
 
 
+def _mask_annotations_as_classvar(attrs: dict, names) -> None:
+    """
+    Rewrite the annotations for ``names`` to ``ClassVar[Relationship]`` in the
+    class namespace ``attrs``, handling both the pre-3.14 and PEP 649 paths.
+
+    Two storage formats exist depending on Python version:
+
+    - **Python <= 3.13:** annotations are eagerly available as a dict at
+      ``attrs['__annotations__']``. Pydantic reads from this dict during
+      ``super().__new__()`` to discover model fields. Mutating the dict
+      in place is sufficient.
+
+    - **Python 3.14+ (PEP 649 + PEP 749):** annotations are produced by a
+      lazily-called function stored at ``attrs['__annotate_func__']`` (note
+      the suffix — PEP 749 renamed the original PEP 649 ``__annotate__``).
+      Pydantic 2.12+ calls this function with a format argument (1 = VALUE,
+      2 = FORWARDREF, 3 = SOURCE) to get the annotation dict. We wrap the
+      original function with one that returns the original mapping but
+      rewrites the listed ``names`` to ``ClassVar[Relationship]``.
+
+    Both formats are handled because we don't want to assume which Python
+    version is active.
+
+    Mutating ``attrs`` rather than waiting until after ``super().__new__()``
+    is essential: by the time the class object exists, Pydantic has already
+    walked the annotations and built ``model_fields``. The point of this
+    function is to intercept before that walk.
+    """
+    names = list(names)
+
+    # Pre-3.14 path: __annotations__ is a dict on the class body
+    annotations = attrs.get('__annotations__')
+    if isinstance(annotations, dict):
+        for name in names:
+            annotations[name] = ClassVar[Relationship]
+
+    # PEP 749 path (Python 3.14+): __annotate_func__ is a lazily-called function
+    annotate_func = attrs.get('__annotate_func__')
+    if annotate_func is not None and callable(annotate_func):
+        def _wrapped(format=1, _orig=annotate_func, _names=tuple(names)):
+            try:
+                base = _orig(format) or {}
+            except NotImplementedError:
+                # SOURCE format is not always implemented; let the caller
+                # see the original behaviour for that format.
+                raise
+            except Exception:
+                base = {}
+            # Don't mutate the underlying mapping returned by the original
+            # function — callers may cache it.
+            masked = dict(base)
+            for n in _names:
+                masked[n] = ClassVar[Relationship]
+            return masked
+
+        attrs['__annotate_func__'] = _wrapped
+
+
 class CustomMeta(BaseModel.__class__):
+    """
+    Metaclass that prevents Pydantic from treating ``Relationship`` attributes
+    as model fields.
+
+    Background: A naive ``knows: Relationship = Relationship('A', 'KNOWS', 'B')``
+    declaration on a Pydantic ``BaseModel`` subclass causes Pydantic to register
+    ``knows`` in ``model_fields`` and deep-copy its default into every
+    instance's ``__dict__`` during ``__init__``. On Python 3.14 + Pydantic
+    2.12+ this is expensive (~4 µs per relationship per instance) and breaks
+    descriptor semantics (the deep-copied value shadows the class-level
+    descriptor, so ``_parent_instance`` linkage and lazy access don't work
+    without a per-instance patch loop).
+
+    The fix here is the same pattern SQLModel uses for its SQLAlchemy
+    relationships: intercept the relationship-typed attributes in the
+    metaclass *before* Pydantic's metaclass machinery processes the namespace,
+    remove them from ``attrs`` so Pydantic never sees them as fields, then
+    re-install them as class-level descriptors after Pydantic finishes.
+
+    Effect:
+
+    - ``Gene.model_fields`` only contains scalar fields (``uid``, ``name``, …)
+    - ``Gene.knows`` is still a ``Relationship`` descriptor, accessed via the
+      class as a schema reference (``Gene.knows.dataset()``) or via an
+      instance as a per-instance, lazily-created copy
+      (``gene.knows.add(other)``).
+    - ``Gene._relationships`` is the canonical schema reflection dict, with
+      own + inherited relationships flattened via MRO walk.
+    - Pydantic deep-copy is no longer triggered for relationships on any
+      Python version → constant-time ``__init__`` regardless of relationship
+      count.
+    """
+
     def __new__(mcs, name, bases, attrs):
-        # First create the class using the normal mechanism
+        # Bootstrap classes (``Base``, ``NodeModel`` themselves) have no
+        # Relationship attributes — and the ``Relationship`` name isn't even
+        # defined yet at the point those classes are constructed. Skip the
+        # preempt for them.
+        if name in ('Base', 'NodeModel'):
+            return super().__new__(mcs, name, bases, attrs)
+
+        # === Preempt: hide Relationship attributes from Pydantic ===
+        # ``Relationship`` is resolved at call time (not class-definition
+        # time), so by the time user code subclasses ``NodeModel`` it's
+        # available in module globals.
+        own_relationships = {}
+        for attr_name, attr_value in list(attrs.items()):
+            if isinstance(attr_value, Relationship):
+                own_relationships[attr_name] = attr_value
+                del attrs[attr_name]
+
+        if own_relationships:
+            _mask_annotations_as_classvar(attrs, own_relationships.keys())
+
+        # Pydantic now builds the model class without seeing relationships.
         cls = super().__new__(mcs, name, bases, attrs)
 
-        # Add field descriptors for all fields in model classes
-        if name not in ('Base', 'NodeModel'):
-            if hasattr(cls, 'model_fields'):
-                for field_name in cls.model_fields:
-                    # Check if the field's default value is a descriptor (like Relationship)
-                    field_info = cls.model_fields[field_name]
-                    default_value = field_info.default
-                    if default_value is not None and hasattr(default_value, '__get__'):
-                        # Restore the descriptor to the class so it works properly
-                        setattr(cls, field_name, default_value)
-                    else:
-                        setattr(cls, field_name, QueryFieldDescriptor(field_name))
+        # Aggregate own + inherited relationships. Walking the MRO fixes the
+        # previous limitation where ``cls._relationships`` only contained
+        # directly-declared relationships, not ones inherited from parent
+        # NodeModel classes.
+        merged_relationships = {}
+        for base_cls in reversed(cls.__mro__):
+            base_rels = getattr(base_cls, '_relationships', None)
+            if isinstance(base_rels, dict):
+                merged_relationships.update(base_rels)
+        merged_relationships.update(own_relationships)
+        cls._relationships = merged_relationships
 
-        # Simple import-time registration - replaces complex Registry
-        if name not in ('Base', 'NodeModel'):
-            if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
-                _MODEL_REGISTRY[cls.__name__] = cls
+        # Re-install own descriptors on this class. Inherited descriptors stay
+        # on their parent class and are reached via normal MRO attribute
+        # lookup, so we don't re-install those here.
+        for rel_name, rel_descriptor in own_relationships.items():
+            setattr(cls, rel_name, rel_descriptor)
+
+        # Scalar fields: install QueryFieldDescriptor so ``Person.name`` at
+        # class-access returns a query helper. (Same as before — only relevant
+        # for non-relationship fields now.)
+        if hasattr(cls, 'model_fields'):
+            for field_name in cls.model_fields:
+                field_info = cls.model_fields[field_name]
+                default_value = field_info.default
+                if default_value is not None and hasattr(default_value, '__get__'):
+                    setattr(cls, field_name, default_value)
+                else:
+                    setattr(cls, field_name, QueryFieldDescriptor(field_name))
+
+        # Registry
+        if hasattr(cls, '_labels') and hasattr(cls, '_merge_keys'):
+            _MODEL_REGISTRY[cls.__name__] = cls
 
         return cls
 
@@ -497,60 +624,19 @@ class NodeModel(Base, metaclass=CustomMeta):
         for k, v in data.items():
             setattr(self, k, v)
         self._validate_merge_keys()
-        self._init_relationships()
 
-    def _init_relationships(self):
-        """
-        Patch ``_parent_instance`` on Relationship copies that Pydantic has
-        already placed in ``self.__dict__``.
+    # NOTE: previous versions defined ``_init_relationships`` here to patch
+    # ``_parent_instance`` on Pydantic-deep-copied Relationship objects in
+    # ``self.__dict__``. The CustomMeta preempt now stops Pydantic from
+    # placing relationships in ``__dict__`` at all, so the post-init patch
+    # is no longer needed. The lazy ``Relationship.__get__`` descriptor
+    # handles per-instance creation correctly on every Python version.
 
-        Behavior depends on the Python + Pydantic combination at runtime:
-
-        - Python <= 3.13 / older Pydantic: ``super().__init__`` does NOT
-          pre-populate ``__dict__`` for descriptor-typed default fields, so
-          the loop here finds nothing and is a no-op. Subsequent
-          ``instance.knows`` access goes through ``Relationship.__get__``,
-          which lazily creates a per-instance copy with the correct
-          ``_parent_instance``.
-
-        - Python 3.14 + Pydantic 2.12+: Pydantic eagerly deep-copies every
-          field default (including Relationship defaults) into
-          ``instance.__dict__``. The deep copy gives each instance its own
-          ``nodes`` list (so per-instance isolation works) but leaves
-          ``_parent_instance`` as ``None`` because Pydantic has no way to
-          know it should point back to the model instance. The loop here
-          sets ``_parent_instance`` on those Pydantic-supplied copies.
-
-        This is intentionally a minimal repair: we do NOT rebuild the
-        Relationship objects (Pydantic already constructed them), only
-        patch the one field Pydantic doesn't know about. That keeps the
-        cost on 3.14 to a single attribute write per relationship instead
-        of a full Pydantic constructor call.
-
-        We iterate ``__dict__`` rather than ``cls._relationships`` because
-        the latter only contains relationships defined directly on the
-        class — inherited Relationship fields would be missed. Pydantic's
-        default copying covers the inherited fields as well, so iterating
-        ``__dict__`` catches everything Pydantic placed there regardless
-        of which class in the MRO declared the field.
-        """
-        for value in list(self.__dict__.values()):
-            if isinstance(value, Relationship):
-                value._parent_instance = self
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-
-        # Collect relationships into a class variable
-        cls._relationships = {}
-        for name, value in cls.__dict__.items():
-            if isinstance(value, Relationship):
-                cls._relationships[name] = value
-
-                # Optionally add ClassVar annotation if using type hints
-                if '__annotations__' in cls.__dict__:
-                    cls.__annotations__[name] = ClassVar[Relationship]
+    # NOTE: previous versions defined ``__init_subclass__`` here to collect
+    # ``cls._relationships`` and rewrite annotations to ``ClassVar``. Both
+    # of those jobs now happen in ``CustomMeta.__new__`` *before* Pydantic
+    # sees the namespace, which is the only point at which we can prevent
+    # Pydantic from registering relationships as model fields.
 
     def _validate_merge_keys(self):
         for key in self.__class__._merge_keys:
