@@ -38,7 +38,9 @@ class NodeSet:
         :param merge_keys: Properties that define node uniqueness for MERGE operations
         :param default_props: Properties applied to all nodes by default
         :param preserve: Properties that should not be overwritten during MERGE operations
-        :param append_props: Properties that should be appended as arrays during MERGE
+        :param append_props: Properties that should be appended as arrays during MERGE.
+            Values can be scalars or lists; lists are concatenated element-wise,
+            null values and missing keys leave the existing array unchanged.
         :param additional_labels: Additional labels to apply during CREATE/MERGE operations
         :param indexed: Whether indexes have been created for this NodeSet
         :param deduplicate: If True, automatically prevents duplicate nodes based on merge_keys
@@ -286,15 +288,21 @@ def nodes_merge_factory(
     if not property_parameter:
         property_parameter = 'props'
 
+    # `[] + value` normalizes scalars and lists to a list; null/missing keys
+    # become [] and null elements are dropped (nulls are not storable in arrays)
     on_create_array_props_list = []
     for ap in array_props:
-        on_create_array_props_list.append(f'n.{ap} = [properties.{ap}]')
+        on_create_array_props_list.append(
+            f'n.{ap} = [x IN [] + coalesce(properties.{ap}, []) WHERE x IS NOT NULL]'
+        )
     on_create_array_props_string = ', '.join(on_create_array_props_list)
 
     on_match_array_props_list = []
     for ap in array_props:
         if ap not in preserve:
-            on_match_array_props_list.append(f'n.{ap} = n.{ap} + properties.{ap}')
+            on_match_array_props_list.append(
+                f'n.{ap} = coalesce(n.{ap}, []) + [x IN [] + coalesce(properties.{ap}, []) WHERE x IS NOT NULL]'
+            )
     on_match_array_props_string = ', '.join(on_match_array_props_list)
 
     q = CypherQuery()

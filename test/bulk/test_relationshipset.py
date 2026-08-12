@@ -341,6 +341,66 @@ class TestRelationshipSetMerge:
         result = run_query_return_results(graph, "MATCH ()-[r:TEST_APPEND]->() WHERE r.note = 'second' RETURN count(r)")
         assert result[0][0] == 100
 
+    def test_relationshipset_merge_append_props_list_values(self, graph, create_nodes_test):
+        """
+        List values are stored flat on create and concatenated on merge.
+        """
+        rs = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        rs.add({'uuid': 1}, {'uuid': 1}, {'source': ['source_a', 'source_b']})
+        rs.merge(graph)
+
+        result = run_query_return_results(graph, 'MATCH ()-[r:TEST_APPEND]->() RETURN r.source')
+        assert result[0][0] == ['source_a', 'source_b']
+
+        rs2 = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        rs2.add({'uuid': 1}, {'uuid': 1}, {'source': ['source_c']})
+        rs2.merge(graph)
+
+        result = run_query_return_results(graph, 'MATCH ()-[r:TEST_APPEND]->() RETURN r.source')
+        assert result[0][0] == ['source_a', 'source_b', 'source_c']
+
+    def test_relationshipset_merge_append_props_null_values(self, graph, create_nodes_test):
+        """
+        Null values and missing keys create an empty array and do not wipe existing arrays on merge.
+        """
+        rs = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        rs.add({'uuid': 1}, {'uuid': 1}, {'source': None})
+        rs.add({'uuid': 2}, {'uuid': 2}, {})
+        rs.merge(graph)
+
+        result = run_query_return_results(
+            graph, 'MATCH (:Test {uuid: 1})-[r:TEST_APPEND]->() RETURN r.source'
+        )
+        assert result[0][0] == []
+        result = run_query_return_results(
+            graph, 'MATCH (:Test {uuid: 2})-[r:TEST_APPEND]->() RETURN r.source'
+        )
+        assert result[0][0] == []
+
+        rs2 = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        rs2.add({'uuid': 1}, {'uuid': 1}, {'source': 'source_a'})
+        rs2.merge(graph)
+
+        rs3 = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        rs3.add({'uuid': 1}, {'uuid': 1}, {'source': None})
+        rs3.merge(graph)
+
+        result = run_query_return_results(
+            graph, 'MATCH (:Test {uuid: 1})-[r:TEST_APPEND]->() RETURN r.source'
+        )
+        assert result[0][0] == ['source_a']
+
+    def test_relationshipset_merge_append_props_list_with_null_elements(self, graph, create_nodes_test):
+        """
+        Null elements inside list values are dropped.
+        """
+        rs = RelationshipSet('TEST_APPEND', ['Test'], ['Foo'], ['uuid'], ['uuid'], append_props=['source'])
+        rs.add({'uuid': 1}, {'uuid': 1}, {'source': ['source_a', None]})
+        rs.merge(graph)
+
+        result = run_query_return_results(graph, 'MATCH ()-[r:TEST_APPEND]->() RETURN r.source')
+        assert result[0][0] == ['source_a']
+
     def test_relationshipset_merge_string_and_array_props(self, graph, create_nodes_test):
 
         rs = RelationshipSet('TEST_ARRAY', ['Test'], ['Foo'], [ArrayProperty('array_key')], [ArrayProperty('array_key')])

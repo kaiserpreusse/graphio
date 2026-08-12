@@ -78,18 +78,18 @@ ON MATCH SET n += apoc.map.removeKeys(properties, $preserve)"""
         assert q == """UNWIND $props AS properties
 MERGE (n:Person { name: properties.name } )
 ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)
-ON CREATE SET n.foo = [properties.foo], n.bar = [properties.bar]
+ON CREATE SET n.foo = [x IN [] + coalesce(properties.foo, []) WHERE x IS NOT NULL], n.bar = [x IN [] + coalesce(properties.bar, []) WHERE x IS NOT NULL]
 ON MATCH SET n += apoc.map.removeKeys(properties, $append_props)
-ON MATCH SET n.foo = n.foo + properties.foo, n.bar = n.bar + properties.bar"""
+ON MATCH SET n.foo = coalesce(n.foo, []) + [x IN [] + coalesce(properties.foo, []) WHERE x IS NOT NULL], n.bar = coalesce(n.bar, []) + [x IN [] + coalesce(properties.bar, []) WHERE x IS NOT NULL]"""
 
     def test_nodes_merge_factory_preserve_array_props(self):
         q = nodes_merge_factory(['Person'], ['name'], array_props=['foo', 'bar'], preserve=['bar'])
         assert q == """UNWIND $props AS properties
 MERGE (n:Person { name: properties.name } )
 ON CREATE SET n = apoc.map.removeKeys(properties, $append_props)
-ON CREATE SET n.foo = [properties.foo], n.bar = [properties.bar]
+ON CREATE SET n.foo = [x IN [] + coalesce(properties.foo, []) WHERE x IS NOT NULL], n.bar = [x IN [] + coalesce(properties.bar, []) WHERE x IS NOT NULL]
 ON MATCH SET n += apoc.map.removeKeys(apoc.map.removeKeys(properties, $append_props), $preserve)
-ON MATCH SET n.foo = n.foo + properties.foo"""
+ON MATCH SET n.foo = coalesce(n.foo, []) + [x IN [] + coalesce(properties.foo, []) WHERE x IS NOT NULL]"""
 
 
 class TestRelationshipsCreateFactory:
@@ -121,9 +121,9 @@ MATCH (a:Person), (b:Movie)
 WHERE a.name = rel.start_name AND b.title = rel.end_title
 MERGE (a)-[r:LIKES]->(b)
 ON CREATE SET r = apoc.map.removeKeys(rel.properties, $append_props)
-ON CREATE SET r.source = [rel.properties.source], r.score = [rel.properties.score]
+ON CREATE SET r.source = [x IN [] + coalesce(rel.properties.source, []) WHERE x IS NOT NULL], r.score = [x IN [] + coalesce(rel.properties.score, []) WHERE x IS NOT NULL]
 ON MATCH SET r += apoc.map.removeKeys(rel.properties, $append_props)
-ON MATCH SET r.source = r.source + rel.properties.source, r.score = r.score + rel.properties.score"""
+ON MATCH SET r.source = coalesce(r.source, []) + [x IN [] + coalesce(rel.properties.source, []) WHERE x IS NOT NULL], r.score = coalesce(r.score, []) + [x IN [] + coalesce(rel.properties.score, []) WHERE x IS NOT NULL]"""
 
 
 class TestMatchClauses:

@@ -56,7 +56,9 @@ class RelationshipSet:
         :param end_node_labels: Labels of the end node.
         :param start_node_properties: Property keys to identify the start node.
         :param end_node_properties: Properties to identify the end node.
-        :param append_props: Properties that should be appended as arrays during MERGE
+        :param append_props: Properties that should be appended as arrays during MERGE.
+            Values can be scalars or lists; lists are concatenated element-wise,
+            null values and missing keys leave the existing array unchanged.
         """
 
         self.rel_type = rel_type
@@ -436,10 +438,18 @@ def rels_merge_factory(
         q.append('ON CREATE SET r = rel.properties')
         q.append('ON MATCH SET r += rel.properties')
     else:
-        on_create_array_props_list = [f'r.{ap} = [rel.properties.{ap}]' for ap in append_props]
+        # `[] + value` normalizes scalars and lists to a list; null/missing keys
+        # become [] and null elements are dropped (nulls are not storable in arrays)
+        on_create_array_props_list = [
+            f'r.{ap} = [x IN [] + coalesce(rel.properties.{ap}, []) WHERE x IS NOT NULL]'
+            for ap in append_props
+        ]
         on_create_array_props_string = ', '.join(on_create_array_props_list)
 
-        on_match_array_props_list = [f'r.{ap} = r.{ap} + rel.properties.{ap}' for ap in append_props]
+        on_match_array_props_list = [
+            f'r.{ap} = coalesce(r.{ap}, []) + [x IN [] + coalesce(rel.properties.{ap}, []) WHERE x IS NOT NULL]'
+            for ap in append_props
+        ]
         on_match_array_props_string = ', '.join(on_match_array_props_list)
 
         q.append('ON CREATE SET r = apoc.map.removeKeys(rel.properties, $append_props)')

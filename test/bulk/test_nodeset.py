@@ -335,6 +335,72 @@ class TestNodeSetMerge:
         assert run_query_return_results(graph, "MATCH (n:Test) where 'value' IN n.key RETURN count(n)")[0][0] == 100
         assert run_query_return_results(graph, "MATCH (n:Test) where 'other_value' IN n.key RETURN count(n)")[0][0] == 0
 
+    def test_nodeset_merge_append_props_list_values(self, graph, clear_graph):
+        """
+        List values are stored flat on create and concatenated on merge.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        ns.add({'uuid': 1, 'key': ['a', 'b']})
+        ns.merge(graph)
+
+        assert run_query_return_results(graph, 'MATCH (n:Test) RETURN n.key')[0][0] == ['a', 'b']
+
+        append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        append_ns.add({'uuid': 1, 'key': ['c']})
+        append_ns.merge(graph)
+
+        assert run_query_return_results(graph, 'MATCH (n:Test) RETURN n.key')[0][0] == ['a', 'b', 'c']
+
+    def test_nodeset_merge_append_props_mixed_scalar_and_list(self, graph, clear_graph):
+        """
+        Scalar on create, list on merge (and vice versa) accumulate into one flat array.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        ns.add({'uuid': 1, 'key': 'a'})
+        ns.merge(graph)
+
+        append_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        append_ns.add({'uuid': 1, 'key': ['b', 'c']})
+        append_ns.merge(graph)
+
+        append_scalar_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        append_scalar_ns.add({'uuid': 1, 'key': 'd'})
+        append_scalar_ns.merge(graph)
+
+        assert run_query_return_results(graph, 'MATCH (n:Test) RETURN n.key')[0][0] == ['a', 'b', 'c', 'd']
+
+    def test_nodeset_merge_append_props_null_values(self, graph, clear_graph):
+        """
+        Null values and missing keys create an empty array and do not wipe existing arrays on merge.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        ns.add({'uuid': 1, 'key': None})
+        ns.add({'uuid': 2})
+        ns.merge(graph)
+
+        assert run_query_return_results(graph, 'MATCH (n:Test {uuid: 1}) RETURN n.key')[0][0] == []
+        assert run_query_return_results(graph, 'MATCH (n:Test {uuid: 2}) RETURN n.key')[0][0] == []
+
+        value_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        value_ns.add({'uuid': 1, 'key': 'a'})
+        value_ns.merge(graph)
+
+        null_ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        null_ns.add({'uuid': 1, 'key': None})
+        null_ns.merge(graph)
+
+        assert run_query_return_results(graph, 'MATCH (n:Test {uuid: 1}) RETURN n.key')[0][0] == ['a']
+
+    def test_nodeset_merge_append_props_list_with_null_elements(self, graph, clear_graph):
+        """
+        Null elements inside list values are dropped.
+        """
+        ns = NodeSet(['Test'], merge_keys=['uuid'], append_props=['key'])
+        ns.add({'uuid': 1, 'key': ['a', None]})
+        ns.merge(graph)
+
+        assert run_query_return_results(graph, 'MATCH (n:Test) RETURN n.key')[0][0] == ['a']
+
     def test_nodeset_merge_number(self, small_nodeset, graph, clear_graph):
         """
         Merge a nodeset 3 times and check number of nodes.
