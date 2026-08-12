@@ -12,25 +12,20 @@ logging.basicConfig()
 
 log = logging.getLogger(__name__)
 
-NEO4J_PASSWORD = 'test'
 
 RUN_ENVIRONMENT = os.getenv('RUN_ENVIRONMENT', None)
 DRIVER = os.getenv('DRIVER', None)
 
 if RUN_ENVIRONMENT == 'github_actions':
     NEO4J_VERSIONS = [
-        {'host': 'localhost', 'version': '5-community', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '5-enterprise', 'ports': (7475, 7473, 7688), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '5-community', 'ports': (7474, 7473, 7687), 'uri_prefix': 'bolt', 'user': 'neo4j', 'password': 'test'},
+        {'host': 'localhost', 'version': '5-enterprise', 'ports': (7475, 7473, 7688), 'uri_prefix': 'bolt', 'user': 'neo4j', 'password': 'test'},
     ]
 
 else:
     NEO4J_VERSIONS = [
-        {'host': 'localhost', 'version': '5-community', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
-        {'host': 'localhost', 'version': '5-enterprise', 'ports': (14474, 14473, 14687), 'uri_prefix': 'bolt',
-         'lib': 'neodriver'},
+        {'host': 'localhost', 'version': '5-community', 'ports': (13474, 13473, 13687), 'uri_prefix': 'bolt', 'user': 'neo4j', 'password': 'test'},
+        {'host': 'localhost', 'version': '5-enterprise', 'ports': (14474, 14473, 14687), 'uri_prefix': 'bolt', 'user': 'neo4j', 'password': 'test'},
     ]
 
 import pytest
@@ -54,13 +49,12 @@ def test_environment(reset_registry, clear_graph, set_driver):
 
 @pytest.fixture(scope='session', params=NEO4J_VERSIONS)
 def graph(request, wait_for_neo4j):
-    if request.param['lib'] == 'neodriver':
-        uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
-        driver = GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
-        try:
-            yield driver
-        finally:
-            driver.close()
+    uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
+    driver = GraphDatabase.driver(uri, auth=(request.param['user'], request.param['password']))
+    try:
+        yield driver
+    finally:
+        driver.close()
 
 
 @pytest.fixture
@@ -131,7 +125,9 @@ def wait_for_neo4j():
             for v in NEO4J_VERSIONS:
                 # get Graph, bolt connection to localhost is default
                 uri = f"{v['uri_prefix']}://{v['host']}:{v['ports'][2]}"
-                driver = GraphDatabase.driver(uri, auth=("neo4j", NEO4J_PASSWORD))
+                print(f"Trying to connect to {v['version']} at {uri}...")
+                driver = GraphDatabase.driver(uri, auth=(v['user'], v['password']))
+                print(f"Connected to {v['version']} at {uri}. Verifying connection...")
                 try:
                     with driver.session() as s:
                         s.run("MATCH (n) RETURN n LIMIT 1")
