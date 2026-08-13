@@ -1,3 +1,4 @@
+import copy
 import logging
 from typing import Any, ClassVar
 
@@ -223,6 +224,33 @@ class CustomMeta(BaseModel.__class__):
         # lookup, so we don't re-install those here.
         for rel_name, rel_descriptor in own_relationships.items():
             setattr(cls, rel_name, rel_descriptor)
+
+        # === Repair inherited field defaults polluted by query descriptors ===
+        # Installing QueryFieldDescriptor on a model class (below) has a side
+        # effect on subclasses created later: when Pydantic collects the
+        # subclass's fields it calls getattr() on the parent class to find the
+        # default of an inherited field — and the descriptor answers with its
+        # RelField query helper instead of the real default. The subclass then
+        # treats RelField as the field default: declared defaults are lost and
+        # required fields silently become optional. Restore the parent's own
+        # FieldInfo for every field that got poisoned this way and rebuild the
+        # Pydantic schema.
+        if hasattr(cls, 'model_fields'):
+            parent_fields = {}
+            for base_cls in reversed(cls.__mro__[1:]):
+                base_fields = base_cls.__dict__.get('__pydantic_fields__')
+                if isinstance(base_fields, dict):
+                    parent_fields.update(base_fields)
+            polluted = [
+                field_name
+                for field_name, field_info in cls.model_fields.items()
+                if isinstance(field_info.default, RelField | QueryFieldDescriptor)
+                and field_name in parent_fields
+            ]
+            if polluted:
+                for field_name in polluted:
+                    cls.model_fields[field_name] = copy.copy(parent_fields[field_name])
+                cls.model_rebuild(force=True, raise_errors=False)
 
         # Scalar fields: install QueryFieldDescriptor so ``Person.name`` at
         # class-access returns a query helper. (Same as before — only relevant

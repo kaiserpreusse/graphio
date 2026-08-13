@@ -3141,3 +3141,70 @@ class TestBaseClassVars:
         driver_annotation = Base.__annotations__['_driver']
         assert get_origin(driver_annotation) is ClassVar, \
             f"_driver should be ClassVar, got {driver_annotation}"
+
+
+class TestInheritedFieldDefaults:
+    """
+    Regression tests: fields inherited from a parent NodeModel must behave like
+    normal Pydantic fields on the subclass.
+
+    The bug: graphio installs query helper descriptors on every model class so
+    that ``Person.age > 30`` works in queries. When a subclass was created,
+    Pydantic asked the parent class for the default value of each inherited
+    field and got that query helper (a RelField object) instead of the real
+    default. As a result, on the subclass, declared defaults were replaced by
+    RelField objects and required fields were silently no longer required.
+    """
+
+    def test_inherited_field_keeps_its_default(self, test_base):
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['name']
+            name: str
+            age: int = 0
+
+        class Employee(Person):
+            _labels = ['Employee', 'Person']
+            _merge_keys = ['name']
+            company: str = None
+
+        bob = Employee(name='bob', company='acme')
+
+        # before the fix, bob.age was a RelField query helper instead of 0
+        assert bob.age == 0
+        assert bob.model_dump() == {'name': 'bob', 'age': 0, 'company': 'acme'}
+
+    def test_inherited_required_field_is_still_required(self, test_base):
+        from pydantic import ValidationError
+
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['name']
+            name: str
+
+        class Employee(Person):
+            _labels = ['Employee', 'Person']
+            _merge_keys = ['name']
+            company: str = None
+
+        # before the fix, leaving out the required 'name' raised no error
+        with pytest.raises(ValidationError):
+            Employee(company='acme')
+
+    def test_query_syntax_still_works_on_inherited_fields(self, test_base):
+        class Person(NodeModel):
+            _labels = ['Person']
+            _merge_keys = ['name']
+            name: str
+            age: int = 0
+
+        class Employee(Person):
+            _labels = ['Employee', 'Person']
+            _merge_keys = ['name']
+            company: str = None
+
+        # class-level access must still return the query helper on both classes
+        filter_op = Employee.age > 30
+        assert isinstance(filter_op, FilterOp)
+        assert filter_op.field == 'age'
+        assert filter_op.operator == '>'
