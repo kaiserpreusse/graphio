@@ -1,4 +1,5 @@
 import pytest
+import json
 import logging
 import os
 import shutil
@@ -28,6 +29,45 @@ else:
         {'host': 'localhost', 'version': '5-enterprise', 'ports': (14474, 14473, 14687), 'uri_prefix': 'bolt', 'user': 'neo4j', 'password': 'test'},
     ]
 
+
+def _load_targets():
+    """
+    Return the Neo4j targets as a list of dicts with `name`, `uri`, `user` and `password`.
+
+    `GRAPHIO_TEST_TARGETS` (a JSON array of such dicts) replaces the defaults from `NEO4J_VERSIONS`.
+    """
+    raw = os.getenv('GRAPHIO_TEST_TARGETS')
+    if raw is None:
+        return [
+            {
+                'name': v['version'],
+                'uri': f"{v['uri_prefix']}://{v['host']}:{v['ports'][2]}",
+                'user': v['user'],
+                'password': v['password'],
+            }
+            for v in NEO4J_VERSIONS
+        ]
+
+    try:
+        targets = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"GRAPHIO_TEST_TARGETS is not valid JSON: {e}") from e
+    if not isinstance(targets, list) or not targets:
+        raise ValueError("GRAPHIO_TEST_TARGETS must be a non-empty JSON array of targets")
+    for i, t in enumerate(targets):
+        if not isinstance(t, dict):
+            raise ValueError(f"GRAPHIO_TEST_TARGETS: target {i} is not a JSON object")
+        missing = [k for k in ('name', 'uri', 'user', 'password') if not isinstance(t.get(k), str)]
+        if missing:
+            raise ValueError(f"GRAPHIO_TEST_TARGETS: target {i} is missing string field(s): {', '.join(missing)}")
+    names = [t['name'] for t in targets]
+    if len(set(names)) != len(names):
+        raise ValueError(f"GRAPHIO_TEST_TARGETS: target names must be unique, got {names}")
+    return targets
+
+
+TARGETS = _load_targets()
+
 import pytest
 
 # Make fixture execution order explicit
@@ -47,10 +87,9 @@ def test_environment(reset_registry, clear_graph, set_driver):
 # Fixtures used in tests
 ##############################################################
 
-@pytest.fixture(scope='session', params=NEO4J_VERSIONS)
+@pytest.fixture(scope='session', params=TARGETS, ids=[t['name'] for t in TARGETS])
 def graph(request, wait_for_neo4j):
-    uri = f"{request.param['uri_prefix']}://{request.param['host']}:{request.param['ports'][2]}"
-    driver = GraphDatabase.driver(uri, auth=(request.param['user'], request.param['password']))
+    driver = GraphDatabase.driver(request.param['uri'], auth=(request.param['user'], request.param['password']))
     try:
         yield driver
     finally:
@@ -122,12 +161,10 @@ def wait_for_neo4j():
         try:
             # try to connect to both graphs, if it is not available `graph.run()` will
             # throw a ServiceUnavailable error
-            for v in NEO4J_VERSIONS:
-                # get Graph, bolt connection to localhost is default
-                uri = f"{v['uri_prefix']}://{v['host']}:{v['ports'][2]}"
-                print(f"Trying to connect to {v['version']} at {uri}...")
-                driver = GraphDatabase.driver(uri, auth=(v['user'], v['password']))
-                print(f"Connected to {v['version']} at {uri}. Verifying connection...")
+            for t in TARGETS:
+                print(f"Trying to connect to {t['name']} at {t['uri']}...")
+                driver = GraphDatabase.driver(t['uri'], auth=(t['user'], t['password']))
+                print(f"Connected to {t['name']} at {t['uri']}. Verifying connection...")
                 try:
                     with driver.session() as s:
                         s.run("MATCH (n) RETURN n LIMIT 1")

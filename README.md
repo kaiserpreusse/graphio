@@ -131,6 +131,15 @@ uv run pytest
 
 All tests using the `graph` fixture will run against both Neo4j Community and Enterprise editions.
 
+To run the suite against other servers, set `GRAPHIO_TEST_TARGETS` to a JSON array of targets. It replaces the default targets; `name` is used as the pytest parameter id. The suite wipes each target database before every test.
+
+```bash
+GRAPHIO_TEST_TARGETS='[
+  {"name": "lts", "uri": "bolt://127.0.0.1:17687", "user": "neo4j", "password": "kwela-harness"},
+  {"name": "cal", "uri": "bolt://127.0.0.1:27687", "user": "neo4j", "password": "kwela-harness"}
+]' uv run pytest
+```
+
 ## Feedback
 Please provide feedback, ideas and bug reports through GitHub issues.
 
