@@ -1,6 +1,7 @@
 import logging
 from uuid import uuid4
 
+from graphio import kweladb
 from graphio.bulk.query_utils import ArrayProperty, CypherQuery
 from graphio.utils import (
     BATCHSIZE,
@@ -206,6 +207,12 @@ class RelationshipSet:
             self.rel_type,
         )
 
+        # Experimental: rows over Arrow Flight on KwelaDB (GRAPHIO_KWELA_FLIGHT); off by default
+        if kweladb.enabled():
+            rows = rels_params_from_objects(self.relationships)['rels']
+            if kweladb.bulk(graph, database, q, 'rels', rows, {}):
+                return
+
         # Define transaction function once
         def create_batch(tx, batch_params):
             result = tx.run(q, **batch_params)
@@ -240,6 +247,13 @@ class RelationshipSet:
             self.rel_type,
             append_props=self.append_props,
         )
+
+        # Experimental: rows over Arrow Flight on KwelaDB (GRAPHIO_KWELA_FLIGHT); off by default
+        if kweladb.enabled():
+            rows = rels_params_from_objects(self.relationships)['rels']
+            params = {'append_props': self.append_props}
+            if kweladb.bulk(graph, database, q, 'rels', rows, params, self.append_props):
+                return
 
         # Define transaction function once
         def merge_batch(tx, batch_params):

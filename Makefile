@@ -9,6 +9,8 @@ help:
 	@echo "make fix - fix code issues and format"
 	@echo "make check - run all checks (lint + test)"
 	@echo "make docs - serve documentation locally"
+	@echo "make test-kweladb - experimental KwelaDB transport tests (needs a running KwelaDB)"
+	@echo "make test-kweladb-suite - graphio's suite against KwelaDB, bulk loads over Flight"
 
 # Database commands
 localdb:
@@ -59,4 +61,19 @@ check: lint test
 docs:
 	uv run mkdocs serve
 
-.PHONY: help localdb stop test test-all lint format fix check docs
+.PHONY: help localdb stop test test-all lint format fix check docs test-kweladb test-kweladb-suite
+
+# Experimental KwelaDB transport (graphio/kweladb.py): not part of `make test` or CI. Needs a
+# KwelaDB started outside graphio; in the KwelaDB repository: make graphio-test-up
+KWELA_BOLT ?= bolt://localhost:7690
+KWELA_FLIGHT ?= grpc://localhost:8817
+
+test-kweladb:
+	KWELA_TEST_BOLT=$(KWELA_BOLT) KWELA_TEST_FLIGHT=$(KWELA_FLIGHT) \
+		uv run --extra dev --extra kweladb pytest test_kweladb
+
+# The batch size tests count UNWIND batches; over Flight a set goes as one table, not in batches.
+test-kweladb-suite:
+	GRAPHIO_TEST_TARGETS='[{"name": "kweladb", "uri": "$(KWELA_BOLT)", "user": "neo4j", "password": "test"}]' \
+		GRAPHIO_KWELA_FLIGHT=$(KWELA_FLIGHT) GRAPHIO_KWELA_FLIGHT_MIN_ROWS=1 \
+		uv run --extra dev --extra kweladb pytest test -q -W ignore::UserWarning -k 'not batch_size_exactness'

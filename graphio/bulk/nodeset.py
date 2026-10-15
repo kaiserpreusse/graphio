@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from neo4j import DEFAULT_DATABASE, Driver
 
+from graphio import kweladb
 from graphio.bulk.query_utils import CypherQuery, merge_clause_with_properties
 from graphio.utils import (
     BATCHSIZE,
@@ -155,6 +156,10 @@ class NodeSet:
             self.labels, property_parameter='props', additional_labels=self.additional_labels
         )
 
+        # Experimental: rows over Arrow Flight on KwelaDB (GRAPHIO_KWELA_FLIGHT); off by default
+        if kweladb.enabled() and kweladb.bulk(graph, database, q, 'props', self.nodes, {}):
+            return
+
         # Define transaction function once
         def create_batch(tx, batch_props):
             result = tx.run(q, props=batch_props)
@@ -206,6 +211,13 @@ class NodeSet:
             property_parameter='props',
             additional_labels=self.additional_labels,
         )
+
+        # Experimental: rows over Arrow Flight on KwelaDB (GRAPHIO_KWELA_FLIGHT); off by default
+        if kweladb.enabled():
+            params = {'append_props': self.append_props, 'preserve': self.preserve}
+            lists = [p for p in self.append_props if p not in self.merge_keys]
+            if kweladb.bulk(graph, database, q, 'props', self.nodes, params, lists):
+                return
 
         # Define transaction function once
         def merge_batch(tx, batch_props):
