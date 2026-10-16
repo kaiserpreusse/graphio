@@ -323,7 +323,7 @@ def batches(table, limit: int = _BATCH_BYTES):
         while part.nbytes > limit and size > 1:
             size //= 2
             part = table.slice(offset, size)
-        yield from part.combine_chunks().to_batches()
+        yield from part.to_batches()
         offset += size
 
 
