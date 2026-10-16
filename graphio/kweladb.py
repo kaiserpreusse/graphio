@@ -303,11 +303,28 @@ def _upload(uri, database, name, table):
         db_kwargs['password'] = unquote(parts.password or '')
     if database:
         db_kwargs['adbc.flight.sql.rpc.call_header.kwela-database'] = database
-    rows_per_batch = max(1, int(table.num_rows * _BATCH_BYTES / max(table.nbytes, 1)))
+    import pyarrow as pa
+
     with flight_sql.connect(location, db_kwargs=db_kwargs, autocommit=True) as conn:
         with conn.cursor() as cursor:
-            reader = table.to_reader(max_chunksize=rows_per_batch)
+            reader = pa.RecordBatchReader.from_batches(table.schema, batches(table))
             cursor.adbc_ingest(name, reader, mode='replace')
+
+
+def batches(table, limit: int = _BATCH_BYTES):
+    """The table in record batches of at most `limit` bytes each (gRPC refuses messages over
+    16 MB). Rows can differ much in size (sequences, abstracts), so each batch is measured, not
+    estimated from the average row; a batch too large is halved until it fits."""
+    offset, total = 0, table.num_rows
+    rows = max(1, int(total * limit / max(table.nbytes, 1)))
+    while offset < total:
+        size = min(rows, total - offset)
+        part = table.slice(offset, size)
+        while part.nbytes > limit and size > 1:
+            size //= 2
+            part = table.slice(offset, size)
+        yield from part.combine_chunks().to_batches()
+        offset += size
 
 
 def _warn_once():

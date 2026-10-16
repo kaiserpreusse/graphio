@@ -5,7 +5,7 @@ import datetime
 import pyarrow as pa
 import pytest
 
-from graphio.kweladb import Inexact, arrow_table, to_arrow
+from graphio.kweladb import Inexact, arrow_table, batches, to_arrow
 
 
 def test_types():
@@ -118,3 +118,15 @@ def test_overflow_reason_names_the_key():
     with pytest.raises(Inexact) as error:
         arrow_table([{'k': 2**63}])
     assert str(error.value).startswith("key 'k': ")
+
+
+def test_batches_stay_under_the_limit_with_uneven_rows():
+    """Rows of very different sizes (short ids, long sequences): every batch is measured."""
+    table = pa.table(
+        {'id': list(range(20_000)), 'seq': ['x' * 10] * 10_000 + ['y' * 5_000] * 10_000}
+    )
+    limit = 4 * 2**20
+    parts = list(batches(table, limit))
+    assert max(b.nbytes for b in parts) <= limit
+    assert sum(b.num_rows for b in parts) == table.num_rows
+    assert pa.Table.from_batches(parts).equals(table)
