@@ -38,7 +38,7 @@ Issues = "https://github.com/kaiserpreusse/graphio/issues"
 # Experimental: bulk loads into KwelaDB over Arrow Flight SQL (graphio/kweladb.py)
 kweladb = [
     "adbc-driver-flightsql>=1.12",
-    "pyarrow>=16",
+    "pyarrow>=24",
 ]
 docs = [
     "mkdocs",
