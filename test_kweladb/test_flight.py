@@ -23,7 +23,7 @@ def uploads(monkeypatch):
     upload = transport._upload
 
     def counting(uri, database, name, table):
-        sent.append((database, name, table.num_rows))
+        sent.append((database, name, getattr(table, 'num_rows', None)))  # a stream has no count
         upload(uri, database, name, table)
 
     monkeypatch.setattr(transport, '_upload', counting)
@@ -244,3 +244,88 @@ def test_other_servers_use_unwind(monkeypatch):
 
     monkeypatch.setenv('GRAPHIO_KWELA_FLIGHT', FLIGHT)
     assert not transport._speaks_protocol(FakeDriver())
+
+
+# ---- Arrow sources: the same graph as the set's own rows ------------------------------------
+
+
+def arrow_ways(driver, monkeypatch, load_dicts, load_arrow):
+    """The graph from the set's dicts over UNWIND, from an Arrow source over Flight, and from
+    the same source over UNWIND (Flight off): all three must be equal."""
+    results = []
+    for load, flight in [(load_dicts, False), (load_arrow, True), (load_arrow, False)]:
+        driver.execute_query('MATCH (n) DETACH DELETE n')
+        if flight:
+            monkeypatch.setenv('GRAPHIO_KWELA_FLIGHT', FLIGHT)
+        else:
+            monkeypatch.delenv('GRAPHIO_KWELA_FLIGHT', raising=False)
+        load()
+        results.append(graph(driver))
+    assert results[0][0], 'the load created nothing'
+    assert results[0] == results[1], 'Arrow over Flight differs'
+    assert results[0] == results[2], 'Arrow over UNWIND differs'
+
+
+def gene_rows(n, round=0):
+    return [
+        {
+            'gid': i % (n // 2 + 1),
+            'name': None if i % 5 == 0 else f'gene {i}',
+            'score': i / 7,
+            'since': datetime.date(2020, 1, 1) + datetime.timedelta(days=i),
+            'src': [f's{round}'],
+        }
+        for i in range(n)
+    ]
+
+
+def test_arrow_nodes_merge(driver, monkeypatch, uploads):
+    import pyarrow as pa
+
+    def gene_set():
+        return NodeSet(['Gene'], merge_keys=['gid'], append_props=['src'], preserve=['since'],
+                       default_props={'origin': 'test'})  # fmt: skip
+
+    def load_dicts():
+        for round in range(2):
+            ns = gene_set()
+            ns.add_nodes(gene_rows(400, round))
+            ns.merge(driver)
+
+    def load_arrow():
+        for round in range(2):
+            source = pa.Table.from_pylist(gene_rows(400, round)).to_reader(max_chunksize=150)
+            transport.merge_nodes(gene_set(), driver, source)
+
+    arrow_ways(driver, monkeypatch, load_dicts, load_arrow)
+
+
+def test_arrow_nodes_create_and_relationships(driver, monkeypatch, uploads):
+    import pyarrow as pa
+
+    rels = [{'start_gid': i % 50, 'end_gid': i * 7 % 50, 'w': i, 'note': None if i % 3 else 'x'}
+            for i in range(600)]  # fmt: skip
+
+    def rel_set():
+        return RelationshipSet(
+            'LINKS', ['Gene'], ['Gene'], ['gid'], ['gid'], default_props={'by': 't'}
+        )
+
+    def load_dicts():
+        ns = NodeSet(['Gene'], merge_keys=['gid'])
+        ns.add_nodes([{'gid': i, 'name': f'g{i}'} for i in range(50)])
+        ns.create(driver)
+        rs = rel_set()
+        for r in rels:
+            rs.add_relationship({'gid': r['start_gid']}, {'gid': r['end_gid']},
+                                {'w': r['w'], 'note': r['note']})  # fmt: skip
+        rs.create(driver)
+        rs.merge(driver)
+
+    def load_arrow():
+        nodes = pa.table({'gid': list(range(50)), 'name': [f'g{i}' for i in range(50)]})
+        transport.create_nodes(NodeSet(['Gene'], merge_keys=['gid']), driver, nodes)
+        transport.create_relationships(rel_set(), driver, pa.Table.from_pylist(rels))
+        transport.merge_relationships(rel_set(), driver, pa.Table.from_pylist(rels))
+
+    arrow_ways(driver, monkeypatch, load_dicts, load_arrow)

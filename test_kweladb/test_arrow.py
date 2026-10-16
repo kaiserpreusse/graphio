@@ -1,6 +1,7 @@
-"""Rows to Arrow: exact types or None (graphio then uses UNWIND). No server needed."""
+"""Rows to Arrow: exact types or None (graphio then uses UNWIND); Arrow sources. No server needed."""
 
 import datetime
+import decimal
 
 import pyarrow as pa
 import pytest
@@ -130,3 +131,73 @@ def test_batches_stay_under_the_limit_with_uneven_rows():
     assert max(b.nbytes for b in parts) <= limit
     assert sum(b.num_rows for b in parts) == table.num_rows
     assert pa.Table.from_batches(parts).equals(table)
+
+
+# ---- Arrow sources (kweladb.create_nodes and the others) ------------------------------------
+
+from graphio import kweladb as transport  # noqa: E402
+
+
+def _rows(source):
+    return [row for batch in transport._source_batches(source) for row in batch.to_pylist()]
+
+
+def test_sources_of_every_kind():
+    table = pa.table({'id': [1, 2, 3], 'name': ['a', 'b', None]})
+    expected = table.to_pylist()
+    for source in [
+        table,
+        table.to_batches()[0],
+        table.to_reader(),
+        iter(table.to_batches(max_chunksize=1)),
+        table.to_batches(max_chunksize=2),
+    ]:
+        assert _rows(source) == expected, type(source)
+
+
+def test_dictionaries_decoded_and_defaults_filled_in():
+    table = pa.table({'kind': pa.array(['x', 'y', 'x']).dictionary_encode(), 'n': [1, 2, 3]})
+    batch = next(transport._source_batches(table, defaults={'source': 'arrow', 'n': 0}))
+    assert batch.schema.field('kind').type == pa.string()
+    assert batch.to_pylist() == [
+        {'kind': 'x', 'n': 1, 'source': 'arrow'},
+        {'kind': 'y', 'n': 2, 'source': 'arrow'},
+        {'kind': 'x', 'n': 3, 'source': 'arrow'},
+    ]
+
+
+@pytest.mark.parametrize(
+    'array',
+    [
+        pa.array([decimal.Decimal('1.5')]),
+        pa.array([b'bytes']),
+        pa.array([2**63], type=pa.uint64()),
+        pa.array([{'a': 1}]),
+        pa.array([[[1]]]),
+    ],
+)
+def test_types_neither_transport_carries_fail(array):
+    with pytest.raises(TypeError, match="column 'k'"):
+        list(transport._source_batches(pa.table({'k': array})))
+
+
+def test_relationship_rows_from_arrow():
+    table = pa.table({'start_id': [1, 2], 'end_id': [3, 4], 'w': [0.5, None]})
+    batches = list(transport._relationship_batches(table, ['id'], ['id'], defaults={'src': 'x'}))
+    assert [r for b in batches for r in b.to_pylist()] == [
+        {'start_id': 1, 'end_id': 3, 'properties': {'w': 0.5, 'src': 'x'}},
+        {'start_id': 2, 'end_id': 4, 'properties': {'w': None, 'src': 'x'}},
+    ]
+    with pytest.raises(ValueError, match='end_id'):
+        list(transport._relationship_batches(pa.table({'start_id': [1]}), ['id'], ['id']))
+    # Without properties.
+    plain = list(
+        transport._relationship_batches(pa.table({'start_id': [1], 'end_id': [2]}), ['id'], ['id'])
+    )
+    assert plain[0].to_pylist() == [{'start_id': 1, 'end_id': 2, 'properties': {}}]
+
+
+def test_row_batches_split_across_arrow_batches():
+    table = pa.table({'i': list(range(25))})
+    sizes = [len(b) for b in transport._row_batches(table.to_batches(max_chunksize=7), 10)]
+    assert sizes == [10, 10, 5]

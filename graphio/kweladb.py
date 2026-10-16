@@ -32,6 +32,7 @@ import time
 import uuid
 import warnings
 import weakref
+from itertools import chain
 from urllib.parse import unquote, urlsplit
 
 log = logging.getLogger(__name__)
@@ -100,7 +101,81 @@ def bulk(
     staged_name = f'graphio_{uuid.uuid4().hex}'
     _upload(os.environ[ENV_VAR], database, staged_name, table)
     uploaded = time.perf_counter()
-    staged = 'CALL kwela.staged($kwela_table, $kwela_options) YIELD row AS ' + query[len(prefix) :]
+    _run_staged(driver, database, query[len(prefix) :], staged_name, keep_nulls, params)
+    done = time.perf_counter()
+    log.info(
+        '%s: %s rows over Arrow Flight in %.1f s (conversion and upload %.1f s)',
+        name,
+        f'{len(rows):,}',
+        done - started,
+        uploaded - started,
+    )
+    return True
+
+
+class Inexact(ValueError):
+    """Arrow can't carry the rows exactly; the message says why."""
+
+
+def bulk_arrow(driver, database, query: str, parameter: str, arrow_batches, params: dict,
+               name='rows') -> bool:  # fmt: skip
+    """
+    Run ``query``, built for ``UNWIND $<parameter> AS ...``, over Arrow record batches sent as
+    they are (an Arrow source, :mod:`graphio.bulk.arrow`): no Python rows, streamed.
+
+    :param arrow_batches: Normalized batches in the query's row shape; consumed only if the
+        Flight transport is on and the server speaks KwelaDB's bulk protocol.
+    :return: True if it ran; False if the caller should send the batches with UNWIND.
+    """
+    if not enabled():
+        return False
+    prefix = f'UNWIND ${parameter} AS '
+    if not query.startswith(prefix) or not _speaks_protocol(driver):
+        return False
+    try:
+        import adbc_driver_flightsql  # noqa: F401
+        import pyarrow as pa
+    except ImportError as e:
+        raise ImportError(
+            f'{ENV_VAR} needs pyarrow and adbc-driver-flightsql: pip install graphio[kweladb]'
+        ) from e
+
+    started = time.perf_counter()
+    first = next(iter(arrow_batches), None)
+    if first is None:
+        log.info('%s: no rows', name)
+        return True
+    _warn_once()
+    rows = 0
+
+    def limited():
+        nonlocal rows
+        for batch in chain([first], arrow_batches):
+            rows += batch.num_rows
+            yield from batches(pa.Table.from_batches([batch]))
+
+    staged_name = f'graphio_{uuid.uuid4().hex}'
+    _upload(
+        os.environ[ENV_VAR],
+        database,
+        staged_name,
+        pa.RecordBatchReader.from_batches(first.schema, limited()),
+    )
+    uploaded = time.perf_counter()
+    _run_staged(driver, database, query[len(prefix) :], staged_name, True, params)
+    log.info(
+        '%s: %s rows over Arrow Flight in %.1f s (upload %.1f s)',
+        name,
+        f'{rows:,}',
+        time.perf_counter() - started,
+        uploaded - started,
+    )
+    return True
+
+
+def _run_staged(driver, database, rest: str, staged_name: str, keep_nulls: bool, params: dict):
+    """The query's rest over the staged table, then the table dropped."""
+    staged = 'CALL kwela.staged($kwela_table, $kwela_options) YIELD row AS ' + rest
     options = {'keepNulls': keep_nulls}
 
     def run(tx):
@@ -115,19 +190,6 @@ def bulk(
                 session.run(drop, kwela_table=staged_name).consume()
             except Exception as e:  # the load's own error matters more
                 log.warning('could not drop staged table %s: %s', staged_name, e)
-    done = time.perf_counter()
-    log.info(
-        '%s: %s rows over Arrow Flight in %.1f s (conversion and upload %.1f s)',
-        name,
-        f'{len(rows):,}',
-        done - started,
-        uploaded - started,
-    )
-    return True
-
-
-class Inexact(ValueError):
-    """Arrow can't carry the rows exactly; the message says why."""
 
 
 def to_arrow(rows: list, lists=()):
@@ -261,6 +323,263 @@ def _array(pa, values, key: str, as_lists=False):
         raise Inexact(f"key '{key}': {error}") from None
 
 
+# ---- Arrow sources ---------------------------------------------------------------------------
+#
+# Experimental, here until graphio has them in general (KWELADB_GENERALIZE.md): a NodeSet's or
+# RelationshipSet's rows from Arrow data instead of Python dicts. A source is anything that
+# speaks Arrow: a pyarrow Table, RecordBatch or RecordBatchReader, an iterable of record batches
+# (ParquetFile.iter_batches()), or an object with __arrow_c_stream__ (a DuckDB result, a Polars
+# data frame). Read as a stream. Node rows: one column per property. Relationship rows:
+# start_<key> and end_<key> columns for the endpoints, every other column a property. A null is
+# an explicit None. The set's default_props fill in missing columns.
+#
+# Over Arrow Flight (GRAPHIO_KWELA_FLIGHT, a KwelaDB server) the batches are uploaded as they
+# are; otherwise (Neo4j, or the transport off) they become dicts sent with UNWIND in transactions
+# of batch_size, as a set's own rows are.
+
+
+def create_nodes(node_set, driver, rows, database=None, batch_size=None):
+    """Create `node_set`'s nodes from an Arrow source `rows` (see above)."""
+    from graphio.bulk.nodeset import nodes_create_factory
+
+    q = nodes_create_factory(
+        node_set.labels, property_parameter='props', additional_labels=node_set.additional_labels
+    )
+    name = f'{":".join(node_set.labels or [])} (create)'
+    _write_nodes(node_set, driver, database, q, {}, batch_size, rows, name)
+
+
+def merge_nodes(node_set, driver, rows, database=None, batch_size=None):
+    """Merge `node_set`'s nodes from an Arrow source `rows` on its merge keys, with its
+    append_props and preserve (see above)."""
+    from graphio.bulk.nodeset import nodes_merge_factory
+
+    if not node_set.merge_keys:
+        raise ValueError('Merge keys are empty, MERGE requires merge keys.')
+    q = nodes_merge_factory(
+        node_set.labels,
+        node_set.merge_keys,
+        array_props=node_set.append_props,
+        preserve=node_set.preserve,
+        property_parameter='props',
+        additional_labels=node_set.additional_labels,
+    )
+    params = {'append_props': node_set.append_props, 'preserve': node_set.preserve}
+    name = f'{":".join(node_set.labels or [])} (merge)'
+    _write_nodes(node_set, driver, database, q, params, batch_size, rows, name)
+
+
+def create_relationships(rel_set, driver, rows, database=None, batch_size=None):
+    """Create `rel_set`'s relationships from an Arrow source `rows` (see above)."""
+    from graphio.bulk.relationshipset import rels_create_factory
+
+    q = rels_create_factory(
+        rel_set.start_node_labels,
+        rel_set.end_node_labels,
+        rel_set.start_node_properties,
+        rel_set.end_node_properties,
+        rel_set.rel_type,
+    )
+    _write_relationships(
+        rel_set, driver, database, q, {}, batch_size, rows, f'{rel_set.rel_type} (create)'
+    )
+
+
+def merge_relationships(rel_set, driver, rows, database=None, batch_size=None):
+    """Merge `rel_set`'s relationships from an Arrow source `rows`, with its append_props."""
+    from graphio.bulk.relationshipset import rels_merge_factory
+
+    q = rels_merge_factory(
+        rel_set.start_node_labels,
+        rel_set.end_node_labels,
+        rel_set.start_node_properties,
+        rel_set.end_node_properties,
+        rel_set.rel_type,
+        append_props=rel_set.append_props,
+    )
+    params = {'append_props': rel_set.append_props}
+    _write_relationships(
+        rel_set, driver, database, q, params, batch_size, rows, f'{rel_set.rel_type} (merge)'
+    )
+
+
+def _write_nodes(node_set, driver, database, q, params, batch_size, rows, name):
+    source = _source_batches(rows, defaults=node_set.default_props)
+    _write(driver, database, q, 'props', params, batch_size, source, name)
+
+
+def _write_relationships(rel_set, driver, database, q, params, batch_size, rows, name):
+    source = _relationship_batches(
+        rows,
+        [str(p) for p in rel_set.start_node_properties],
+        [str(p) for p in rel_set.end_node_properties],
+        defaults=rel_set.default_props,
+    )
+    _write(driver, database, q, 'rels', params, batch_size, source, name)
+
+
+def _write(driver, database, q, parameter, params, batch_size, source, name):
+    """Normalized Arrow batches over Flight, or as dicts with UNWIND."""
+    if bulk_arrow(driver, database, q, parameter, source, params, name=name):
+        return
+    from graphio.utils import BATCHSIZE
+
+    def write_batch(tx, batch):
+        tx.run(q, {parameter: batch, **params}).consume()
+
+    started, rows = time.perf_counter(), 0
+    with driver.session(database=database) as session:
+        for batch in _row_batches(source, batch_size or BATCHSIZE):
+            session.execute_write(write_batch, batch)
+            rows += len(batch)
+    log.info(
+        '%s: %s rows from Arrow over UNWIND in %.1f s',
+        name,
+        f'{rows:,}',
+        time.perf_counter() - started,
+    )
+
+
+def _pa():
+    try:
+        import pyarrow as pa
+    except ImportError as e:
+        raise ImportError('Arrow sources need pyarrow: pip install graphio[kweladb]') from e
+    return pa
+
+
+def _reader(source):
+    """The source as a ``pyarrow.RecordBatchReader``."""
+    pa = _pa()
+    if isinstance(source, pa.RecordBatchReader):
+        return source
+    if isinstance(source, pa.RecordBatch):
+        return pa.RecordBatchReader.from_batches(source.schema, [source])
+    if hasattr(source, '__arrow_c_stream__'):
+        return pa.RecordBatchReader.from_stream(source)
+    try:
+        batches = iter(source)
+    except TypeError:
+        raise TypeError(
+            f'not an Arrow source: {type(source).__name__} (a pyarrow Table, RecordBatch, '
+            'RecordBatchReader, an iterable of record batches, or an object with '
+            '__arrow_c_stream__)'
+        ) from None
+    first = next(batches, None)
+    if first is None:
+        raise ValueError(
+            'an empty iterable has no schema: pass a pyarrow Table or RecordBatchReader'
+        )
+    if not isinstance(first, pa.RecordBatch):
+        raise TypeError(f'an iterable of record batches yielded {type(first).__name__}')
+    return pa.RecordBatchReader.from_batches(first.schema, chain([first], batches))
+
+
+def _decoded_type(pa, arrow_type):
+    """The type a column is sent as: dictionaries decoded (DuckDB enums, Parquet dictionaries)."""
+    if pa.types.is_dictionary(arrow_type):
+        return _decoded_type(pa, arrow_type.value_type)
+    if pa.types.is_list(arrow_type) or pa.types.is_large_list(arrow_type):
+        return pa.list_(_decoded_type(pa, arrow_type.value_type))
+    return arrow_type
+
+
+def _check(pa, name, arrow_type, nested=False):
+    """Types both transports carry exactly: booleans, integers (but uint64), floats (but half
+    floats), strings, dates, timestamps, times, nulls, and lists of these."""
+    t = pa.types
+    if t.is_list(arrow_type) or t.is_large_list(arrow_type):
+        if nested:
+            raise TypeError(f"column '{name}': lists of lists can't be properties")
+        return _check(pa, name, arrow_type.value_type, nested=True)
+    carried = (
+        t.is_boolean(arrow_type)
+        or (t.is_integer(arrow_type) and not t.is_uint64(arrow_type))
+        or (t.is_floating(arrow_type) and not t.is_float16(arrow_type))
+        or t.is_string(arrow_type)
+        or t.is_large_string(arrow_type)
+        or t.is_date(arrow_type)
+        or t.is_timestamp(arrow_type)
+        or t.is_time64(arrow_type)
+        or t.is_null(arrow_type)
+    )
+    if not carried:
+        raise TypeError(
+            f"column '{name}' has type {arrow_type}, which graphio doesn't send as a property; "
+            'cast it first (e.g. a decimal to float64)'
+        )
+
+
+def _normalize(pa, batch, defaults: dict | None):
+    """Dictionaries decoded, types checked, `defaults` added where the batch has no column."""
+    columns, names = [], []
+    for name, column in zip(batch.schema.names, batch.columns, strict=True):
+        decoded = _decoded_type(pa, column.type)
+        if decoded != column.type:
+            column = column.cast(decoded)
+        _check(pa, name, column.type)
+        columns.append(column)
+        names.append(name)
+    for key, value in (defaults or {}).items():
+        if key not in names:
+            columns.append(pa.array([value] * batch.num_rows))
+            names.append(key)
+    return pa.RecordBatch.from_arrays(columns, names=names)
+
+
+def _source_batches(source, defaults: dict | None = None):
+    """The source's batches, normalized (see :func:`_normalize`)."""
+    pa = _pa()
+    for batch in _reader(source):
+        if batch.num_rows:
+            yield _normalize(pa, batch, defaults)
+
+
+def _endpoint_columns(keys, side):
+    return [f'{side}_{key}' for key in keys]
+
+
+def _relationship_batches(source, start_keys, end_keys, defaults: dict | None = None):
+    """Relationship rows in graphio's query shape: ``start_<key>`` and ``end_<key>`` columns and
+    a ``properties`` struct of the other columns (`defaults` filled in)."""
+    pa = _pa()
+    endpoints = _endpoint_columns(start_keys, 'start') + _endpoint_columns(end_keys, 'end')
+    for batch in _source_batches(source):
+        missing = [c for c in endpoints if c not in batch.schema.names]
+        if missing:
+            raise ValueError(
+                f'the relationship rows have no column {", ".join(missing)} '
+                f'(columns: {", ".join(batch.schema.names)})'
+            )
+        props = [n for n in batch.schema.names if n not in endpoints]
+        names = list(props)
+        children = [batch.column(n) for n in props]
+        for key, value in (defaults or {}).items():
+            if key not in names:
+                names.append(key)
+                children.append(pa.array([value] * batch.num_rows))
+        if names:
+            properties = pa.StructArray.from_arrays(children, names=names)
+        else:
+            properties = pa.array([{}] * batch.num_rows, type=pa.struct([]))
+        yield pa.RecordBatch.from_arrays(
+            [batch.column(c) for c in endpoints] + [properties], names=endpoints + ['properties']
+        )
+
+
+def _row_batches(arrow_batches, batch_size: int):
+    """Dicts in lists of at most `batch_size`, for UNWIND over Bolt."""
+    pending = []
+    for batch in arrow_batches:
+        pending.extend(batch.to_pylist())
+        full = len(pending) // batch_size * batch_size
+        for start in range(0, full, batch_size):
+            yield pending[start : start + batch_size]
+        pending = pending[full:]
+    if pending:
+        yield pending
+
+
 def _speaks_protocol(driver) -> bool:
     """Whether the server is KwelaDB with the bulk protocol this module speaks (cached)."""
     try:
@@ -307,7 +626,10 @@ def _upload(uri, database, name, table):
 
     with flight_sql.connect(location, db_kwargs=db_kwargs, autocommit=True) as conn:
         with conn.cursor() as cursor:
-            reader = pa.RecordBatchReader.from_batches(table.schema, batches(table))
+            if isinstance(table, pa.RecordBatchReader):
+                reader = table  # already in batches under the limit
+            else:
+                reader = pa.RecordBatchReader.from_batches(table.schema, batches(table))
             cursor.adbc_ingest(name, reader, mode='replace')
 
 
