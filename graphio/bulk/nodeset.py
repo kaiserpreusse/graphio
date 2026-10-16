@@ -157,8 +157,10 @@ class NodeSet:
         )
 
         # Experimental: rows over Arrow Flight on KwelaDB (GRAPHIO_KWELA_FLIGHT); off by default
-        if kweladb.enabled() and kweladb.bulk(graph, database, q, 'props', self.nodes, {}):
-            return
+        if kweladb.enabled():
+            name = f'{":".join(self.labels or [])} (create)'
+            if kweladb.bulk(graph, database, q, 'props', self.nodes, {}, name=name):
+                return
 
         # Define transaction function once
         def create_batch(tx, batch_props):
@@ -216,7 +218,8 @@ class NodeSet:
         if kweladb.enabled():
             params = {'append_props': self.append_props, 'preserve': self.preserve}
             lists = [p for p in self.append_props if p not in self.merge_keys]
-            if kweladb.bulk(graph, database, q, 'props', self.nodes, params, lists):
+            name = f'{":".join(self.labels or [])} (merge)'
+            if kweladb.bulk(graph, database, q, 'props', self.nodes, params, lists, name=name):
                 return
 
         # Define transaction function once

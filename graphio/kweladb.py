@@ -28,6 +28,7 @@ Unlike ``UNWIND``, a set is sent and written as a whole, not in batches of ``bat
 import datetime
 import logging
 import os
+import time
 import uuid
 import warnings
 import weakref
@@ -54,23 +55,32 @@ def enabled() -> bool:
     return bool(os.environ.get(ENV_VAR))
 
 
-def bulk(driver, database, query: str, parameter: str, rows: list, params: dict, lists=()) -> bool:
+def bulk(
+    driver, database, query: str, parameter: str, rows: list, params: dict, lists=(), name='rows'
+) -> bool:
     """
     Run ``query``, built for ``UNWIND $<parameter> AS ...``, over ``rows`` sent with Flight.
+
+    Logs one INFO line per set (logger ``graphio.kweladb``): how it was sent, and if not over
+    Flight, why.
 
     :param params: The query's other parameters.
     :param lists: Keys (of the rows, or of their ``properties`` maps) that the query only reads
         as ``[] + value`` (``append_props``): their scalars may be sent as one-element lists.
     :return: True if it ran; False if the caller should run it with ``UNWIND`` (the Flight
         transport is off, the server isn't KwelaDB, or the rows can't be sent exactly).
+    :param name: The set, for the log (e.g. ``Gene (merge)``).
     """
-    if not enabled() or len(rows) < MIN_ROWS:
+    if not enabled():
+        return False
+    if len(rows) < MIN_ROWS:
+        # Debug only: the OGM writes single objects this way.
+        log.debug('%s: %s rows over UNWIND (fewer than %s)', name, f'{len(rows):,}', MIN_ROWS)
         return False
     prefix = f'UNWIND ${parameter} AS '
     if not query.startswith(prefix):
         return False
     if not _speaks_protocol(driver):
-        log.debug('%s is set, but the server is not KwelaDB: using UNWIND', ENV_VAR)
         return False
     try:
         import adbc_driver_flightsql  # noqa: F401
@@ -79,30 +89,45 @@ def bulk(driver, database, query: str, parameter: str, rows: list, params: dict,
         raise ImportError(
             f'{ENV_VAR} needs pyarrow and adbc-driver-flightsql: pip install graphio[kweladb]'
         ) from e
-    converted = to_arrow(rows, lists)
-    if converted is None:
-        log.debug('rows that Arrow cannot carry exactly: using UNWIND')
+    started = time.perf_counter()
+    try:
+        table, keep_nulls = arrow_table(rows, lists)
+    except Inexact as reason:
+        log.info('%s: %s rows over UNWIND: %s', name, f'{len(rows):,}', reason)
         return False
-    table, keep_nulls = converted
     _warn_once()
 
-    name = f'graphio_{uuid.uuid4().hex}'
-    _upload(os.environ[ENV_VAR], database, name, table)
+    staged_name = f'graphio_{uuid.uuid4().hex}'
+    _upload(os.environ[ENV_VAR], database, staged_name, table)
+    uploaded = time.perf_counter()
     staged = 'CALL kwela.staged($kwela_table, $kwela_options) YIELD row AS ' + query[len(prefix) :]
     options = {'keepNulls': keep_nulls}
 
     def run(tx):
-        tx.run(staged, kwela_table=name, kwela_options=options, **params).consume()
+        tx.run(staged, kwela_table=staged_name, kwela_options=options, **params).consume()
 
     with driver.session(database=database) as session:
         try:
             session.execute_write(run)
         finally:
             try:
-                session.run('CALL kwela.dropStaged($kwela_table)', kwela_table=name).consume()
+                drop = 'CALL kwela.dropStaged($kwela_table)'
+                session.run(drop, kwela_table=staged_name).consume()
             except Exception as e:  # the load's own error matters more
-                log.warning('could not drop staged table %s: %s', name, e)
+                log.warning('could not drop staged table %s: %s', staged_name, e)
+    done = time.perf_counter()
+    log.info(
+        '%s: %s rows over Arrow Flight in %.1f s (conversion and upload %.1f s)',
+        name,
+        f'{len(rows):,}',
+        done - started,
+        uploaded - started,
+    )
     return True
+
+
+class Inexact(ValueError):
+    """Arrow can't carry the rows exactly; the message says why."""
 
 
 def to_arrow(rows: list, lists=()):
@@ -113,6 +138,14 @@ def to_arrow(rows: list, lists=()):
     :param lists: Keys whose scalars may become one-element lists (see :func:`bulk`).
     :return: ``(table, keep_nulls)``, or None if Arrow can't carry the rows exactly.
     """
+    try:
+        return arrow_table(rows, lists)
+    except Inexact:
+        return None
+
+
+def arrow_table(rows: list, lists=()):
+    """:func:`to_arrow`, raising :class:`Inexact` with the reason instead of returning None."""
     import pyarrow as pa
 
     keys = {}
@@ -122,7 +155,7 @@ def to_arrow(rows: list, lists=()):
     has_none = False
     for row in rows:
         if not isinstance(row, dict):
-            return None
+            raise Inexact(f'a row is a {type(row).__name__}, not a map')
         signature = []
         for key, value in row.items():
             keys.setdefault(key, None)
@@ -142,14 +175,14 @@ def to_arrow(rows: list, lists=()):
             uniform = False
     if not uniform and has_none:
         # A null would mean "missing" in some rows and "None" in others.
-        return None
+        raise Inexact('some rows lack keys that others have, and some values are None')
 
     columns = []
     for key in keys:
         values = [row.get(key) for row in rows]
         if key in nested:
             if any(v is not None and not isinstance(v, dict) for v in values):
-                return None
+                raise Inexact(f"key '{key}' holds a map in some rows and other values in others")
             if not nested[key]:
                 # Maps without keys (relationships without properties).
                 array = pa.array([None if v is None else {} for v in values], type=pa.struct([]))
@@ -158,16 +191,11 @@ def to_arrow(rows: list, lists=()):
             children = []
             for field in nested[key]:
                 column = [None if v is None else v.get(field) for v in values]
-                child = _array(pa, column, field in lists)
-                if child is None:
-                    return None
-                children.append(child)
+                children.append(_array(pa, column, f'{key}.{field}', field in lists))
             mask = pa.array([v is None for v in values])
             array = pa.StructArray.from_arrays(children, names=list(nested[key]), mask=mask)
         else:
-            array = _array(pa, values, key in lists)
-        if array is None:
-            return None
+            array = _array(pa, values, key, key in lists)
         columns.append(array)
     return pa.Table.from_arrays(columns, names=list(keys)), uniform
 
@@ -184,8 +212,12 @@ def _kind(value):
     return None
 
 
-def _array(pa, values, as_lists=False):
-    """The values as one Arrow array of one exact type, or None."""
+def _name(kind) -> str:
+    return 'date' if kind is datetime.date else kind.__name__
+
+
+def _array(pa, values, key: str, as_lists=False):
+    """The values as one Arrow array of one exact type; raises Inexact otherwise."""
     if as_lists and any(isinstance(v, list) for v in values):
         values = [v if v is None or isinstance(v, list) else [v] for v in values]
     scalar = element = None
@@ -196,17 +228,25 @@ def _array(pa, values, as_lists=False):
         if isinstance(value, list):
             lists = True
             for item in value:
-                kind = None if item is None else _kind(item)
-                if item is not None and (kind is None or element not in (None, kind)):
-                    return None
-                element = element or kind
+                if item is None:
+                    continue
+                kind = _kind(item)
+                if kind is None:
+                    raise Inexact(f"key '{key}' has lists with {type(item).__name__} items")
+                if element not in (None, kind):
+                    raise Inexact(
+                        f"key '{key}' has lists with {_name(element)} and {_name(kind)} items"
+                    )
+                element = kind
         else:
             kind = _kind(value)
-            if kind is None or scalar not in (None, kind):
-                return None
+            if kind is None:
+                raise Inexact(f"key '{key}' has {type(value).__name__} values")
+            if scalar not in (None, kind):
+                raise Inexact(f"key '{key}' has {_name(scalar)} and {_name(kind)} values")
             scalar = kind
     if lists and scalar is not None:
-        return None
+        raise Inexact(f"key '{key}' has lists in some rows and single values in others")
     types = {
         bool: pa.bool_(),
         int: pa.int64(),
@@ -217,8 +257,8 @@ def _array(pa, values, as_lists=False):
     arrow_type = pa.list_(types[element or str]) if lists else types[scalar or str]
     try:
         return pa.array(values, type=arrow_type)
-    except (pa.ArrowInvalid, pa.ArrowTypeError, OverflowError):
-        return None
+    except (pa.ArrowInvalid, pa.ArrowTypeError, OverflowError) as error:
+        raise Inexact(f"key '{key}': {error}") from None
 
 
 def _speaks_protocol(driver) -> bool:
@@ -229,7 +269,11 @@ def _speaks_protocol(driver) -> bool:
         pass
     result = False
     try:
-        if '+kweladb.' in driver.get_server_info().agent:
+        agent = driver.get_server_info().agent
+        if '+kweladb.' not in agent:
+            log.info('%s is set, but the server (%s) is not KwelaDB: graphio uses UNWIND',
+                     ENV_VAR, agent)  # fmt: skip
+        else:
             records, _, _ = driver.execute_query(
                 'CALL kwela.protocol() YIELD version RETURN version'
             )
@@ -240,7 +284,7 @@ def _speaks_protocol(driver) -> bool:
                     'KwelaDB speaks bulk protocol %s, graphio %s: using UNWIND', version, PROTOCOL
                 )
     except Exception as e:
-        log.debug('KwelaDB protocol check failed: %s', e)
+        log.info("could not check KwelaDB's bulk protocol (%s): graphio uses UNWIND", e)
     try:
         _servers[driver] = result
     except TypeError:

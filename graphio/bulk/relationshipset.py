@@ -210,7 +210,8 @@ class RelationshipSet:
         # Experimental: rows over Arrow Flight on KwelaDB (GRAPHIO_KWELA_FLIGHT); off by default
         if kweladb.enabled():
             rows = rels_params_from_objects(self.relationships)['rels']
-            if kweladb.bulk(graph, database, q, 'rels', rows, {}):
+            name = f'{self.rel_type} (create)'
+            if kweladb.bulk(graph, database, q, 'rels', rows, {}, name=name):
                 return
 
         # Define transaction function once
@@ -252,7 +253,8 @@ class RelationshipSet:
         if kweladb.enabled():
             rows = rels_params_from_objects(self.relationships)['rels']
             params = {'append_props': self.append_props}
-            if kweladb.bulk(graph, database, q, 'rels', rows, params, self.append_props):
+            name = f'{self.rel_type} (merge)'
+            if kweladb.bulk(graph, database, q, 'rels', rows, params, self.append_props, name=name):
                 return
 
         # Define transaction function once

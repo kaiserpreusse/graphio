@@ -5,7 +5,7 @@ import datetime
 import pyarrow as pa
 import pytest
 
-from graphio.kweladb import to_arrow
+from graphio.kweladb import Inexact, arrow_table, to_arrow
 
 
 def test_types():
@@ -86,3 +86,35 @@ def test_append_props_scalars_become_lists():
     ]
     table, _ = to_arrow(rels, lists=['src'])
     assert [r['properties']['src'] for r in table.to_pylist()] == [['a'], ['b']]
+
+
+@pytest.mark.parametrize(
+    ('rows', 'reason'),
+    [
+        ([{'k': 1}, {'k': 2.5}], "key 'k' has int and float values"),
+        ([{'k': datetime.datetime(2026, 10, 15, 12, 0)}], "key 'k' has datetime values"),
+        ([{'k': [1]}, {'k': ['a']}], "key 'k' has lists with int and str items"),
+        ([{'k': [1]}, {'k': 1}], "key 'k' has lists in some rows and single values in others"),
+        (
+            [{'a': 1, 'b': None}, {'a': 2}],
+            'some rows lack keys that others have, and some values are None',
+        ),
+        (
+            [{'p': {'w': 1}}, {'p': 2}],
+            "key 'p' holds a map in some rows and other values in others",
+        ),
+        ([{'p': {'w': 1}}, {'p': {'w': 'x'}}], "key 'p.w' has int and str values"),
+        (['not a map'], 'a row is a str, not a map'),
+    ],
+)
+def test_reasons(rows, reason):
+    """Why a set goes over UNWIND, as graphio logs it."""
+    with pytest.raises(Inexact) as error:
+        arrow_table(rows)
+    assert str(error.value) == reason
+
+
+def test_overflow_reason_names_the_key():
+    with pytest.raises(Inexact) as error:
+        arrow_table([{'k': 2**63}])
+    assert str(error.value).startswith("key 'k': ")

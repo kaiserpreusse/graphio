@@ -4,6 +4,7 @@ same KwelaDB: every scenario runs both ways and the whole graphs are compared.
 """
 
 import datetime
+import logging
 
 import pytest
 
@@ -211,6 +212,21 @@ def test_database_parameter(driver, monkeypatch, uploads):
         assert driver.execute_query('MATCH (n) RETURN count(n) AS c').records[0]['c'] == 0
     finally:
         driver.execute_query(f'DROP DATABASE {DATABASE} IF EXISTS WAIT', database_='system')
+
+
+def test_log_says_how_each_set_was_sent(driver, monkeypatch, uploads, caplog):
+    driver.execute_query('MATCH (n) DETACH DELETE n')
+    monkeypatch.setenv('GRAPHIO_KWELA_FLIGHT', FLIGHT)
+    with caplog.at_level(logging.INFO, logger='graphio.kweladb'):
+        genes(200).merge(driver)
+        mixed = NodeSet(['Mixed'], merge_keys=['gid'])
+        for i in range(100):
+            mixed.add_node({'gid': i, 'score': 1 if i % 2 else 1.5})
+        mixed.merge(driver)
+    lines = [r.getMessage() for r in caplog.records if r.name == 'graphio.kweladb']
+    assert len(lines) == 2, lines
+    assert lines[0].startswith('Gene (merge): 200 rows over Arrow Flight in ')
+    assert lines[1] == "Mixed (merge): 100 rows over UNWIND: key 'score' has float and int values"
 
 
 def test_other_servers_use_unwind(monkeypatch):
